@@ -1,0 +1,32 @@
+name: F45 데이터 자동 갱신
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'      # 5분마다 (UTC 기준, GitHub 사정에 따라 다소 밀릴 수 있음)
+  workflow_dispatch:            # 수동 실행 버튼도 생김
+
+concurrency:
+  group: f45-update
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: 라이브러리 설치
+        run: pip install supabase
+
+      - name: 전체 갱신 실행
+        env:
+          GLOFOX_API_KEY: ${{ secrets.GLOFOX_API_KEY }}
+          GLOFOX_API_TOKEN: ${{ secrets.GLOFOX_API_TOKEN }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: python 자동갱신.py
