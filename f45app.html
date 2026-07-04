@@ -100,8 +100,8 @@ body{padding-bottom:76px}
 .subtabs button.on{background:var(--red);border-color:var(--red);color:#fff}
 .carecard{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 11px;margin-bottom:9px}
 .mini4w-wrap{margin:9px 0 4px;display:flex;flex-direction:column;gap:2px;align-items:flex-start}
-.mini4w{display:grid;grid-template-columns:repeat(6,1fr);gap:3px;max-width:150px}
-.m4{aspect-ratio:1;background:#1a2942;border-radius:3px}
+.mini4w{display:grid;grid-template-columns:repeat(6,15px);gap:3px}
+.m4{width:15px;height:15px;background:#1a2942;border-radius:3px}
 .m4.on{background:var(--grn)}.m4.fut{opacity:.2}
 .m4lab{color:var(--dim);font-size:10px;margin-top:3px;display:block}
 .memoin{width:100%;background:#0e1a30;border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:7px 10px;font-size:12px;margin-top:8px}
@@ -228,19 +228,21 @@ async function upPhotoApp(uid,file){
 function refreshView(){if(VIEW==='photo')renderPhoto();else if(VIEW==='att')renderDay(false);else if(VIEW==='member')renderMember();}
 function saveIgApp(uid,val){sb.from('people').update({instagram:val.replace('@','').trim()}).eq('glofox_user_id',uid).then(({error})=>{if(error)alert('저장 실패: '+error.message);else if(MEMBERS[uid])MEMBERS[uid].instagram=val;});}
 let _memAll=false;
+function last2Times(m){const a=(m._att||[]).slice().sort();const out=a.slice(-2).reverse();
+ return out.map(x=>x.slice(5).replace('-','/')).join(', ');}
 function renderMember(){
  let list=Object.values(MEMBERS).filter(m=>m.glofox_user_id&&['회원','과거회원','트라이얼'].includes(m.stage));
- if(!_memAll)list=list.filter(m=>!m.photo_url);
+ if(!_memAll)list=list.filter(m=>!m.photo_url&&!m.glofox_photo); // 직접 사진 없고 글로폭스 사진도 없는 사람만
  list.sort((a,b)=>{const al=lastVisit(a)||'',bl=lastVisit(b)||'';return bl.localeCompare(al);});
  const box=document.getElementById('view-member');
- let h=`<div class="listhead">📷 ${_memAll?'전체':'사진 필요'} <b>${list.length}명</b> · 얼굴에 사진을 끌어다 놓거나 눌러 넣으세요 (최근 출석순, 리드 제외) <button class="mini" style="margin-left:6px" onclick="_memAll=!_memAll;renderMember()">${_memAll?'사진필요만':'전체보기'}</button></div>`;
+ let h=`<div class="listhead">📷 ${_memAll?'전체':'사진 필요'} <b>${list.length}명</b> · 얼굴에 사진을 끌어다 놓거나 눌러 넣으세요 (최근 출석순, 리드·사진있는사람 제외) <button class="mini" style="margin-left:6px" onclick="_memAll=!_memAll;renderMember()">${_memAll?'사진필요만':'전체보기'}</button></div>`;
  if(!list.length){box.innerHTML=h+'<div class="center">모두 사진이 있어요 👍</div>';return;}
- h+=list.slice(0,400).map(m=>{const uid=m.glofox_user_id;const p=photoOf(m);const bd=badgeOf(m);const lv=lastVisit(m);const ig=(m.instagram||'').replace('@','');
+ h+=list.slice(0,400).map(m=>{const uid=m.glofox_user_id;const p=photoOf(m);const bd=badgeOf(m);const t2=last2Times(m);const ig=(m.instagram||'').replace('@','');
   return `<div class="mrow2">
     <label class="pav ${p?'':'nophoto'}" for="mf_${uid}" ondragover="dOverA(event)" ondragleave="dLeaveA(event)" ondrop="dropA(event,'${uid}')">${avatar(m,'bk')}<span class="pcam">📷</span></label>
     <input type="file" id="mf_${uid}" accept="image/*" style="display:none" onchange="upPhotoApp('${uid}',this.files[0])">
     <div class="minfo"><div class="nm">${esc(m.name)||'(이름없음)'}${bd?` <span class="badge b-${bd}">${bd}</span>`:''}</div>
-      <div class="smeta">${lv?'출석 '+lv.slice(5).replace('-','/'):'출석기록없음'}</div>
+      <div class="smeta">${t2?'최근 출석 '+t2:'최근35일 출석기록 없음'}</div>
       <div class="ig2"><span>@</span><input value="${esc(ig)}" placeholder="인스타 ID" onchange="saveIgApp('${uid}',this.value)"></div>
     </div></div>`;}).join('');
  box.innerHTML=h;
@@ -381,7 +383,7 @@ function buildSessions(rows){
   const e=ev[r.event_id]||(ev[r.event_id]={date:ds,time:tm,name:r.class_name||'수업',att:{}});
   const prev=e.att[r.glofox_user_id]||{};
   e.att[r.glofox_user_id]={attended:(r.attended||prev.attended||false),status:r.status||prev.status||''};
-  if(r.attended){const m=MEMBERS[r.glofox_user_id];if(m){(m._days=m._days||[]);if(!m._days.includes(ds))m._days.push(ds);}}
+  if(r.attended){const m=MEMBERS[r.glofox_user_id];if(m){(m._days=m._days||[]);if(!m._days.includes(ds))m._days.push(ds);(m._att=m._att||[]);m._att.push(ds+' '+tm);}}
  });
  SESSIONS={};
  Object.values(ev).forEach(e=>{(SESSIONS[e.date]=SESSIONS[e.date]||[]).push({time:e.time,name:e.name,att:Object.entries(e.att).map(([uid,a])=>({uid,attended:a.attended,status:a.status}))})});
