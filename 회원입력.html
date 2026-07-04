@@ -22,6 +22,7 @@ h1{font-size:19px;font-weight:800;margin-bottom:4px}
 .nm{font-weight:700;font-size:15px}
 .badge{font-size:10px;padding:1px 6px;border-radius:6px;margin-left:5px}
 .b-트라이얼{background:#3d3512;color:#e0c94f}.b-회원{background:#123d2a;color:#4fe08a}.b-과거회원{background:#3d1a1a;color:#e06a6a}.b-리드{background:#3d2412;color:#e0954f}
+.meta{color:var(--dim);font-size:11px;margin-top:2px;line-height:1.4}
 .ig{display:flex;align-items:center;gap:5px;margin-top:5px}
 .ig span{color:var(--dim);font-size:13px}
 .ig input{flex:1;background:#0e1a30;border:1px solid var(--line);color:var(--txt);border-radius:7px;padding:5px 8px;font-size:13px}
@@ -62,18 +63,45 @@ function dropPhoto(e,pid){e.preventDefault();e.currentTarget.classList.remove('d
 function dropVideo(e,pid){e.preventDefault();e.currentTarget.classList.remove('drag');
  const f=[...e.dataTransfer.files].find(x=>x.type.startsWith('video/'));
  if(f)upVideo(pid,f);else alert('영상 파일(mp4 등)을 놓아주세요.');}
+function metaLine(m){
+ const p=[];
+ const ph=(m.phone||'').replace(/\D/g,'');
+ if(ph.length>=4)p.push('📞…'+ph.slice(-4));
+ const g=m.gender==='남'||m.gender==='M'||m.gender==='male'?'남':(m.gender==='여'||m.gender==='F'||m.gender==='female'?'여':'');
+ const yy=(m.birth||'').slice(-2);
+ if(g||yy)p.push((g||'')+(g&&yy?'·':'')+(yy?"'"+yy:''));
+ if(m.join_date&&m.join_date.length>=7)p.push('가입'+m.join_date.slice(2,7).replace('-','.'));
+ const last=LAST[m.glofox_user_id];
+ if(last)p.push('출석'+last.slice(5).replace('-','/'));
+ else p.push('출석없음');
+ if(m.membership){let mm=m.membership;if(mm.length>12)mm=mm.slice(0,12)+'…';p.push(mm);}
+ return p.join(' · ');
+}
 async function boot(){
  sb=supabase.createClient(SUPABASE_URL,PUBLISHABLE_KEY,{global:{headers:{'x-app-token':TOKEN}}});
- const {data,error}=await sb.from('people').select('person_id,glofox_user_id,name,stage,photo_url,glofox_photo,instagram,video_url').order('stage');
+ const {data,error}=await sb.from('people').select('person_id,glofox_user_id,name,stage,photo_url,glofox_photo,instagram,video_url,phone,membership,join_date,gender,birth,end_date').order('stage');
  if(error){document.getElementById('list').innerHTML=`<div class="center">불러오기 실패<br><small>${esc(error.message)}</small></div>`;return;}
  PEOPLE=data||[];
  render();
+ loadLastSeen();  // 마지막 출석일 (뒤에서 채워 다시 그림)
+}
+let LAST={};
+async function loadLastSeen(){
+ let from=0;
+ while(true){
+  const {data,error}=await sb.from('attendance').select('glofox_user_id,class_time')
+    .eq('attended',true).order('class_time',{ascending:false}).range(from,from+999);
+  if(error||!data||!data.length)break;
+  data.forEach(a=>{const u=a.glofox_user_id;if(!LAST[u])LAST[u]=String(a.class_time).slice(0,10);});
+  if(data.length<1000)break; from+=1000;
+ }
+ render();  // 마지막출석 채워서 다시 그림
 }
 function setF(f){filter=f;document.querySelectorAll('.fbtn').forEach(b=>b.classList.remove('on'));
  document.getElementById('f_'+(f==='all'?'all':f)).classList.add('on');render();}
 function match(m){
  const q=document.getElementById('q').value.trim().toLowerCase();
- if(q && !(m.name||'').toLowerCase().includes(q)) return false;
+ if(q){const ph=(m.phone||'').replace(/\D/g,'');if(!(m.name||'').toLowerCase().includes(q) && !ph.includes(q)) return false;}
  if(filter==='nophoto' && m.photo_url) return false;
  if(filter==='active' && !['회원','트라이얼'].includes(m.stage)) return false;
  return true;
@@ -90,6 +118,7 @@ function render(){
    <input type="file" id="ph_${pid}" accept="image/*" style="display:none" onchange="upPhoto('${pid}',this.files[0])">
    <div class="info">
      <div><span class="nm">${esc(m.name)||'(이름없음)'}</span>${m.stage?`<span class="badge b-${m.stage}">${m.stage}</span>`:''}<span class="ok" id="ok_${pid}">✓ 저장됨</span></div>
+     <div class="meta">${esc(metaLine(m))}</div>
      <div class="ig"><span>@</span><input value="${esc((m.instagram||'').replace('@',''))}" placeholder="인스타 ID" onchange="saveIg('${pid}',this.value)"></div>
      <div class="vid ${m.video_url?'has':''}" id="vid_${pid}" onclick="document.getElementById('vf_${pid}').click()" ondragover="dOver(event)" ondragleave="dLeave(event)" ondrop="dropVideo(event,'${pid}')">${m.video_url?'🎬 영상 있음 (교체)':'＋ 영상 올리기'}</div>
      <input type="file" id="vf_${pid}" accept="video/*,.mp4,.mov" style="display:none" onchange="upVideo('${pid}',this.files[0])">
