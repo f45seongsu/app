@@ -166,6 +166,7 @@ function showView(v){VIEW=v;
  if(v==='photo')renderPhoto();
  if(v==='risk')renderRisk();
  if(v==='expire')renderExpire();
+ if(v==='trial')renderTrial();
 }
 function renderSearch(){
  const q=(document.getElementById('q').value||'').trim().toLowerCase();
@@ -212,6 +213,7 @@ function ddaysAgo(n){const t=new Date(today+'T00:00:00');t.setDate(t.getDate()-n
 function lastVisit(m){const d=(m._days||[]).slice().sort();return d.length?d[d.length-1]:null;}
 function ddayOf(m){if(!m.end_date||m.end_date.length<10)return null;const t=new Date(today+'T00:00:00');const e=new Date(m.end_date.slice(0,10)+'T00:00:00');return Math.round((e-t)/86400000);}
 function msgFor(uid,type){const m=MEMBERS[uid]||{};const nm=m.name||'회원';
+ if(type==='trial'){return `${nm}님, F45 성수 체험 어떠셨어요? 😊 함께 운동해보니 정말 좋으셨죠! 지금 등록하시면 끊김 없이 이어가실 수 있어요. 궁금하신 점이나 등록 문의는 편하게 답장 주세요 💪 -F45 성수`;}
  if(type==='risk'){const lv=lastVisit(m);const disp=lv?lv.slice(5).replace('-','/'):'';
   return `${nm}님! 요즘 F45에서 통 못 뵀네요 😊 ${disp?'마지막 운동이 '+disp+'이었어요. ':''}이번 주에 다시 나오셔서 같이 땀 흘려요! 편하신 시간 말씀 주시면 예약 도와드릴게요 💪 -F45 성수`;}
  const dd=ddayOf(m);const ed=m.end_date?m.end_date.slice(0,10):'';
@@ -220,6 +222,7 @@ function msgFor(uid,type){const m=MEMBERS[uid]||{};const nm=m.name||'회원';
 function smsMsg(uid,type){const m=MEMBERS[uid]||{};const ph=(m.phone||'').replace(/[^0-9]/g,'');if(!ph){alert('번호가 없어요.');return;}location.href='sms:'+ph+'&body='+encodeURIComponent(msgFor(uid,type));}
 function copyMsg(uid,type){const t=msgFor(uid,type);navigator.clipboard.writeText(t);alert('문구 복사됨:\n'+t);}
 function isUnlimited(m){const s=m.membership||'';return s.includes('무제한')||s.includes('Unlimited')||s.includes('파운데이션')||s.includes('Foundation');}
+function saveTrialMemo(uid,val){sb.from('people').update({trial_memo:val}).eq('glofox_user_id',uid).then(({error})=>{if(error)alert('메모 저장 실패: '+error.message);else if(MEMBERS[uid])MEMBERS[uid].trial_memo=val;});}
 function saveMemo(uid,val){sb.from('people').update({care_memo:val}).eq('glofox_user_id',uid).then(({error})=>{if(error)alert('메모 저장 실패: '+error.message);else if(MEMBERS[uid])MEMBERS[uid].care_memo=val;});}
 function miniGrid(m){const set=new Set(m._days||[]);const t=new Date(today+'T00:00:00');
  const dow=(t.getDay()+6)%7;const mon=new Date(t);mon.setDate(t.getDate()-dow);let c='';
@@ -270,6 +273,25 @@ function renderExpire(){let list=[];
   list.map(x=>{const m=MEMBERS[x.uid];const ed=m.end_date?m.end_date.slice(0,10):'';
    const meta=`<b style="color:${x.dd<=3?'#e0563a':'#e0954f'}">${x.dd===0?'오늘 만료':'D-'+x.dd}</b> · ${esc(ed)}${m.membership?' · '+esc(m.membership):''}`;
    return careCard(x.uid,meta,'expire',false);}).join('');}
+function renderTrial(){
+ let list=Object.values(MEMBERS).filter(m=>m.stage==='트라이얼'&&m.glofox_user_id);
+ list.sort((a,b)=>(b.join_date||'').localeCompare(a.join_date||''));
+ const box=document.getElementById('view-trial');
+ if(!list.length){box.innerHTML='<div class="center">트라이얼 회원이 없어요.</div>';return;}
+ box.innerHTML=`<div class="listhead">⚡ 체험 회원 <b>${list.length}명</b> (최근 등록순) · 아직 정회원 전환 안 한 분들이에요. 등록 유도 + 메모로 관리하세요.</div>`+
+  list.map(m=>{const uid=m.glofox_user_id;const bd=badgeOf(m);const ph=(m.phone||'').replace(/[^0-9]/g,'');
+   const ed=m.end_date?m.end_date.slice(0,10):'';const dd=ddayOf(m);
+   const expTxt=ed?(dd!=null?(dd<0?`체험 만료 (${-dd}일 전)`:(dd===0?'오늘 만료':`체험 D-${dd}`)):ed):'';
+   const meta=`${esc(m.source||m.join_date||'')}${ed?` · ${expTxt}`:''}${m.join_date?` · 등록 ${m.join_date.slice(2,10).replace(/-/g,'.')}`:''}`;
+   return `<div class="carecard">
+     <div class="srow" style="border:0;padding:0;margin:0;background:none">
+       <span onclick="open_('${uid}')">${avatar(m,'bk')}</span>
+       <div class="sinfo" onclick="open_('${uid}')"><div class="nm">${esc(m.name)||'(이름없음)'} <span class="badge b-트라이얼">트라이얼</span></div><div class="smeta">${meta}</div></div>
+       <div class="cacts">${ph?`<button class="mini" onclick="smsMsg('${uid}','trial')">문자</button><button class="mini" onclick="copyMsg('${uid}','trial')">문구</button>`:'<span class="smeta">번호없음</span>'}</div>
+     </div>
+     <input class="memoin" value="${esc(m.trial_memo||'')}" placeholder="트라이얼 메모 (예: 7/2 통화·고민중)" onchange="saveTrialMemo('${uid}',this.value)">
+   </div>`;}).join('');
+}
 async function boot(){
  const il=document.getElementById('inputLink');if(il)il.href='회원입력.html'+location.search;
  if(!SUPABASE_URL||!PUBLISHABLE_KEY){document.getElementById('app').innerHTML='<div class="center">앱 설정이 필요해요.<br>파일 상단 SUPABASE_URL / PUBLISHABLE_KEY 를 채워주세요.</div>';return;}
