@@ -29,6 +29,7 @@ h1{font-size:20px;font-weight:800}.sub{color:var(--dim);font-size:13px;margin:2p
 .chip .ck{position:absolute;top:-5px;right:-5px;width:19px;height:19px;border-radius:50%;background:var(--red);color:#fff;font-size:11px;line-height:19px;text-align:center;display:none;box-shadow:0 0 0 2px var(--navy)}
 .chip.picked .ck{display:block}
 .chip.picked{outline:2px solid var(--red);outline-offset:1px;border-radius:24px}
+.chip.dropping{outline:2px dashed var(--grn);outline-offset:2px;border-radius:24px;background:rgba(37,194,110,.12)}
 .selbar{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:10px;padding-top:10px;border-top:1px solid var(--line)}
 .selbar button{background:#1c2f4d;border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:7px 11px;font-size:12px;cursor:pointer}
 .selbar button.pri{background:var(--red);border-color:var(--red);font-weight:700}
@@ -98,12 +99,20 @@ body{padding-bottom:76px}
 .subtabs button{flex:1;background:#0e1a30;border:1px solid var(--line);color:var(--dim);border-radius:9px;padding:9px;font-size:13px;cursor:pointer;font-weight:700}
 .subtabs button.on{background:var(--red);border-color:var(--red);color:#fff}
 .carecard{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 11px;margin-bottom:9px}
-.mini4w-wrap{margin:9px 0 4px}
+.mini4w-wrap{margin:9px 0 4px;display:flex;flex-direction:column;gap:2px;align-items:flex-start}
 .mini4w{display:grid;grid-template-columns:repeat(6,1fr);gap:3px;max-width:150px}
 .m4{aspect-ratio:1;background:#1a2942;border-radius:3px}
 .m4.on{background:var(--grn)}.m4.fut{opacity:.2}
 .m4lab{color:var(--dim);font-size:10px;margin-top:3px;display:block}
 .memoin{width:100%;background:#0e1a30;border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:7px 10px;font-size:12px;margin-top:8px}
+
+.mrow2{display:flex;gap:11px;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:9px 11px;margin-bottom:8px}
+.mrow2 .pav{width:54px;height:54px;flex:none}
+.mrow2 .pav .av{width:54px!important;height:54px!important;font-size:15px}
+.minfo{flex:1;min-width:0}
+.ig2{display:flex;align-items:center;gap:5px;margin-top:5px}
+.ig2 span{color:var(--dim);font-size:13px}
+.ig2 input{flex:1;background:#0e1a30;border:1px solid var(--line);color:var(--txt);border-radius:7px;padding:5px 8px;font-size:13px}
 </style></head><body>
 <header class="topbar"><button class="ham" onclick="toggleDrawer()">≡</button><h1 id="vtitle">수업 출결</h1><button id="refreshBtn" onclick="loadData(true)">↻</button></header>
 <div class="sub" id="sub">불러오는 중…</div>
@@ -118,6 +127,7 @@ body{padding-bottom:76px}
 <div id="view-trial" class="view" style="display:none"><div class="center">준비중이에요.</div></div>
 <div id="view-pass" class="view" style="display:none"><div class="center">준비중이에요.</div></div>
 <div id="view-photo" class="view" style="display:none"></div>
+<div id="view-member" class="view" style="display:none"></div>
 
 <nav class="tabbar">
  <button class="tab on" data-v="att" onclick="showView('att')"><span>📋</span>출결</button>
@@ -132,7 +142,7 @@ body{padding-bottom:76px}
   <button onclick="showView('trial')">⚡ 트라이얼 현황</button>
   <button onclick="showView('pass')">🎫 횟수권 관리</button>
   <button onclick="showView('photo')">📸 사진 입력 (수업별)</button>
-  <a id="inputLink" class="draw-link" href="회원입력.html">📷 회원 사진·정보 입력</a>
+  <button onclick="showView('member')">📷 회원 사진 채우기</button>
  </div>
 </div>
 <div id="modal" onclick="if(event.target.id=='modal')close_()"><div id="sheet"></div></div>
@@ -156,9 +166,9 @@ function badgeOf(m){if(m.stage==='트라이얼')return '트라이얼';if(m.pass_
 let VIEW='att';
 function toggleDrawer(){const d=document.getElementById('drawer');d.style.display=d.style.display==='none'?'block':'none';}
 function showView(v){VIEW=v;
- ['att','risk','expire','search','trial','pass','photo'].forEach(x=>{const el=document.getElementById('view-'+x);if(el)el.style.display=(x===v?'':'none');});
+ ['att','risk','expire','search','trial','pass','photo','member'].forEach(x=>{const el=document.getElementById('view-'+x);if(el)el.style.display=(x===v?'':'none');});
  document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('on',b.dataset.v===v));
- const T={att:'수업 출결',risk:'이탈 위험군',expire:'만료 임박',search:'회원 검색',trial:'트라이얼 현황',pass:'횟수권 관리',photo:'사진 입력 (수업별)'};
+ const T={att:'수업 출결',risk:'이탈 위험군',expire:'만료 임박',search:'회원 검색',trial:'트라이얼 현황',pass:'횟수권 관리',photo:'사진 입력 (수업별)',member:'회원 사진 채우기'};
  document.getElementById('vtitle').textContent=T[v]||'';
  document.getElementById('sub').style.display=(v==='att'?'':'none');
  document.getElementById('drawer').style.display='none';
@@ -167,6 +177,7 @@ function showView(v){VIEW=v;
  if(v==='risk')renderRisk();
  if(v==='expire')renderExpire();
  if(v==='trial')renderTrial();
+ if(v==='member')renderMember();
 }
 function renderSearch(){
  const q=(document.getElementById('q').value||'').trim().toLowerCase();
@@ -197,6 +208,11 @@ function renderPhoto(){
 function dOverA(e){e.preventDefault();e.currentTarget.classList.add('drag')}
 function dLeaveA(e){e.currentTarget.classList.remove('drag')}
 function dropA(e,uid){e.preventDefault();e.currentTarget.classList.remove('drag');const f=[...e.dataTransfer.files].find(x=>x.type.startsWith('image/'));if(f)upPhotoApp(uid,f);else alert('이미지 파일을 놓아주세요.');}
+function dOverChip(e){e.preventDefault();e.currentTarget.classList.add('dropping')}
+function dLeaveChip(e){e.currentTarget.classList.remove('dropping')}
+function dropChip(e,uid){e.preventDefault();e.stopPropagation();e.currentTarget.classList.remove('dropping');
+ const f=[...e.dataTransfer.files].find(x=>x.type.startsWith('image/'));
+ if(f)upPhotoApp(uid,f);else alert('이미지 파일을 놓아주세요.');}
 async function upPhotoApp(uid,file){
  if(!file)return;
  const ext=(file.name.split('.').pop()||'jpg').toLowerCase();
@@ -207,7 +223,27 @@ async function upPhotoApp(uid,file){
  const {error:e2}=await sb.from('people').update({photo_url:url}).eq('glofox_user_id',uid);
  if(e2){alert('저장 실패: '+e2.message);return;}
  if(MEMBERS[uid])MEMBERS[uid].photo_url=url;
- renderPhoto();
+ refreshView();
+}
+function refreshView(){if(VIEW==='photo')renderPhoto();else if(VIEW==='att')renderDay(false);else if(VIEW==='member')renderMember();}
+function saveIgApp(uid,val){sb.from('people').update({instagram:val.replace('@','').trim()}).eq('glofox_user_id',uid).then(({error})=>{if(error)alert('저장 실패: '+error.message);else if(MEMBERS[uid])MEMBERS[uid].instagram=val;});}
+let _memAll=false;
+function renderMember(){
+ let list=Object.values(MEMBERS).filter(m=>m.glofox_user_id&&['회원','과거회원','트라이얼'].includes(m.stage));
+ if(!_memAll)list=list.filter(m=>!m.photo_url);
+ list.sort((a,b)=>{const al=lastVisit(a)||'',bl=lastVisit(b)||'';return bl.localeCompare(al);});
+ const box=document.getElementById('view-member');
+ let h=`<div class="listhead">📷 ${_memAll?'전체':'사진 필요'} <b>${list.length}명</b> · 얼굴에 사진을 끌어다 놓거나 눌러 넣으세요 (최근 출석순, 리드 제외) <button class="mini" style="margin-left:6px" onclick="_memAll=!_memAll;renderMember()">${_memAll?'사진필요만':'전체보기'}</button></div>`;
+ if(!list.length){box.innerHTML=h+'<div class="center">모두 사진이 있어요 👍</div>';return;}
+ h+=list.slice(0,400).map(m=>{const uid=m.glofox_user_id;const p=photoOf(m);const bd=badgeOf(m);const lv=lastVisit(m);const ig=(m.instagram||'').replace('@','');
+  return `<div class="mrow2">
+    <label class="pav ${p?'':'nophoto'}" for="mf_${uid}" ondragover="dOverA(event)" ondragleave="dLeaveA(event)" ondrop="dropA(event,'${uid}')">${avatar(m,'bk')}<span class="pcam">📷</span></label>
+    <input type="file" id="mf_${uid}" accept="image/*" style="display:none" onchange="upPhotoApp('${uid}',this.files[0])">
+    <div class="minfo"><div class="nm">${esc(m.name)||'(이름없음)'}${bd?` <span class="badge b-${bd}">${bd}</span>`:''}</div>
+      <div class="smeta">${lv?'출석 '+lv.slice(5).replace('-','/'):'출석기록없음'}</div>
+      <div class="ig2"><span>@</span><input value="${esc(ig)}" placeholder="인스타 ID" onchange="saveIgApp('${uid}',this.value)"></div>
+    </div></div>`;}).join('');
+ box.innerHTML=h;
 }
 function ddaysAgo(n){const t=new Date(today+'T00:00:00');t.setDate(t.getDate()-n);return fmt(t);}
 function lastVisit(m){const d=(m._days||[]).slice().sort();return d.length?d[d.length-1]:null;}
@@ -236,36 +272,51 @@ function careCard(uid,metaHtml,type,showGrid){const m=MEMBERS[uid]||{name:'?'};c
      <div class="sinfo" onclick="open_('${uid}')"><div class="nm">${esc(m.name)||'(이름없음)'}${bd?` <span class="badge b-${bd}">${bd}</span>`:''}</div><div class="smeta">${metaHtml}</div></div>
      <div class="cacts">${ph?`<button class="mini" onclick="smsMsg('${uid}','${type}')">문자</button><button class="mini" onclick="copyMsg('${uid}','${type}')">문구</button>`:'<span class="smeta">번호없음</span>'}</div>
    </div>
-   ${showGrid?`<div class="mini4w-wrap"><div class="mini4w">${miniGrid(m)}</div><span class="m4lab">← 4주 전 ··· 최근 →</span></div>`:''}
+   ${showGrid?`<div class="mini4w-wrap"><span class="m4lab">↑ 4주 전</span><div class="mini4w">${miniGrid(m)}</div><span class="m4lab">↓ 이번 주</span></div>`:''}
    <input class="memoin" value="${esc(m.care_memo||'')}" placeholder="메모 (예: 6/20 통화함·안받음)" onchange="saveMemo('${uid}',this.value)">
  </div>`;}
+function payMember(m){const t=m.membership||'';return !(t.includes('횟수권')||t.includes('Class Pass')||t.includes('무료혜택')||t.includes('Complimentary'));}
 let riskTab='risk';
 function setRiskTab(t){riskTab=t;renderRisk();}
 function renderRisk(){
  const box=document.getElementById('view-risk');
- const tabs=`<div class="subtabs"><button class="${riskTab==='risk'?'on':''}" onclick="setRiskTab('risk')">이탈 위험</button><button class="${riskTab==='expired'?'on':''}" onclick="setRiskTab('expired')">최근 만료</button></div>`;
- box.innerHTML=tabs+(riskTab==='risk'?riskListHTML():expiredListHTML());
+ const tab=(k,l)=>`<button class="${riskTab===k?'on':''}" onclick="setRiskTab('${k}')">${l}</button>`;
+ const tabs=`<div class="subtabs">${tab('risk','급감 위험')}${tab('long','장기 미출석')}${tab('expired','최근 만료')}</div>`;
+ box.innerHTML=tabs+(riskTab==='risk'?riskListHTML():riskTab==='long'?longAbsHTML():expiredListHTML());
 }
-function riskListHTML(){const d14=ddaysAgo(14),d28=ddaysAgo(28);let list=[];
- Object.values(MEMBERS).forEach(m=>{if(m.stage!=='회원'||!m.glofox_user_id||!isUnlimited(m))return;
-  const ed=m.end_date&&m.end_date.length>=10?m.end_date.slice(0,10):null;if(ed&&ed<today)return;
+function eligibleActive(m){ // 유효 유료회원(만료 전), 횟수권·무료혜택 제외
+ if(m.stage!=='회원'||!payMember(m))return false;
+ const ed=m.end_date&&m.end_date.length>=10?m.end_date.slice(0,10):null;
+ if(ed&&ed<today)return false; return true;}
+function riskListHTML(){const d14=ddaysAgo(14),d28=ddaysAgo(28);let drop=[];
+ Object.values(MEMBERS).forEach(m=>{if(!m.glofox_user_id||!eligibleActive(m))return;
   const days=m._days||[];const recent=days.filter(d=>d>d14).length;const prior=days.filter(d=>d>d28&&d<=d14).length;
-  if(recent<=1&&prior>=3)list.push({uid:m.glofox_user_id,prior,recent});});
- list.sort((a,b)=>b.prior-a.prior);
- if(!list.length)return '<div class="center">지금은 이탈 위험 회원이 없어요 👍</div>';
- return `<div class="listhead">🚨 무제한 회원 중 최근 2주 급감 <b>${list.length}명</b> · 아래 4주 칸이 오른쪽으로 갈수록 비면 이탈 신호예요.</div>`+
-  list.map(x=>{const m=MEMBERS[x.uid];const lv=lastVisit(m);
+  if(recent<=1&&prior>=3)drop.push({uid:m.glofox_user_id,prior,recent});});
+ drop.sort((a,b)=>b.prior-a.prior);
+ if(!drop.length)return '<div class="center">급감한 회원이 없어요 👍</div>';
+ return `<div class="listhead">🚨 잘 오시다 <b>최근 2주 급감</b> ${drop.length}명 · 4주 칸(위=4주전 → 아래=이번주)이 아래로 갈수록 비면 이탈 신호예요.</div>`+
+  drop.map(x=>{const m=MEMBERS[x.uid];const lv=lastVisit(m);
    const meta=`그전 2주 <b style="color:#5aa0e0">${x.prior}회</b> → 최근 2주 <b style="color:#e0563a">${x.recent}회</b>${lv?` · 마지막 ${lv.slice(5).replace('-','/')}`:''}`;
    return careCard(x.uid,meta,'risk',true);}).join('');}
+function longAbsHTML(){const d28=ddaysAgo(28);let list=[];
+ Object.values(MEMBERS).forEach(m=>{if(!m.glofox_user_id||!eligibleActive(m))return;
+  const days=m._days||[];const in4=days.filter(d=>d>d28).length;const lv=lastVisit(m);
+  if(in4<=1&&lv)list.push({uid:m.glofox_user_id,in4,lv});});
+ list.sort((a,b)=>b.lv.localeCompare(a.lv)); // 최근에 끊긴 사람 먼저
+ if(!list.length)return '<div class="center">장기 미출석 회원이 없어요 👍</div>';
+ return `<div class="listhead">💤 <b>4주간 거의 안 오신</b> 유효 회원 ${list.length}명 · 최근에 끊긴 분부터. 오래 방치되면 이탈이에요.</div>`+
+  list.map(x=>{const m=MEMBERS[x.uid];
+   const meta=`최근 4주 <b style="color:#e0563a">${x.in4}회</b> · 마지막 ${x.lv.slice(5).replace('-','/')}`;
+   return careCard(x.uid,meta,'risk',true);}).join('');}
 function expiredListHTML(){let list=[];
- Object.values(MEMBERS).forEach(m=>{if(!m.glofox_user_id||!isUnlimited(m))return;const dd=ddayOf(m);if(dd!=null&&dd<0&&dd>=-21)list.push({uid:m.glofox_user_id,dd});});
+ Object.values(MEMBERS).forEach(m=>{if(!m.glofox_user_id||!payMember(m))return;const dd=ddayOf(m);if(dd!=null&&dd<0&&dd>=-21)list.push({uid:m.glofox_user_id,dd});});
  list.sort((a,b)=>b.dd-a.dd);
- if(!list.length)return '<div class="center">최근 3주 내 만료된 무제한 회원이 없어요.</div>';
- return `<div class="listhead">📕 최근 3주 내 만료 (미재등록) <b>${list.length}명</b> · 재등록 유도 대상</div>`+
+ if(!list.length)return '<div class="center">최근 3주 내 만료된 회원이 없어요.</div>';
+ return `<div class="listhead">📕 <b>최근 3주 내 만료</b> (미재등록) ${list.length}명 · 재등록 유도 대상</div>`+
   list.map(x=>{const m=MEMBERS[x.uid];const meta=`<b style="color:#e0563a">${-x.dd}일 전 만료</b> · ${esc(m.end_date?m.end_date.slice(0,10):'')}${m.membership?' · '+esc(m.membership):''}`;
    return careCard(x.uid,meta,'expire',false);}).join('');}
 function renderExpire(){let list=[];
- Object.values(MEMBERS).forEach(m=>{if(!m.glofox_user_id||m.stage==='트라이얼')return;const dd=ddayOf(m);if(dd!=null&&dd>=0&&dd<=14)list.push({uid:m.glofox_user_id,dd});});
+ Object.values(MEMBERS).forEach(m=>{if(!m.glofox_user_id||m.stage==='트라이얼'||!payMember(m))return;const dd=ddayOf(m);if(dd!=null&&dd>=0&&dd<=14)list.push({uid:m.glofox_user_id,dd});});
  list.sort((a,b)=>a.dd-b.dd);
  const box=document.getElementById('view-expire');
  if(!list.length){box.innerHTML='<div class="center">2주 내 만료 예정 회원이 없어요.</div>';return;}
@@ -349,7 +400,8 @@ function renderDay(doScroll){const evs=(SESSIONS[sel]||[]).slice().sort((a,b)=>(
  evs.forEach((ev,i)=>{
   const passed=new Date(sel+'T'+(ev.time||'23:59')+':00')<nowTs;
   ev.att.forEach(a=>{a._st=a.status==='CANCELED'?'cancel':(a.attended?'att':(passed?'noshow':'bk'));});
-  const ordr={att:0,bk:1,noshow:2,cancel:3};
+  ev.att=ev.att.filter(a=>a._st!=='cancel');
+  const ordr={att:0,bk:1,noshow:2};
   ev.att.sort((x,y)=>ordr[x._st]-ordr[y._st]);
   const present=ev.att.filter(a=>a._st==='att').length;
   const noshow=ev.att.filter(a=>a._st==='noshow').length;
@@ -360,7 +412,8 @@ function renderDay(doScroll){const evs=(SESSIONS[sel]||[]).slice().sort((a,b)=>(
   ev.att.forEach(a=>{const m=MEMBERS[a.uid]||{name:'(미등록)'};const bd=badgeOf(m);
    const pk=on&&PICK.has(a.uid);
    const click=on?`pick('${a.uid}')`:`open_('${a.uid}')`;
-   h+=`<div class="chip s-${a._st} ${pk?'picked':''}" onclick="${click}">${avatar(m,a._st)}<span class="nm">${esc(m.name)}</span>${bd?`<span class="badge b-${bd}">${bd}</span>`:''}${m.injury_note?'<span class="inj">⚠</span>':''}<span class="ck">✓</span></div>`;});
+   const drop=on?'':`ondragover="dOverChip(event)" ondragleave="dLeaveChip(event)" ondrop="dropChip(event,'${a.uid}')"`;
+   h+=`<div class="chip s-${a._st} ${pk?'picked':''}" onclick="${click}" ${drop}>${avatar(m,a._st)}<span class="nm">${esc(m.name)}</span>${bd?`<span class="badge b-${bd}">${bd}</span>`:''}${m.injury_note?'<span class="inj">⚠</span>':''}<span class="ck">✓</span></div>`;});
   h+='</div>';
   if(on){h+=`<div class="selbar"><span class="selcnt">${PICK.size}명 선택</span><button onclick="pickAll(${i})">전체</button><button onclick="pickNone()">해제</button><button class="pri" onclick="copyInsta()">@ 인스타복사</button><button class="pri" onclick="copyPhones()">번호복사</button><button onclick="smsOpen()">문자앱</button></div>`;}
   h+='</div>';});
