@@ -22,7 +22,17 @@ h1{font-size:20px;font-weight:800}.sub{color:var(--dim);font-size:13px;margin:2p
 .av img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:50%}
 .av .rd{position:absolute;right:-1px;bottom:-1px;width:9px;height:9px;border-radius:50%;border:2px solid #0e1a30;z-index:2}
 .rd.att{background:var(--grn)}.rd.bk{background:#5a6f8c}.rd.noshow{background:#e0563a}.rd.cancel{background:#e0954f}
-.chip.s-noshow .nm{color:#e0563a;text-decoration:line-through}.chip.s-cancel{opacity:.75}.chip.s-cancel .nm{text-decoration:line-through;color:#e0954f}
+.chip.s-noshow .nm{color:#e0563a;text-decoration:line-through}
+.selbtn{background:#1c2f4d;border:1px solid var(--line);color:var(--dim);border-radius:8px;padding:4px 11px;font-size:12px;cursor:pointer}
+.selbtn.on{background:var(--red);border-color:var(--red);color:#fff}
+.chip{position:relative}
+.chip .ck{position:absolute;top:-5px;right:-5px;width:19px;height:19px;border-radius:50%;background:var(--red);color:#fff;font-size:11px;line-height:19px;text-align:center;display:none;box-shadow:0 0 0 2px var(--navy)}
+.chip.picked .ck{display:block}
+.chip.picked{outline:2px solid var(--red);outline-offset:1px;border-radius:24px}
+.selbar{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:10px;padding-top:10px;border-top:1px solid var(--line)}
+.selbar button{background:#1c2f4d;border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:7px 11px;font-size:12px;cursor:pointer}
+.selbar button.pri{background:var(--red);border-color:var(--red);font-weight:700}
+.selcnt{color:var(--dim);font-size:12px;margin-right:2px}.chip.s-cancel{opacity:.75}.chip.s-cancel .nm{text-decoration:line-through;color:#e0954f}
 
 .nm{font-weight:600;font-size:14px}
 .badge{font-size:10px;padding:1px 6px;border-radius:6px}
@@ -116,11 +126,13 @@ function buildSessions(rows){
  sel=DATES.includes(today)?today:DATES[DATES.length-1];
 }
 const DOW=['일','월','화','수','목','금','토'];
-function render(){renderStrip();renderDay();document.getElementById('sub').textContent=`업데이트 ${window._lastUpdate||''} · 날짜를 골라 지난 수업도 볼 수 있어요`;}
+function render(){renderStrip();renderDay(!window._loaded);window._loaded=true;document.getElementById('sub').textContent=`업데이트 ${window._lastUpdate||''} · 날짜를 골라 지난 수업도 볼 수 있어요`;}
 function renderStrip(){let h='';DATES.forEach(d=>{const dt=new Date(d+'T00:00:00');
- h+=`<div class="day ${d===sel?'sel':''}" onclick="sel='${d}';renderStrip();renderDay()"><div class="mo">${dt.getMonth()+1}월</div><div class="dw">${DOW[dt.getDay()]}</div><div class="dn">${dt.getDate()}</div><div class="pip"></div></div>`;});
+ h+=`<div class="day ${d===sel?'sel':''}" onclick="sel='${d}';selEv=null;renderStrip();renderDay(true)"><div class="mo">${dt.getMonth()+1}월</div><div class="dw">${DOW[dt.getDay()]}</div><div class="dn">${dt.getDate()}</div><div class="pip"></div></div>`;});
  document.getElementById('strip').innerHTML=h;const s=document.querySelector('.day.sel');if(s)s.scrollIntoView({inline:'center',block:'nearest'});}
-function renderDay(){const evs=SESSIONS[sel]||[];let h='';const nowTs=new Date();
+let selEv=null; const PICK=new Set();
+function renderDay(doScroll){const evs=(SESSIONS[sel]||[]).slice().sort((a,b)=>(a.time||'').localeCompare(b.time||''));
+ SESSIONS[sel]=evs; let h='';const nowTs=new Date();
  evs.forEach((ev,i)=>{
   const passed=new Date(sel+'T'+(ev.time||'23:59')+':00')<nowTs;
   ev.att.forEach(a=>{a._st=a.status==='CANCELED'?'cancel':(a.attended?'att':(passed?'noshow':'bk'));});
@@ -130,11 +142,34 @@ function renderDay(){const evs=SESSIONS[sel]||[];let h='';const nowTs=new Date()
   const noshow=ev.att.filter(a=>a._st==='noshow').length;
   const cancel=ev.att.filter(a=>a._st==='cancel').length;
   const cntTxt=`${ev.att.length}명 · ${present} 출석`+(noshow?` · <span style="color:#e0563a">${noshow} 노쇼</span>`:'')+(cancel?` · <span style="color:#e0954f">${cancel} 취소</span>`:'');
-  h+=`<div class="ev"><div class="evh"><span class="time">${ev.time}</span><span class="enm">${esc(ev.name)}</span><span class="cnt">${cntTxt}</span><button class="tagbtn" onclick="tag('${sel}',${i})">태그</button></div><div class="grid">`;
+  const on=selEv===i;
+  h+=`<div class="ev" id="ev_${i}"><div class="evh"><span class="time">${ev.time}</span><span class="enm">${esc(ev.name)}</span><span class="cnt">${cntTxt}</span><button class="selbtn ${on?'on':''}" onclick="toggleSel(${i})">${on?'완료':'선택'}</button></div><div class="grid">`;
   ev.att.forEach(a=>{const m=MEMBERS[a.uid]||{name:'(미등록)'};const bd=badgeOf(m);
-   h+=`<div class="chip s-${a._st}" onclick="open_('${a.uid}')">${avatar(m,a._st)}<span class="nm">${esc(m.name)}</span>${bd?`<span class="badge b-${bd}">${bd}</span>`:''}${m.injury_note?'<span class="inj">⚠</span>':''}</div>`;});
-  h+='</div></div>';});
- document.getElementById('app').innerHTML=h||'<div class="center">이 날은 수업이 없어요.</div>';}
+   const pk=on&&PICK.has(a.uid);
+   const click=on?`pick('${a.uid}')`:`open_('${a.uid}')`;
+   h+=`<div class="chip s-${a._st} ${pk?'picked':''}" onclick="${click}">${avatar(m,a._st)}<span class="nm">${esc(m.name)}</span>${bd?`<span class="badge b-${bd}">${bd}</span>`:''}${m.injury_note?'<span class="inj">⚠</span>':''}<span class="ck">✓</span></div>`;});
+  h+='</div>';
+  if(on){h+=`<div class="selbar"><span class="selcnt">${PICK.size}명 선택</span><button onclick="pickAll(${i})">전체</button><button onclick="pickNone()">해제</button><button class="pri" onclick="copyInsta()">@ 인스타복사</button><button class="pri" onclick="copyPhones()">번호복사</button><button onclick="smsOpen()">문자앱</button></div>`;}
+  h+='</div>';});
+ document.getElementById('app').innerHTML=h||'<div class="center">이 날은 수업이 없어요.</div>';
+ if(doScroll!==false && sel===today && evs.length){
+  const nowM=nowTs.getHours()*60+nowTs.getMinutes();let tg=-1;
+  evs.forEach((ev,i)=>{const pr=(ev.time||'0:0').split(':').map(Number);const em=pr[0]*60+pr[1];if(tg<0&&em+60>=nowM)tg=i;});
+  if(tg<0)tg=evs.length-1;const el=document.getElementById('ev_'+tg);if(el)el.scrollIntoView({behavior:'smooth',block:'start'});
+ }}
+function toggleSel(i){if(selEv===i){selEv=null;}else{selEv=i;PICK.clear();}renderDay(false);}
+function pick(uid){if(PICK.has(uid))PICK.delete(uid);else PICK.add(uid);renderDay(false);}
+function pickAll(i){SESSIONS[sel][i].att.forEach(a=>PICK.add(a.uid));renderDay(false);}
+function pickNone(){PICK.clear();renderDay(false);}
+function pickedMembers(){return [...PICK].map(u=>MEMBERS[u]).filter(m=>m);}
+function copyInsta(){const ids=pickedMembers().map(m=>(m.instagram||'').replace('@','').trim()).filter(x=>x).map(x=>'@'+x);
+ if(!ids.length){alert('선택된 회원 중 인스타 ID가 없어요.');return;}
+ navigator.clipboard.writeText(ids.join(' '));alert(`${ids.length}명 인스타 복사됨:\n`+ids.join(' '));}
+function copyPhones(){const ph=pickedMembers().map(m=>(m.phone||'').replace(/[^0-9]/g,'')).filter(x=>x);
+ if(!ph.length){alert('선택된 회원 중 번호가 없어요.');return;}
+ navigator.clipboard.writeText(ph.join(', '));alert(`${ph.length}명 번호 복사됨 (문자앱 수신자칸에 붙여넣기):\n`+ph.join(', '));}
+function smsOpen(){const ph=pickedMembers().map(m=>(m.phone||'').replace(/[^0-9]/g,'')).filter(x=>x);
+ if(!ph.length){alert('선택된 회원 중 번호가 없어요.');return;}location.href='sms:'+ph.join(',');}
 function fmt(d){return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`}
 function timeColor(h){
  if(h>=6&&h<12){const t=(h-6)/6;return `hsl(353,75%,${38+t*22}%)`;}
