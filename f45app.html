@@ -93,6 +93,17 @@ body{padding-bottom:76px}
 .cacts{display:flex;flex-direction:column;gap:5px;flex:none}
 .cacts .mini{background:#1c2f4d;border:1px solid var(--line);color:var(--txt);border-radius:7px;padding:6px 12px;font-size:12px;cursor:pointer;text-align:center}
 .srow .sinfo b{font-weight:700}
+
+.subtabs{display:flex;gap:6px;margin-bottom:12px}
+.subtabs button{flex:1;background:#0e1a30;border:1px solid var(--line);color:var(--dim);border-radius:9px;padding:9px;font-size:13px;cursor:pointer;font-weight:700}
+.subtabs button.on{background:var(--red);border-color:var(--red);color:#fff}
+.carecard{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 11px;margin-bottom:9px}
+.mini4w-wrap{margin:9px 0 4px}
+.mini4w{display:grid;grid-template-columns:repeat(6,1fr);gap:3px;max-width:150px}
+.m4{aspect-ratio:1;background:#1a2942;border-radius:3px}
+.m4.on{background:var(--grn)}.m4.fut{opacity:.2}
+.m4lab{color:var(--dim);font-size:10px;margin-top:3px;display:block}
+.memoin{width:100%;background:#0e1a30;border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:7px 10px;font-size:12px;margin-top:8px}
 </style></head><body>
 <header class="topbar"><button class="ham" onclick="toggleDrawer()">≡</button><h1 id="vtitle">수업 출결</h1><button id="refreshBtn" onclick="loadData(true)">↻</button></header>
 <div class="sub" id="sub">불러오는 중…</div>
@@ -208,32 +219,57 @@ function msgFor(uid,type){const m=MEMBERS[uid]||{};const nm=m.name||'회원';
  return `${nm}님, 멤버십이 ${when} 만료 예정이에요. 끊김 없이 운동 이어가실 수 있게 재등록 안내드려요! 궁금하신 점 있으면 편하게 답장 주세요 😊 -F45 성수`;}
 function smsMsg(uid,type){const m=MEMBERS[uid]||{};const ph=(m.phone||'').replace(/[^0-9]/g,'');if(!ph){alert('번호가 없어요.');return;}location.href='sms:'+ph+'&body='+encodeURIComponent(msgFor(uid,type));}
 function copyMsg(uid,type){const t=msgFor(uid,type);navigator.clipboard.writeText(t);alert('문구 복사됨:\n'+t);}
-function careCard(uid,metaHtml,type){const m=MEMBERS[uid]||{name:'?'};const bd=badgeOf(m);const ph=(m.phone||'').replace(/[^0-9]/g,'');
- return `<div class="srow">
-   <span onclick="open_('${uid}')">${avatar(m,'bk')}</span>
-   <div class="sinfo" onclick="open_('${uid}')"><div class="nm">${esc(m.name)||'(이름없음)'}${bd?` <span class="badge b-${bd}">${bd}</span>`:''}</div><div class="smeta">${metaHtml}</div></div>
-   <div class="cacts">${ph?`<button class="mini" onclick="smsMsg('${uid}','${type}')">문자</button><button class="mini" onclick="copyMsg('${uid}','${type}')">문구</button>`:'<span class="smeta">번호없음</span>'}</div>
+function isUnlimited(m){const s=m.membership||'';return s.includes('무제한')||s.includes('Unlimited')||s.includes('파운데이션')||s.includes('Foundation');}
+function saveMemo(uid,val){sb.from('people').update({care_memo:val}).eq('glofox_user_id',uid).then(({error})=>{if(error)alert('메모 저장 실패: '+error.message);else if(MEMBERS[uid])MEMBERS[uid].care_memo=val;});}
+function miniGrid(m){const set=new Set(m._days||[]);const t=new Date(today+'T00:00:00');
+ const dow=(t.getDay()+6)%7;const mon=new Date(t);mon.setDate(t.getDate()-dow);let c='';
+ for(let w=3;w>=0;w--)for(let d=0;d<6;d++){const cur=new Date(mon);cur.setDate(mon.getDate()-w*7+d);
+  const ds=fmt(cur);c+=`<span class="m4 ${set.has(ds)?'on':''} ${cur>t?'fut':''}"></span>`;}
+ return c;}
+function careCard(uid,metaHtml,type,showGrid){const m=MEMBERS[uid]||{name:'?'};const bd=badgeOf(m);const ph=(m.phone||'').replace(/[^0-9]/g,'');
+ return `<div class="carecard">
+   <div class="srow" style="border:0;padding:0;margin:0;background:none">
+     <span onclick="open_('${uid}')">${avatar(m,'bk')}</span>
+     <div class="sinfo" onclick="open_('${uid}')"><div class="nm">${esc(m.name)||'(이름없음)'}${bd?` <span class="badge b-${bd}">${bd}</span>`:''}</div><div class="smeta">${metaHtml}</div></div>
+     <div class="cacts">${ph?`<button class="mini" onclick="smsMsg('${uid}','${type}')">문자</button><button class="mini" onclick="copyMsg('${uid}','${type}')">문구</button>`:'<span class="smeta">번호없음</span>'}</div>
+   </div>
+   ${showGrid?`<div class="mini4w-wrap"><div class="mini4w">${miniGrid(m)}</div><span class="m4lab">← 4주 전 ··· 최근 →</span></div>`:''}
+   <input class="memoin" value="${esc(m.care_memo||'')}" placeholder="메모 (예: 6/20 통화함·안받음)" onchange="saveMemo('${uid}',this.value)">
  </div>`;}
-function renderRisk(){const d14=ddaysAgo(14),d28=ddaysAgo(28);let list=[];
- Object.values(MEMBERS).forEach(m=>{if(m.stage!=='회원'||!m.glofox_user_id)return;const days=m._days||[];
-  const recent=days.filter(d=>d>d14).length;const prior=days.filter(d=>d>d28&&d<=d14).length;
+let riskTab='risk';
+function setRiskTab(t){riskTab=t;renderRisk();}
+function renderRisk(){
+ const box=document.getElementById('view-risk');
+ const tabs=`<div class="subtabs"><button class="${riskTab==='risk'?'on':''}" onclick="setRiskTab('risk')">이탈 위험</button><button class="${riskTab==='expired'?'on':''}" onclick="setRiskTab('expired')">최근 만료</button></div>`;
+ box.innerHTML=tabs+(riskTab==='risk'?riskListHTML():expiredListHTML());
+}
+function riskListHTML(){const d14=ddaysAgo(14),d28=ddaysAgo(28);let list=[];
+ Object.values(MEMBERS).forEach(m=>{if(m.stage!=='회원'||!m.glofox_user_id||!isUnlimited(m))return;
+  const ed=m.end_date&&m.end_date.length>=10?m.end_date.slice(0,10):null;if(ed&&ed<today)return;
+  const days=m._days||[];const recent=days.filter(d=>d>d14).length;const prior=days.filter(d=>d>d28&&d<=d14).length;
   if(recent<=1&&prior>=3)list.push({uid:m.glofox_user_id,prior,recent});});
  list.sort((a,b)=>b.prior-a.prior);
- const box=document.getElementById('view-risk');
- if(!list.length){box.innerHTML='<div class="center">지금은 이탈 위험 회원이 없어요 👍</div>';return;}
- box.innerHTML=`<div class="listhead">🚨 잘 오시다 최근 2주 급감한 회원 <b>${list.length}명</b><br>집중 케어 대상이에요. 문자로 다시 불러보세요.</div>`+
+ if(!list.length)return '<div class="center">지금은 이탈 위험 회원이 없어요 👍</div>';
+ return `<div class="listhead">🚨 무제한 회원 중 최근 2주 급감 <b>${list.length}명</b> · 아래 4주 칸이 오른쪽으로 갈수록 비면 이탈 신호예요.</div>`+
   list.map(x=>{const m=MEMBERS[x.uid];const lv=lastVisit(m);
    const meta=`그전 2주 <b style="color:#5aa0e0">${x.prior}회</b> → 최근 2주 <b style="color:#e0563a">${x.recent}회</b>${lv?` · 마지막 ${lv.slice(5).replace('-','/')}`:''}`;
-   return careCard(x.uid,meta,'risk');}).join('');}
+   return careCard(x.uid,meta,'risk',true);}).join('');}
+function expiredListHTML(){let list=[];
+ Object.values(MEMBERS).forEach(m=>{if(!m.glofox_user_id||!isUnlimited(m))return;const dd=ddayOf(m);if(dd!=null&&dd<0&&dd>=-21)list.push({uid:m.glofox_user_id,dd});});
+ list.sort((a,b)=>b.dd-a.dd);
+ if(!list.length)return '<div class="center">최근 3주 내 만료된 무제한 회원이 없어요.</div>';
+ return `<div class="listhead">📕 최근 3주 내 만료 (미재등록) <b>${list.length}명</b> · 재등록 유도 대상</div>`+
+  list.map(x=>{const m=MEMBERS[x.uid];const meta=`<b style="color:#e0563a">${-x.dd}일 전 만료</b> · ${esc(m.end_date?m.end_date.slice(0,10):'')}${m.membership?' · '+esc(m.membership):''}`;
+   return careCard(x.uid,meta,'expire',false);}).join('');}
 function renderExpire(){let list=[];
- Object.values(MEMBERS).forEach(m=>{if(!m.glofox_user_id)return;const dd=ddayOf(m);if(dd!=null&&dd>=0&&dd<=14)list.push({uid:m.glofox_user_id,dd});});
+ Object.values(MEMBERS).forEach(m=>{if(!m.glofox_user_id||m.stage==='트라이얼')return;const dd=ddayOf(m);if(dd!=null&&dd>=0&&dd<=14)list.push({uid:m.glofox_user_id,dd});});
  list.sort((a,b)=>a.dd-b.dd);
  const box=document.getElementById('view-expire');
  if(!list.length){box.innerHTML='<div class="center">2주 내 만료 예정 회원이 없어요.</div>';return;}
- box.innerHTML=`<div class="listhead">⏳ 14일 내 만료 예정 <b>${list.length}명</b> · 재등록 상담 대상 (임박순)</div>`+
+ box.innerHTML=`<div class="listhead">⏳ 14일 내 만료 예정 <b>${list.length}명</b> · 재등록 상담 대상 (임박순) · 트라이얼 제외</div>`+
   list.map(x=>{const m=MEMBERS[x.uid];const ed=m.end_date?m.end_date.slice(0,10):'';
    const meta=`<b style="color:${x.dd<=3?'#e0563a':'#e0954f'}">${x.dd===0?'오늘 만료':'D-'+x.dd}</b> · ${esc(ed)}${m.membership?' · '+esc(m.membership):''}`;
-   return careCard(x.uid,meta,'expire');}).join('');}
+   return careCard(x.uid,meta,'expire',false);}).join('');}
 async function boot(){
  const il=document.getElementById('inputLink');if(il)il.href='회원입력.html'+location.search;
  if(!SUPABASE_URL||!PUBLISHABLE_KEY){document.getElementById('app').innerHTML='<div class="center">앱 설정이 필요해요.<br>파일 상단 SUPABASE_URL / PUBLISHABLE_KEY 를 채워주세요.</div>';return;}
