@@ -33,14 +33,15 @@ h1{font-size:19px;font-weight:800;margin-bottom:4px}
 .center{text-align:center;color:var(--dim);padding:50px 20px}
 .count{color:var(--dim);font-size:12px;margin:8px 2px}
 </style></head><body>
-<h1>F45 성수 · 회원 빠른 입력</h1>
+<div style="display:flex;align-items:center;gap:10px"><a id="homeLink" href="f45app.html" style="text-decoration:none;background:#12203a;border:1px solid var(--line);color:var(--txt);border-radius:9px;padding:6px 11px;font-size:13px">← 출결앱</a><h1 style="font-size:19px;font-weight:800;margin:0">회원 빠른 입력</h1></div>
 <div class="sub">사진 동그라미를 누르거나 <b>이미지를 끌어다 놓기</b> · 영상칸에 <b>mp4 드래그</b> · 인스타 즉시 저장 · 모든 코치에게 공유돼요</div>
 <div class="bar">
  <input class="search" id="q" placeholder="이름 검색…" oninput="render()">
  <div class="filters">
-  <button class="fbtn on" id="f_all" onclick="setF('all')">전체</button>
+  <button class="fbtn on" id="f_active" onclick="setF('active')">활성 (사진필요순)</button>
   <button class="fbtn" id="f_nophoto" onclick="setF('nophoto')">사진 없는 사람</button>
-  <button class="fbtn" id="f_active" onclick="setF('active')">활성 회원만</button>
+  <button class="fbtn" id="f_etc" onclick="setF('etc')">기타</button>
+  <button class="fbtn" id="f_all" onclick="setF('all')">전체</button>
  </div>
 </div>
 <div class="count" id="count"></div>
@@ -50,7 +51,7 @@ h1{font-size:19px;font-weight:800;margin-bottom:4px}
 const SUPABASE_URL="https://mvgbwsbvngdnxdndwimb.supabase.co";
 const PUBLISHABLE_KEY="sb_publishable_ZRHS4-UR7Q07Fmtc_P-19g_fVlIc85X";
 const TOKEN=new URLSearchParams(location.search).get('key')||'';
-let sb, PEOPLE=[], filter='all';
+let sb, PEOPLE=[], filter='active';
 function esc(s){return (s||'').replace(/[<>&"]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]))}
 function initial(n){return (n||'?').trim().slice(-2)}
 function photoOf(m){return m.photo_url||m.glofox_photo||''}
@@ -78,6 +79,7 @@ function metaLine(m){
  return p.join(' · ');
 }
 async function boot(){
+ const hl=document.getElementById('homeLink');if(hl)hl.href='f45app.html'+location.search;
  sb=supabase.createClient(SUPABASE_URL,PUBLISHABLE_KEY,{global:{headers:{'x-app-token':TOKEN}}});
  const {data,error}=await sb.from('people').select('person_id,glofox_user_id,name,stage,photo_url,glofox_photo,instagram,video_url,phone,membership,join_date,gender,birth,end_date').order('stage');
  if(error){document.getElementById('list').innerHTML=`<div class="center">불러오기 실패<br><small>${esc(error.message)}</small></div>`;return;}
@@ -98,16 +100,31 @@ async function loadLastSeen(){
  render();  // 마지막출석 채워서 다시 그림
 }
 function setF(f){filter=f;document.querySelectorAll('.fbtn').forEach(b=>b.classList.remove('on'));
- document.getElementById('f_'+(f==='all'?'all':f)).classList.add('on');render();}
+ document.getElementById('f_'+f).classList.add('on');render();}
+// 얼굴 아는 활성: 회원 + (트라이얼이면서 등록일 4/3 이후). 그 외(과거회원·리드·옛트라이얼)=기타
+function isActive(m){
+ if(m.stage==='회원')return true;
+ if(m.stage==='트라이얼')return (m.join_date||'')>='2026-04-03';
+ return false;
+}
 function match(m){
  const q=document.getElementById('q').value.trim().toLowerCase();
- if(q){const ph=(m.phone||'').replace(/\D/g,'');if(!(m.name||'').toLowerCase().includes(q) && !ph.includes(q)) return false;}
- if(filter==='nophoto' && m.photo_url) return false;
- if(filter==='active' && !['회원','트라이얼'].includes(m.stage)) return false;
- return true;
+ if(q){const ph=(m.phone||'').replace(/\D/g,'');if(!(m.name||'').toLowerCase().includes(q) && !ph.includes(q)) return false; return true;}
+ if(filter==='nophoto') return isActive(m) && !m.photo_url;
+ if(filter==='active') return isActive(m);
+ if(filter==='etc') return !isActive(m);
+ return true; // all
 }
 function render(){
- const list=PEOPLE.filter(match);
+ let list=PEOPLE.filter(match);
+ if(filter==='active'||filter==='nophoto'){
+  list.sort((a,b)=>{
+   const an=a.photo_url?1:0, bn=b.photo_url?1:0;      // 사진 없는(0) 먼저
+   if(an!==bn)return an-bn;
+   const al=LAST[a.glofox_user_id]||'', bl=LAST[b.glofox_user_id]||''; // 최근 출석 먼저
+   return bl.localeCompare(al);
+  });
+ }
  document.getElementById('count').textContent=`${list.length}명`;
  if(!list.length){document.getElementById('list').innerHTML='<div class="center">해당하는 회원이 없어요.</div>';return;}
  let h='';
