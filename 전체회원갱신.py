@@ -75,15 +75,13 @@ while page<=80:
     page+=1
 print(f"회원 {len(users)}명 수집")
 
-# ── dedup (이메일→전화→_id) ──
-persons,e_idx,p_idx={},{},{}
+# ── 병합 없음: 글로폭스 _id 마다 1행 (출석 uid와 정확히 매칭 → 미등록 방지) ──
+persons={}
 for u in users:
+    uid=u.get("_id")
+    if not uid: continue
     em=str(u.get("email")or"").strip().lower(); em=em if "@" in em else None
-    ph=phone(u.get("phone"))
-    pid=e_idx.get(em) or p_idx.get(ph) or u.get("_id")
-    if pid not in persons: persons[pid]={"glofox_user_id":u.get("_id",""),"u":u,"email":em,"phone":ph}
-    if em: e_idx[em]=pid
-    if ph: p_idx[ph]=pid
+    persons[uid]={"glofox_user_id":uid,"u":u,"email":em,"phone":phone(u.get("phone"))}
 
 today=datetime.now(KST).strftime("%Y-%m-%d")
 def stage_of(u,mem):
@@ -122,7 +120,7 @@ for pid,p in persons.items():
     elif is_r(nm): name=NC.get(nm,nm)   # 캐시 없으면 원문 유지
     else: name=nm
     memname=mem.get("membership_name") or mem.get("plan_name") or ""
-    row={"person_id":pid,"glofox_user_id":p["glofox_user_id"],"stage":stage_of(u,mem),
+    row={"person_id":p["glofox_user_id"],"glofox_user_id":p["glofox_user_id"],"stage":stage_of(u,mem),
          "name":name,"glofox_name":glo,"phone":p["phone"] or "","email":p["email"] or "",
          "source":str((u.get("leads")or{}).get("contact_source") or u.get("source") or ""),
          "membership":memname,"end_date":edate(mem.get("expiry_date")),
