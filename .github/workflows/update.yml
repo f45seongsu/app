@@ -2,31 +2,38 @@ name: F45 데이터 자동 갱신
 
 on:
   schedule:
-    - cron: '*/5 * * * *'      # 5분마다 (UTC 기준, GitHub 사정에 따라 다소 밀릴 수 있음)
-  workflow_dispatch:            # 수동 실행 버튼도 생김
+    - cron: '0 * * * *'         # 1시간마다 "재점화" (GitHub이 이때 루프를 새로 켜줌)
+  workflow_dispatch:            # 수동 실행 버튼
 
 concurrency:
   group: f45-update
-  cancel-in-progress: false
+  cancel-in-progress: true      # 새로 켜지면 이전 루프는 정리 (중복 방지)
 
 jobs:
   update:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 350        # 최대 약 5시간 50분 동안 루프
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-
       - name: 라이브러리 설치
         run: pip install supabase
 
-      - name: 전체 갱신 실행
+      - name: 5분마다 반복 갱신
         env:
           GLOFOX_API_KEY: ${{ secrets.GLOFOX_API_KEY }}
           GLOFOX_API_TOKEN: ${{ secrets.GLOFOX_API_TOKEN }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
-        run: python 자동갱신.py
+        run: |
+          END=$((SECONDS+20400))     # 약 5시간 40분간 루프
+          i=0
+          while [ $SECONDS -lt $END ]; do
+            i=$((i+1))
+            echo "===== 갱신 #$i ($(TZ=Asia/Seoul date '+%H:%M:%S')) ====="
+            python 자동갱신.py || echo "이번 회차 실패(무시하고 계속)"
+            sleep 300               # 5분 대기
+          done
+          echo "루프 종료 — 다음 정시에 다시 시작됩니다."
