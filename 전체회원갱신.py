@@ -139,3 +139,43 @@ for i in range(0,len(rows),200):
     except Exception as e:
         print("업서트 오류:",str(e)[:100])
 print(f"✅ 전체 회원 갱신 완료: {ok}명 반영 ({datetime.now(KST).strftime('%H:%M')})")
+
+# ── 미등록 보충: 출석엔 있으나 회원목록에 없는 uid 개별 조회 ──
+present=set(persons.keys())
+att_uids=set()
+frm=0
+while frm<=6000:
+    r=sb.table("attendance").select("glofox_user_id").range(frm,frm+999).execute()
+    d=r.data or []
+    for a in d:
+        u=a.get("glofox_user_id")
+        if u: att_uids.add(u)
+    if len(d)<1000: break
+    frm+=1000
+missing=[u for u in att_uids if u not in present]
+print(f"출석 있는데 회원목록에 없는 uid: {len(missing)}명 → 개별 보충")
+stub=[]
+for uid in missing:
+    u=api(f"{BASE}/2.0/members/{uid}")
+    if isinstance(u,dict) and "data" in u: u=u["data"]
+    if not isinstance(u,dict) or not u.get("_id"):
+        continue
+    mem=u.get("membership") or {}
+    nm=rawname(u); glo=str(u.get("name") or nm).strip()
+    if is_h(nm): name=clean_h(nm)
+    elif is_r(nm): name=NC.get(nm,nm)
+    else: name=nm
+    memname=mem.get("membership_name") or mem.get("plan_name") or ""
+    row={"person_id":uid,"glofox_user_id":uid,"stage":stage_of(u,mem),
+         "name":name or glo,"glofox_name":glo,"phone":phone(u.get("phone")),"email":str(u.get("email")or"").lower(),
+         "source":str((u.get("leads")or{}).get("contact_source") or u.get("source") or ""),
+         "membership":memname,"end_date":edate(mem.get("expiry_date")),
+         "join_date":edate(mem.get("start_date")),"birth":str(u.get("birth")or""),
+         "gender":str(u.get("gender")or""),"glofox_photo":u.get("image_url") or ""}
+    if is_pass(memname): row.update(credits(uid))
+    stub.append(row)
+if stub:
+    for i in range(0,len(stub),200):
+        try: sb.table("people").upsert(stub[i:i+200],on_conflict="person_id").execute()
+        except Exception as e: print("보충 업서트 오류:",str(e)[:80])
+    print(f"✅ 미등록 보충 완료: {len(stub)}명 추가")
