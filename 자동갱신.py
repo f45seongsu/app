@@ -22,15 +22,15 @@ sb = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_KEY"])
 NC = json.load(open("name_cache.json", encoding="utf-8")) if os.path.exists("name_cache.json") else {}
 SUR = set("김이박최정강조윤장임한오서신권황안송전홍유고문양손배백허남심노하곽성차주우구민류진지엄채원천방공현함변염여추도소석선설마길연위표명기반왕금옥육인맹제탁국어은편용봉빈사")
 
-def api(url, tries=3):
+def api(url, tries=4):
     for t in range(tries):
         try:
             with urllib.request.urlopen(urllib.request.Request(url, headers=H), timeout=45) as r:
                 return json.loads(r.read().decode("utf-8", "replace"))
         except Exception as e:
-            if t == tries-1: print("  API err:", str(e)[:70]); return {}
-            time.sleep(1)
-    return {}
+            if t == tries-1: print("  API err:", str(e)[:70]); return None  # 실패=None
+            time.sleep(2)
+    return None
 def is_h(s): return bool(re.search(r"[가-힣]", str(s)))
 def is_r(s): s=str(s).strip(); return bool(s) and bool(re.fullmatch(r"[A-Za-z .'-]+", s))
 def clean(s):
@@ -46,15 +46,30 @@ def clean(s):
 
 # ── 예약 전체 수집 (검증된 방식) ──
 today = datetime.now(KST).strftime("%Y-%m-%d")
-bookings, p = [], 1
-while p <= 120:
+bookings, p, fails, empty_ok = [], 1, 0, 0
+while p <= 140:
     d = api(f"{BASE}/2.2/branches/{BRANCH_ID}/bookings?limit=200&page={p}")
+    if d is None:                      # 통신 실패 → 멈추지 말고 재시도 후 다음 페이지
+        fails += 1
+        print(f"  page {p} 실패 → 재시도")
+        time.sleep(3)
+        d2 = api(f"{BASE}/2.2/branches/{BRANCH_ID}/bookings?limit=200&page={p}")
+        if d2 is None:
+            print(f"  page {p} 재실패 → 건너뜀(계속)")
+            p += 1
+            if fails >= 8: print("  실패 과다 → 중단"); break
+            continue
+        d = d2
     rows = d.get("data", []) if isinstance(d, dict) else []
-    if not rows: break
+    if not rows:                       # 성공했는데 빈 결과 = 진짜 끝
+        empty_ok += 1
+        if empty_ok >= 2: break        # 두 번 연속 빈 페이지면 확실히 끝
+        p += 1; continue
+    empty_ok = 0
     bookings.extend(rows)
-    if len(rows) < 200: break
+    if len(rows) < 200: break          # 마지막 페이지
     p += 1
-print(f"예약 전체 {len(bookings)}건 수집 (오늘={today})")
+print(f"예약 전체 {len(bookings)}건 수집 (오늘={today}, 실패페이지 {fails}개)")
 
 # ── 오늘 것만 ──
 att_rows, new_people, seen = [], [], set()
