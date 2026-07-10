@@ -380,8 +380,13 @@ async function loadData(manual){
  }
  today=new Date().toLocaleDateString('sv-SE',{timeZone:'Asia/Seoul'});
  MEMBERS={};
- const {data:people,error:e1}=await sb.from('people').select('*');
- if(e1){fail(e1);if(btn){btn.disabled=false;btn.textContent='↻';}return;}
+ let people=[],pf=0;
+ while(true){
+  const {data,error:e1}=await sb.from('people').select('*').range(pf,pf+999);
+  if(e1){fail(e1);if(btn){btn.disabled=false;btn.textContent='↻';}return;}
+  people=people.concat(data||[]);
+  if(!data||data.length<1000)break; pf+=1000;
+ }
  people.forEach(p=>{MEMBERS[p.glofox_user_id]=p});
  const since=new Date(today+'T00:00:00');since.setDate(since.getDate()-35);
  let all=[],from=0;
