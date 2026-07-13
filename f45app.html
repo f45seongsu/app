@@ -133,6 +133,7 @@ body{padding-bottom:76px}
 <div id="view-photo" class="view" style="display:none"></div>
 <div id="view-member" class="view" style="display:none"></div>
 <div id="view-birthday" class="view" style="display:none"></div>
+<div id="view-mile" class="view" style="display:none"></div>
 
 <nav class="tabbar">
  <button class="tab on" data-v="att" onclick="showView('att')"><span>📋</span>출결</button>
@@ -148,6 +149,7 @@ body{padding-bottom:76px}
   <button onclick="showView('pass')">🎫 횟수권 관리</button>
   <button onclick="showView('photo')">📸 사진 입력 (수업별)</button>
   <button onclick="showView('birthday')">🎂 생일 예정자</button>
+  <button onclick="showView('mile')">💯 마일스톤 임박</button>
   <button onclick="showView('member')">📷 회원 사진 채우기</button>
  </div>
 </div>
@@ -172,9 +174,9 @@ function badgeOf(m){if(m.stage==='트라이얼')return '트라이얼';if(m.pass_
 let VIEW='att';
 function toggleDrawer(){const d=document.getElementById('drawer');d.style.display=d.style.display==='none'?'block':'none';}
 function showView(v){VIEW=v;
- ['att','risk','expire','search','trial','pass','photo','member','birthday'].forEach(x=>{const el=document.getElementById('view-'+x);if(el)el.style.display=(x===v?'':'none');});
+ ['att','risk','expire','search','trial','pass','photo','member','birthday','mile'].forEach(x=>{const el=document.getElementById('view-'+x);if(el)el.style.display=(x===v?'':'none');});
  document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('on',b.dataset.v===v));
- const T={att:'수업 출결',risk:'이탈 위험군',expire:'만료 임박',search:'회원 검색',trial:'트라이얼 현황',pass:'횟수권 관리',photo:'사진 입력 (수업별)',member:'회원 사진 채우기',birthday:'생일 예정자'};
+ const T={att:'수업 출결',risk:'이탈 위험군',expire:'만료 임박',search:'회원 검색',trial:'트라이얼 현황',pass:'횟수권 관리',photo:'사진 입력 (수업별)',member:'회원 사진 채우기',birthday:'생일 예정자',mile:'마일스톤 임박'};
  document.getElementById('vtitle').textContent=T[v]||'';
  document.getElementById('sub').style.display=(v==='att'?'':'none');
  document.getElementById('drawer').style.display='none';
@@ -185,6 +187,7 @@ function showView(v){VIEW=v;
  if(v==='trial')renderTrial();
  if(v==='member')renderMember();
  if(v==='birthday')renderBirthday();
+ if(v==='mile')renderMilestone();
 }
 function renderSearch(){
  const q=(document.getElementById('q').value||'').trim().toLowerCase();
@@ -366,6 +369,56 @@ function renderBirthday(){
      <div class="sinfo" onclick="open_('${uid}')"><div class="nm">${esc(m.name)||'(이름없음)'}${bd?` <span class="badge b-${bd}">${bd}</span>`:''}</div><div class="smeta">${dtxt} · ${esc(m.birth.slice(5).replace('-','/'))}${ai?` · 한국 ${ai.kor}세`:''}</div></div>
      <div class="cacts">${ph?`<button class="mini" onclick="smsBday('${uid}')">축하문자</button><button class="mini" onclick="copyBday('${uid}')">문구</button>`:'<span class="smeta">번호없음</span>'}</div>
    </div>`;}).join('');
+}
+let MILEDATA=null;
+function nextMile(t){if(t<45)return 45;return (Math.floor(t/100)+1)*100;}
+function msgMile(uid,nm){const m=MEMBERS[uid]||{};const n=m.name||'회원';return `${n}님, 곧 F45 성수 ${nm}회 출석 달성이에요! 🎉 꾸준함이 정말 대단하세요 💪 함께 축하해요!`;}
+function smsMile(uid,nm){const m=MEMBERS[uid]||{};const ph=(m.phone||'').replace(/[^0-9]/g,'');if(!ph){alert('번호가 없어요.');return;}location.href='sms:'+ph+'&body='+encodeURIComponent(msgMile(uid,nm));}
+function copyMile(uid,nm){navigator.clipboard.writeText(msgMile(uid,nm));alert('축하 문구 복사됨');}
+async function renderMilestone(){
+ const box=document.getElementById('view-mile');
+ if(!MILEDATA){
+  box.innerHTML='<div class="center">출석 집계 중… (처음 한 번만)</div>';
+  // 각 회원의 baseline 이후 출석 수 집계 (visit_base_date 이후 attended)
+  const cnt={};let frm=0;
+  while(true){
+   const {data,error}=await sb.from('attendance').select('glofox_user_id,class_time').eq('attended',true).range(frm,frm+999);
+   if(error){box.innerHTML='<div class="center">집계 실패</div>';return;}
+   (data||[]).forEach(a=>{const u=a.glofox_user_id;if(!u)return;(cnt[u]=cnt[u]||[]).push((a.class_time||'').slice(0,10));});
+   if(!data||data.length<1000)break; frm+=1000;
+  }
+  MILEDATA=cnt;
+ }
+ const d14=ddaysAgo(14);
+ // 총방문 = baseline + (기준일 이후 출석). baseline 없으면 전체 우리출석 수로 대체
+ function totalVisits(m){
+  const dates=MILEDATA[m.glofox_user_id]||[];
+  if(m.visit_base!=null){
+   const bd=m.visit_base_date||'2000-01-01';
+   const after=dates.filter(d=>d>bd).length;   // 기준일 다음날부터
+   return (m.visit_base||0)+after;
+  }
+  return dates.length; // baseline 미반영 회원은 우리 출석만
+ }
+ let list=[];
+ Object.values(MEMBERS).forEach(m=>{if(!m.glofox_user_id)return;
+  const dates=MILEDATA[m.glofox_user_id]||[];
+  const recent=dates.filter(d=>d>d14).length; if(recent<1)return;   // 최근 2주 출석
+  const t=totalVisits(m); if(t<40)return;
+  const nm=nextMile(t); const rem=nm-t; if(rem>15)return;
+  list.push({uid:m.glofox_user_id,t,nm,rem});});
+ list.sort((a,b)=>a.rem-b.rem||b.t-a.t);
+ if(!list.length){box.innerHTML='<div class="center">임박한 마일스톤 대상자가 없어요.</div>';return;}
+ box.innerHTML=`<div class="listhead">💯 <b>마일스톤 임박</b> ${list.length}명 · 최근 2주 출석 중 · 얼마 안 남은 순<br>축하 아이템·사진 미리 준비하세요!</div>`+
+  list.map(x=>{const m=MEMBERS[x.uid];const bd=badgeOf(m);const ph=(m.phone||'').replace(/[^0-9]/g,'');
+   const hot=x.rem<=1?' 🎉':'';
+   return `<div class="carecard">
+     <div class="srow" style="border:0;padding:0;margin:0;background:none">
+       <span onclick="open_('${x.uid}')">${avatar(m,'bk')}</span>
+       <div class="sinfo" onclick="open_('${x.uid}')"><div class="nm">${esc(m.name)||'(이름없음)'}${bd?` <span class="badge b-${bd}">${bd}</span>`:''}</div>
+         <div class="smeta">현재 <b style="color:#5aa0e0">${x.t}회</b> · <b style="color:var(--red)">${x.nm}회까지 ${x.rem}회</b>${hot}</div></div>
+       <div class="cacts">${ph?`<button class="mini" onclick="smsMile('${x.uid}',${x.nm})">문자</button><button class="mini" onclick="copyMile('${x.uid}',${x.nm})">문구</button>`:'<span class="smeta">번호없음</span>'}</div>
+     </div></div>`;}).join('');
 }
 async function boot(){
  const il=document.getElementById('inputLink');if(il)il.href='회원입력.html'+location.search;
