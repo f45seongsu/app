@@ -38,6 +38,7 @@ h1{font-size:20px;font-weight:800}.sub{color:var(--dim);font-size:13px;margin:2p
 .nm{font-weight:600;font-size:14px}
 .nmwrap{display:flex;flex-direction:column;line-height:1.15}
 .igmini{font-size:9px;color:var(--dim);margin-top:1px}
+.submini{font-size:9px;color:var(--dim);margin-top:1px}
 .badge{font-size:10px;padding:1px 6px;border-radius:6px}
 .b-트라이얼{background:#3d3512;color:#e0c94f}.b-만료{background:#3d1a1a;color:#e06a6a}.b-횟수권{background:#123a3d;color:#4fd6e0}
 .inj{color:var(--red);font-size:12px}
@@ -117,6 +118,9 @@ body{padding-bottom:76px}
 .ig2 input{flex:1;background:#0e1a30;border:1px solid var(--line);color:var(--txt);border-radius:7px;padding:5px 8px;font-size:13px}
 .photobtn{display:block;text-align:center;margin-top:12px;background:#1c2f4d;border:1px dashed var(--line);color:var(--txt);border-radius:10px;padding:11px;font-size:14px;cursor:pointer}
 .photobtn:hover{border-color:var(--red)}
+.pbar{position:relative;height:8px;background:#0e1a30;border:1px solid var(--line);border-radius:5px;margin-top:8px;overflow:hidden}
+.pfill{position:absolute;left:0;top:0;bottom:0;background:var(--grn);opacity:.8}
+.pmark{position:absolute;top:-2px;bottom:-2px;width:2px;background:#e0c94f}
 </style></head><body>
 <header class="topbar"><button class="ham" onclick="toggleDrawer()">≡</button><h1 id="vtitle">수업 출결</h1><button id="refreshBtn" onclick="loadData(true)">↻</button></header>
 <div class="sub" id="sub">불러오는 중…</div>
@@ -186,6 +190,7 @@ function showView(v){VIEW=v;
  if(v==='expire')renderExpire();
  if(v==='trial')renderTrial();
  if(v==='member')renderMember();
+ if(v==='pass')renderPass();
  if(v==='birthday')renderBirthday();
  if(v==='mile')renderMilestone();
 }
@@ -420,6 +425,55 @@ async function renderMilestone(){
        <div class="cacts">${ph?`<button class="mini" onclick="smsMile('${x.uid}',${x.nm})">문자</button><button class="mini" onclick="copyMile('${x.uid}',${x.nm})">문구</button>`:'<span class="smeta">번호없음</span>'}</div>
      </div></div>`;}).join('');
 }
+function renderPass(){
+ const box=document.getElementById('view-pass');
+ let list=Object.values(MEMBERS).filter(m=>m.glofox_user_id&&(m.pass_remaining!=null||/횟수권|Class Pass/.test(m.membership||'')));
+ // 이름 중복 제거(같은 glofox_user_id 한 번)
+ const seen={}; list=list.filter(m=>{if(seen[m.glofox_user_id])return false;seen[m.glofox_user_id]=1;return true;});
+ list.sort((a,b)=>{const ae=(a.pass_expiry||'9999-99-99'),be=(b.pass_expiry||'9999-99-99');return ae.localeCompare(be);});
+ if(!list.length){box.innerHTML='<div class="center">횟수권 회원이 없어요.</div>';return;}
+ const tnow=new Date(today+'T00:00:00');
+ function dday(exp){if(!exp||exp.length<10)return null;const e=new Date(exp+'T00:00:00');return Math.round((e-tnow)/86400000);}
+ function pace(m){
+  const tot=+(m.pass_total||0), rem=+(m.pass_remaining||0);
+  const st=m.pass_start, ex=m.pass_expiry;
+  if(!tot||!st||!ex||st.length<10||ex.length<10)return null;
+  const s=new Date(st+'T00:00:00'), e=new Date(ex+'T00:00:00');
+  const totDays=(e-s)/86400000; const elapsed=(tnow-s)/86400000;
+  if(totDays<=0)return null;
+  const frac=Math.min(Math.max(elapsed/totDays,0),1);
+  const expUsed=tot*frac;                 // 지금쯤 썼어야 할 양
+  const expRem=tot-expUsed;               // 지금쯤 남았어야 할 양
+  const diff=rem-expRem;                  // +면 예정보다 많이 남음(덜 씀)
+  return {expUsed:Math.round(expUsed),expRem:Math.round(expRem),diff:Math.round(diff),usedActual:tot-rem};
+ }
+ box.innerHTML=`<div class="listhead">🎫 <b>횟수권 회원</b> ${list.length}명 · 만료 임박순 · 페이스(적정 사용속도 대비)</div>`+
+ list.map(m=>{const uid=m.glofox_user_id;const rem=m.pass_remaining,tot=m.pass_total;const dd=dday(m.pass_expiry);const p=pace(m);
+  let ddtxt = dd==null?'만료일 -':(dd<0?`<b style="color:#e0563a">${-dd}일 전 만료</b>`:(dd<=14?`<b style="color:#e0563a">D-${dd}</b>`:`D-${dd}`));
+  let paceTxt='';
+  if(p){
+   if(rem<=0) paceTxt=`<span style="color:#e0563a">소진 완료</span>`;
+   else if(p.diff>1.5) paceTxt=`<span style="color:#e0954f">예정보다 ${p.diff}회 더 남음 (느리게 사용)</span>`;
+   else if(p.diff<-1.5) paceTxt=`<span style="color:#5aa0e0">예정보다 ${-p.diff}회 적게 남음 (빠르게 사용)</span>`;
+   else paceTxt=`<span style="color:var(--grn)">적정 페이스</span>`;
+  }
+  // 경고: 만료 임박(≤14d)인데 잔여 많음
+  let warn='';
+  if(dd!=null&&dd>=0&&dd<=14&&rem>0){warn=` ⚠ <b style="color:#e0563a">만료 전 ${rem}회 소진 필요</b>`;}
+  // 진행 바
+  const pct=tot?Math.min((tot-rem)/tot*100,100):0;
+  const expPct=p&&tot?Math.min(p.usedActual===undefined?0:(p.expUsed/tot*100),100):null;
+  const bar=`<div class="pbar"><div class="pfill" style="width:${pct}%"></div>${expPct!=null?`<div class="pmark" style="left:${expPct}%"></div>`:''}</div>`;
+  return `<div class="carecard">
+   <div class="srow" style="border:0;padding:0;margin:0;background:none">
+    <span onclick="open_('${uid}')">${avatar(m,'bk')}</span>
+    <div class="sinfo" onclick="open_('${uid}')"><div class="nm">${esc(m.name)||'(이름없음)'}</div>
+      <div class="smeta">잔여 <b>${rem!=null?rem:'-'}</b> / 총 ${tot||'-'}회 · 만료 ${esc((m.pass_expiry||'').slice(0,10))||'-'} · ${ddtxt}</div></div>
+   </div>
+   ${bar}
+   <div class="smeta" style="margin-top:5px">${paceTxt}${p?` · 지금쯤 <b>${p.expUsed}회</b> 사용 예상 (실제 ${p.usedActual}회)`:''}${warn}</div>
+  </div>`;}).join('');
+}
 async function boot(){
  const il=document.getElementById('inputLink');if(il)il.href='회원입력.html'+location.search;
  if(!SUPABASE_URL||!PUBLISHABLE_KEY){document.getElementById('app').innerHTML='<div class="center">앱 설정이 필요해요.<br>파일 상단 SUPABASE_URL / PUBLISHABLE_KEY 를 채워주세요.</div>';return;}
@@ -518,7 +572,7 @@ function renderDay(doScroll){const evs=(SESSIONS[sel]||[]).slice().sort((a,b)=>(
    const click=on?`pick('${a.uid}')`:`open_('${a.uid}')`;
    const drop=on?'':`ondragover="dOverChip(event)" ondragleave="dLeaveChip(event)" ondrop="dropChip(event,'${a.uid}')"`;
    const ig=(m.instagram||'').replace('@','').trim();
-   h+=`<div class="chip s-${a._st} ${pk?'picked':''}" onclick="${click}" ${drop}>${avatar(m,a._st)}<span class="nmwrap"><span class="nm">${esc(m.name)}</span>${ig?`<span class="igmini">@${esc(ig)}</span>`:''}</span>${bd?`<span class="badge b-${bd}">${bd}</span>`:''}${m.injury_note?'<span class="inj">⚠</span>':''}${isBdayToday(m)?'<span title="오늘 생일">🎂</span>':''}<span class="ck">✓</span></div>`;});
+   h+=`<div class="chip s-${a._st} ${pk?'picked':''}" onclick="${click}" ${drop}>${avatar(m,a._st)}<span class="nmwrap"><span class="nm">${esc(m.name)}</span>${(()=>{const vt=visitTotal(m);const igt=ig?`@${esc(ig)}`:'';const vtt=vt!=null?`${vt}회`:'';return (igt||vtt)?`<span class="submini">${[igt,vtt].filter(Boolean).join(' · ')}</span>`:'';})()}</span>${bd?`<span class="badge b-${bd}">${bd}</span>`:''}${m.injury_note?'<span class="inj">⚠</span>':''}${isBdayToday(m)?'<span title="오늘 생일">🎂</span>':''}<span class="ck">✓</span></div>`;});
   h+='</div>';
   if(on){h+=`<div class="selbar"><span class="selcnt">${PICK.size}명 선택</span><button onclick="pickAll(${i})">전체</button><button onclick="pickNone()">해제</button><button class="pri" onclick="copyInsta()">@ 인스타복사</button><button class="pri" onclick="copyPhones()">번호복사</button><button onclick="smsOpen()">문자앱</button></div>`;}
   h+='</div>';});
@@ -557,12 +611,18 @@ function copyTxt(t,msg){navigator.clipboard.writeText(t);alert(msg+'\n'+t)}
 function bigPhoto(url){if(!url)return;document.getElementById('lightbox').innerHTML=`<img src="${url}">`;document.getElementById('lightbox').style.display='flex'}
 
 function ageInfo(b){if(!b||b.length<10)return null;const by=+b.slice(0,4),bm=+b.slice(5,7),bd=+b.slice(8,10);const n=new Date();let man=n.getFullYear()-by;if(n.getMonth()+1<bm||(n.getMonth()+1===bm&&n.getDate()<bd))man--;const kor=n.getFullYear()-by+1;return{man,kor,disp:`${b} · 만 ${man}세 (한국 ${kor}세)`};}
+function visitTotal(m){if(m.visit_base==null)return null;const vbd=m.visit_base_date||'2000-01-01';const after=(m._days||[]).filter(d=>d>vbd).length;return (m.visit_base||0)+after;}
 function isBdayToday(m){if(!m.birth||m.birth.length<10)return false;const n=new Date();return (+m.birth.slice(5,7))===n.getMonth()+1&&(+m.birth.slice(8,10))===n.getDate();}
 function daysToBday(m){if(!m.birth||m.birth.length<10)return 999;const n=new Date();const b=new Date(n.getFullYear(),+m.birth.slice(5,7)-1,+m.birth.slice(8,10));const t=new Date(n.getFullYear(),n.getMonth(),n.getDate());let d=Math.round((b-t)/86400000);if(d<0)d+=365;return d;}
 function msgBday(uid){const m=MEMBERS[uid]||{};const nm=m.name||'회원';const k=ageInfo(m.birth);return `${nm}님, 생일 진심으로 축하드려요! 🎉 F45 성수에서 올 한 해도 건강하고 활기차게 보내세요 💪 생일 기념 방문하시면 작은 선물 준비해뒀어요 😊`;}
 function smsBday(uid){const m=MEMBERS[uid]||{};const ph=(m.phone||'').replace(/[^0-9]/g,'');if(!ph){alert('번호가 없어요.');return;}location.href='sms:'+ph+'&body='+encodeURIComponent(msgBday(uid));}
 function copyBday(uid){navigator.clipboard.writeText(msgBday(uid));alert('생일 문구 복사됨');}
 async function upDetailPhoto(uid,file){await upPhotoApp(uid,file);open_(uid);}
+async function delDetailPhoto(uid){if(!confirm('이 회원의 등록 사진을 삭제할까요?'))return;
+ try{const{error}=await sb.from('people').update({photo_url:null}).eq('glofox_user_id',uid);
+  if(error){alert('삭제 실패: '+error.message);return;}
+  if(MEMBERS[uid])MEMBERS[uid].photo_url=null; open_(uid);
+ }catch(e){alert('오류: '+e.message);}}
 async function open_(uid){
  const m=MEMBERS[uid]||{name:'(미등록)'};
  // 전체 출석 이력 조회 (총출석 + 4주)
@@ -585,6 +645,7 @@ async function open_(uid){
  ${passHTML}
  <label class="photobtn" for="d_photo" ondragover="dOverA(event)" ondragleave="dLeaveA(event)" ondrop="dropA(event,'${uid}')">📷 사진 추가 / 변경 (탭 또는 드래그)</label>
  <input type="file" id="d_photo" accept="image/*" style="display:none" onchange="upDetailPhoto('${uid}',this.files[0])">
+ ${m.photo_url?`<div style="text-align:center;margin-top:6px"><span class="mini" style="color:#e0563a;cursor:pointer" onclick="delDetailPhoto('${uid}')">🗑 등록 사진 삭제</span></div>`:''}
  <div class="stats"><div class="stat"><b>${fullVisits}</b><span>총 방문</span></div><div class="stat"><b>${w.cnt}</b><span>최근 4주</span></div></div>
  <div class="wklab">최근 4주 출석 (월~토) · 색상=주 출석 시간대</div><div class="sqwrap"><div class="sqhead"><div>월</div><div>화</div><div>수</div><div>목</div><div>금</div><div>토</div></div><div class="sq">${w.html}</div></div>
  <div style="display:flex;gap:12px;margin-top:6px;font-size:11px"><span style="color:#e06a6a">■ 오전</span><span style="color:#e0c94f">■ 점심</span><span style="color:#5aa0e0">■ 오후/저녁</span></div>
