@@ -570,6 +570,8 @@ async function open_(uid){
  const dayHour={};
  (att||[]).forEach(a=>{const ct=String(a.class_time);const ds=ct.slice(0,10);const hh=parseInt(ct.slice(11,13));if(!isNaN(hh)){if(dayHour[ds]==null||hh<dayHour[ds])dayHour[ds]=hh;}});
  const total=(att||[]).length; const w=weekGrid(dayHour); const bd=badgeOf(m);
+ let fullVisits=total;
+ if(m.visit_base!=null){const vbd=m.visit_base_date||'2000-01-01';const after=(att||[]).filter(a=>(a.class_time||'').slice(0,10)>vbd).length;fullVisits=(m.visit_base||0)+after;}
  const ph=(m.phone||'').replace(/[^0-9]/g,''); const ig=(m.instagram||'').replace('@','');
  const passHTML = m.pass_remaining!=null ? `<div class="pass">횟수권 · 잔여 <b>${m.pass_remaining}회</b> / 총 ${m.pass_total||'-'}회<br><span style="color:var(--dim);font-size:12px">만료 ${esc(m.pass_expiry)||'-'}</span></div>`:'';
  document.getElementById('sheet').innerHTML=`<span class="close" onclick="close_()">×</span>
@@ -583,7 +585,7 @@ async function open_(uid){
  ${passHTML}
  <label class="photobtn" for="d_photo" ondragover="dOverA(event)" ondragleave="dLeaveA(event)" ondrop="dropA(event,'${uid}')">📷 사진 추가 / 변경 (탭 또는 드래그)</label>
  <input type="file" id="d_photo" accept="image/*" style="display:none" onchange="upDetailPhoto('${uid}',this.files[0])">
- <div class="stats"><div class="stat"><b>${total}</b><span>총 출석</span></div><div class="stat"><b>${w.cnt}</b><span>최근 4주</span></div></div>
+ <div class="stats"><div class="stat"><b>${fullVisits}</b><span>총 방문</span></div><div class="stat"><b>${w.cnt}</b><span>최근 4주</span></div></div>
  <div class="wklab">최근 4주 출석 (월~토) · 색상=주 출석 시간대</div><div class="sqwrap"><div class="sqhead"><div>월</div><div>화</div><div>수</div><div>목</div><div>금</div><div>토</div></div><div class="sq">${w.html}</div></div>
  <div style="display:flex;gap:12px;margin-top:6px;font-size:11px"><span style="color:#e06a6a">■ 오전</span><span style="color:#e0c94f">■ 점심</span><span style="color:#5aa0e0">■ 오후/저녁</span></div>
  <div class="wklab" style="margin-top:14px">부상/주의</div><textarea id="f_injury">${esc(m.injury_note)}</textarea>
