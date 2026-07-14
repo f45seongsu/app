@@ -5,7 +5,7 @@
 *{box-sizing:border-box;margin:0;padding:0}
 body{background:var(--navy);color:var(--txt);font-family:'Pretendard',-apple-system,sans-serif;padding:16px 14px 60px;max-width:900px;margin:0 auto}
 h1{font-size:20px;font-weight:800}.sub{color:var(--dim);font-size:13px;margin:2px 0 14px}
-.strip{display:flex;gap:6px;overflow-x:auto;padding:4px 0 12px}
+.strip{display:flex;gap:6px;overflow-x:auto;padding:8px 0 12px;position:sticky;top:0;z-index:40;background:var(--navy);border-bottom:1px solid var(--line)}
 .day{flex:none;width:46px;text-align:center;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:6px 0;cursor:pointer}
 .day.sel{background:var(--red);border-color:var(--red)}.day.sel .dn{color:#fff}
 .day .mo{font-size:9px;color:var(--dim)}.day .dw{font-size:10px;color:var(--dim)}.day .dn{font-size:16px;font-weight:800}
@@ -497,12 +497,28 @@ async function triggerSync(){
 async function countdownWait(sec,btn){
  for(let i=sec;i>0;i--){ if(btn)btn.textContent='갱신 '+i; await new Promise(r=>setTimeout(r,1000)); }
 }
+async function syncStamp(){try{const {data}=await sb.from('sync_state').select('synced_at').eq('id',1).maybeSingle();return data?data.synced_at:null;}catch(e){return null;}}
+async function waitForSync(t0,btn){
+ // 실제 갱신 완료(sync_state 변경)까지 최대 ~120초 폴링
+ for(let i=0;i<24;i++){
+  await new Promise(r=>setTimeout(r,5000));
+  if(btn)btn.textContent='갱신 '+((i+1)*5);
+  const t=await syncStamp();
+  if(t && t!==t0) return true;   // 새 갱신 감지 → 즉시 종료
+ }
+ return false;
+}
 async function loadData(manual){
  const btn=document.getElementById('refreshBtn'); if(btn){btn.disabled=true;btn.textContent='…';}
  if(manual){
+  const t0=await syncStamp();            // 갱신 전 시각
   const res=await triggerSync();
-  if(res==='ok'){ await countdownWait(40,btn); }      // 글로폭스에서 가져오는 시간 대기
-  else if(res.startsWith('err')){ alert('실시간 갱신 요청 실패('+res+') · 토큰/권한 확인. 저장된 데이터를 불러옵니다.'); }
+  if(res==='ok'){
+   const done=await waitForSync(t0,btn); // 진짜 갱신될 때까지 대기
+   if(!done && btn){ btn.textContent='…'; }  // 지연돼도 일단 최신 읽기 진행
+  } else if(res.startsWith('err')){
+   alert('실시간 갱신 요청 실패('+res+') · 토큰/권한 확인. 저장된 데이터를 불러옵니다.');
+  }
   // 'notoken'이면 조용히 저장된 데이터만 읽음
  }
  today=new Date().toLocaleDateString('sv-SE',{timeZone:'Asia/Seoul'});
@@ -623,6 +639,15 @@ async function delDetailPhoto(uid){if(!confirm('이 회원의 등록 사진을 �
   if(error){alert('삭제 실패: '+error.message);return;}
   if(MEMBERS[uid])MEMBERS[uid].photo_url=null; open_(uid);
  }catch(e){alert('오류: '+e.message);}}
+async function editName(uid){
+ const m=MEMBERS[uid]||{};
+ const nv=prompt('이름을 수정하세요',m.name||'');
+ if(nv==null)return; const name=nv.trim(); if(!name)return;
+ try{const{error}=await sb.from('people').update({name:name}).eq('glofox_user_id',uid);
+  if(error){alert('저장 실패: '+error.message);return;}
+  if(MEMBERS[uid])MEMBERS[uid].name=name; open_(uid);
+ }catch(e){alert('오류: '+e.message);}
+}
 async function open_(uid){
  const m=MEMBERS[uid]||{name:'(미등록)'};
  // 전체 출석 이력 조회 (총출석 + 4주)
@@ -635,7 +660,7 @@ async function open_(uid){
  const ph=(m.phone||'').replace(/[^0-9]/g,''); const ig=(m.instagram||'').replace('@','');
  const passHTML = m.pass_remaining!=null ? `<div class="pass">횟수권 · 잔여 <b>${m.pass_remaining}회</b> / 총 ${m.pass_total||'-'}회<br><span style="color:var(--dim);font-size:12px">만료 ${esc(m.pass_expiry)||'-'}</span></div>`:'';
  document.getElementById('sheet').innerHTML=`<span class="close" onclick="close_()">×</span>
- <div class="mhead"><span onclick="bigPhoto('${esc(photoOf(m))}')">${avatar(m,'bk')}</span><div><h2 style="font-size:19px">${esc(m.name)} ${bd?`<span class="badge b-${bd}">${bd}</span>`:''}</h2></div></div>
+ <div class="mhead"><span onclick="bigPhoto('${esc(photoOf(m))}')">${avatar(m,'bk')}</span><div><h2 style="font-size:19px">${esc(m.name)} ${bd?`<span class="badge b-${bd}">${bd}</span>`:''} <span class="mini" style="cursor:pointer;font-weight:400" onclick="editName('${uid}')">✏️ 이름수정</span></h2></div></div>
  <div class="mrow"><span class="mk">연락처</span><span>${esc(m.phone)||'-'}</span>${ph?`<span class="acts"><a class="mini" href="tel:${ph}">통화</a><a class="mini" href="sms:${ph}">문자</a><span class="mini" onclick="copyTxt('${esc(m.phone)}','번호 복사됨 · 카톡에 붙여넣기')">카톡</span></span>`:''}</div>
  <div class="mrow"><span class="mk">인스타</span><span>${ig?'@'+esc(ig):'-'}</span>${ig?`<span class="acts"><span class="mini" onclick="copyTxt('@${esc(ig)}','태그 복사됨')">태그</span></span>`:''}</div>
  <div class="mrow"><span class="mk">멤버십</span>${esc(m.membership)||'-'}</div>
