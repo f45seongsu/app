@@ -1,0 +1,903 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>F45 시리즈 3 · 빌드 단계 코치 가이드</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  :root{
+    --navy:#152151; --navy2:#211551; --red:#d60010;
+    --gray:#f4f5f8; --line:#e3e5ec; --muted:#8b90a0;
+  }
+  body{
+    font-family:'Pretendard','Apple SD Gothic Neo',-apple-system,BlinkMacSystemFont,'Malgun Gothic',sans-serif;
+    line-height:1.7; color:#2b2f3a; background:#eceef3;
+    -webkit-text-size-adjust:100%;
+  }
+  .wrap{ max-width:1100px; margin:0 auto; background:#fff; }
+
+  header{ background:linear-gradient(135deg,var(--navy) 0%,var(--navy2) 100%); color:#fff; padding:44px 32px; }
+  .kicker{ display:inline-block; background:var(--red); padding:6px 14px; border-radius:3px;
+           font-size:.82rem; font-weight:700; letter-spacing:.08em; margin-bottom:14px; }
+  header h1{ font-size:2.1rem; line-height:1.3; font-weight:800; margin-bottom:6px; }
+  header .sub{ opacity:.85; font-size:1rem; }
+  .hdr-meta{ display:flex; gap:28px; flex-wrap:wrap; margin-top:22px; padding-top:20px; border-top:1px solid rgba(255,255,255,.22); }
+  .hdr-meta div{ font-size:.9rem; }
+  .hdr-meta b{ display:block; font-size:1.15rem; margin-bottom:2px; }
+
+  nav{ background:var(--gray); padding:22px 32px; border-bottom:1px solid var(--line); }
+  nav p{ font-weight:700; color:var(--navy); margin-bottom:10px; font-size:.9rem; }
+  nav ol{ list-style:none; display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:6px 20px; }
+  nav a{ color:#444; text-decoration:none; font-size:.9rem; display:block; padding:3px 0; }
+  nav a:hover{ color:var(--red); }
+  nav .num{ color:var(--red); font-weight:700; margin-right:6px; }
+
+  main{ padding:8px 32px 40px; }
+  section{ padding:38px 0; border-bottom:1px solid var(--line); }
+  section:last-child{ border-bottom:none; }
+
+  h2{ font-size:1.5rem; color:var(--navy); font-weight:800; margin-bottom:6px;
+      padding-left:14px; border-left:5px solid var(--red); }
+  h2 .en{ font-size:.8rem; color:var(--muted); font-weight:600; display:block; letter-spacing:.04em; }
+  h3{ font-size:1.12rem; color:var(--navy2); font-weight:700; margin:28px 0 12px; }
+  h4{ font-size:1rem; color:var(--navy); font-weight:700; margin:18px 0 8px; }
+  p{ margin:10px 0; }
+  ul,ol{ margin:10px 0 10px 20px; }
+  li{ margin:6px 0; }
+
+  .days{ display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:12px; margin:18px 0; }
+  .day{ border:1px solid var(--line); border-radius:8px; overflow:hidden; background:#fff; }
+  .day.ref{ opacity:.62; }
+  .day-top{ padding:10px 14px; color:#fff; display:flex; justify-content:space-between; align-items:center; }
+  .day-top .dow{ font-weight:800; font-size:.95rem; }
+  .day-top .min{ background:rgba(255,255,255,.22); padding:2px 8px; border-radius:20px; font-size:.75rem; font-weight:700; }
+  .day-body{ padding:14px; }
+  .w-name{ font-size:1.15rem; font-weight:800; color:var(--navy); }
+  .w-mean{ font-size:.8rem; color:var(--muted); margin-top:1px; }
+  .w-kr{ font-size:.85rem; color:var(--red); font-weight:600; margin:4px 0 8px; }
+  .w-tag{ display:inline-block; background:var(--gray); color:#555; font-size:.72rem;
+          padding:2px 8px; border-radius:20px; margin:0 4px 4px 0; font-weight:600; }
+  .w-desc{ font-size:.88rem; color:#555; margin-top:8px; line-height:1.6; }
+  .ref-chip{ display:inline-block; background:#dfe2ea; color:#5c6070; font-size:.7rem;
+             font-weight:800; padding:2px 8px; border-radius:20px; margin-left:6px; }
+
+  .c-thr{ background:#e6a100; } .c-tit{ background:#2f3d7e; } .c-var{ background:var(--red); }
+  .c-fif{ background:#00868f; } .c-nin{ background:#1c2a5e; } .c-her{ background:#1f8a4c; }
+  .c-all{ background:#8a8fa3; }
+
+  table{ width:100%; border-collapse:collapse; margin:14px 0; font-size:.9rem; }
+  th{ background:var(--navy); color:#fff; padding:11px 10px; text-align:left; font-weight:700; }
+  td{ padding:10px; border-bottom:1px solid var(--line); vertical-align:top; }
+  tbody tr:nth-child(even){ background:#fafbfd; }
+  .tbl-compact td, .tbl-compact th{ padding:8px; font-size:.85rem; }
+  td.hi{ color:var(--red); font-weight:700; }
+  th.ref-col{ background:#6e7285; }
+  td.ref-col{ color:var(--muted); background:#f7f8fa !important; }
+
+  .box{ border-radius:8px; padding:18px; margin:16px 0; }
+  .box-tip{ background:#eef4ff; border-left:5px solid #3b6fd4; }
+  .box-warn{ background:#fff6e0; border-left:5px solid #e6a100; }
+  .box-key{ background:#eaf7ee; border-left:5px solid #1f8a4c; }
+  .box-red{ background:#fdecee; border-left:5px solid var(--red); }
+  .box-gray{ background:#f4f5f8; border-left:5px solid #8a8fa3; }
+  .box b{ color:var(--navy); }
+
+  .terms{ display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:10px; }
+  .term{ border:1px solid var(--line); border-radius:8px; padding:14px; background:#fff; }
+  .term .t-en{ font-size:.78rem; color:var(--muted); font-weight:600; }
+  .term .t-kr{ font-size:1.02rem; font-weight:800; color:var(--navy); margin:2px 0 6px; }
+  .term .t-kr span{ color:var(--red); font-size:.85rem; font-weight:600; }
+  .term p{ font-size:.86rem; color:#555; margin:0; line-height:1.6; }
+
+  .mins{ display:grid; grid-template-columns:repeat(auto-fit,minmax(250px,1fr)); gap:14px; margin:18px 0; }
+  .min-card{ border:1px solid var(--line); border-radius:8px; overflow:hidden; }
+  .min-head{ padding:12px 14px; color:#fff; }
+  .m1{ background:#7cc576; } .m2{ background:#3d9e4a; } .m3{ background:#16612a; }
+  .min-head .t{ font-size:.78rem; opacity:.9; font-weight:600; }
+  .min-head .n{ font-size:1.05rem; font-weight:800; }
+  .min-head .e{ font-size:.75rem; opacity:.85; }
+  .min-body{ padding:14px; font-size:.88rem; color:#555; }
+  .rpe{ display:inline-block; background:var(--navy); color:#fff; padding:5px 12px;
+        border-radius:4px; font-weight:800; font-size:.92rem; margin-top:10px; }
+
+  .lv{ display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:12px; margin:14px 0; }
+  .lv-card{ border:2px solid var(--line); border-radius:8px; padding:16px; text-align:center; }
+  .lv-code{ font-size:1.5rem; font-weight:800; color:var(--red); }
+  .lv-name{ font-weight:700; color:var(--navy); margin-bottom:8px; font-size:.95rem; }
+  .lv-desc{ font-size:.84rem; color:#555; line-height:1.6; }
+
+  .script{ background:var(--gray); border:1px dashed #b9bece; border-radius:8px; padding:18px; margin:14px 0; }
+  .script .label{ font-size:.75rem; font-weight:700; color:var(--red); letter-spacing:.06em; margin-bottom:8px; }
+  .script p{ font-size:.95rem; line-height:1.9; margin:6px 0; }
+  .blank{ color:var(--muted); }
+
+  .check li{ list-style:none; margin:8px 0; padding-left:26px; position:relative; }
+  .check li:before{ content:"☐"; position:absolute; left:0; color:var(--red); font-size:1.1rem; }
+
+  footer{ background:var(--navy); color:#fff; padding:26px 32px; font-size:.85rem; }
+  footer p{ opacity:.85; }
+  .note{ font-size:.82rem; color:var(--muted); margin-top:6px; }
+
+  @media (max-width:640px){
+    header{ padding:32px 20px; } header h1{ font-size:1.55rem; }
+    nav, main, footer{ padding-left:18px; padding-right:18px; }
+    table{ font-size:.8rem; } th,td{ padding:8px 6px; }
+  }
+  @media print{
+    body{ background:#fff; } nav{ display:none; }
+    section{ page-break-inside:avoid; border-bottom:1px solid #ccc; }
+    header{ -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="kicker">SERIES 3 · BUILD PHASE</div>
+  <h1>시리즈 3 · 빌드 단계 코치 가이드</h1>
+  <div class="sub">2026년 7월 20일(월) ~ 8월 16일(일) · 4주 과정</div>
+  <div class="hdr-meta">
+    <div><b>4주</b>빌드 단계 기간</div>
+    <div><b>6종</b>운영 워크아웃 (월~토)</div>
+    <div><b>스레숄드</b>이번 단계 신규 클래스</div>
+    <div><b>9월 12일</b>PEAK500 최종 측정</div>
+  </div>
+</header>
+
+<nav>
+  <p>목차</p>
+  <ol>
+    <li><a href="#s1"><span class="num">01</span>빌드 단계란</a></li>
+    <li><a href="#s2"><span class="num">02</span>요일별 워크아웃</a></li>
+    <li><a href="#s3"><span class="num">03</span>4주 캘린더</a></li>
+    <li><a href="#s4"><span class="num">04</span>신규 클래스 · 스레숄드</a></li>
+    <li><a href="#s5"><span class="num">05</span>중량 · 반복수 기준표</a></li>
+    <li><a href="#s6"><span class="num">06</span>유산소 강도 기준</a></li>
+    <li><a href="#s7"><span class="num">07</span>요일별 코칭 포인트</a></li>
+    <li><a href="#s8"><span class="num">08</span>회원 안내 멘트</a></li>
+    <li><a href="#s9"><span class="num">09</span>용어 사전</a></li>
+    <li><a href="#s10"><span class="num">10</span>동선 방식 3종</a></li>
+    <li><a href="#s11"><span class="num">11</span>라이언하트 · 머신 세팅</a></li>
+    <li><a href="#s12"><span class="num">12</span>인트로 스크립트 양식</a></li>
+    <li><a href="#s13"><span class="num">13</span>선택 워크아웃 · 대형 클래스 세팅</a></li>
+    <li><a href="#s14"><span class="num">14</span>코치 인증 과정</a></li>
+    <li><a href="#s15"><span class="num">15</span>시작 전 체크리스트</a></li>
+  </ol>
+</nav>
+
+<main>
+
+<!-- 01 -->
+<section id="s1">
+  <h2>01. 빌드 단계란<span class="en">BUILD PHASE OVERVIEW</span></h2>
+
+  <div class="box box-red">
+    <b style="font-size:1.05rem;">한 줄 요약</b>
+    <p style="margin:8px 0 0;">베이스 단계에서 <b>자세를 다졌다면</b>, 빌드 단계는 그 자세를 유지한 채 <b>무게와 속도를 올리는 시기</b>입니다.</p>
+  </div>
+
+  <h3>이번 단계의 3대 목표</h3>
+  <table>
+    <thead><tr><th style="width:32%">목표</th><th>내용</th><th style="width:22%">측정 항목</th></tr></thead>
+    <tbody>
+      <tr><td><b>미는 힘 키우기</b><br><span class="note">Pressing Strength</span></td>
+          <td>어깨 위로 밀어 올리는 힘. 오버헤드 프레스 중량 향상이 목표입니다.</td>
+          <td>오버헤드 프레스</td></tr>
+      <tr><td><b>한 다리 힘 키우기</b><br><span class="note">Unilateral Leg Strength</span></td>
+          <td>양발이 아니라 <b>한쪽 다리씩</b> 쓰는 힘. 런지·스텝업처럼 좌우를 따로 쓰는 동작이 여기 해당합니다. 좌우 밸런스 차이를 줄이는 게 핵심.</td>
+          <td>런지</td></tr>
+      <tr><td><b>달리기 속도 올리기</b><br><span class="note">Sprint Speed</span></td>
+          <td>스프린트 강도와 속도를 높이고, 회복 후 다시 같은 속도를 내는 능력까지 기릅니다.</td>
+          <td>스프린트</td></tr>
+    </tbody>
+  </table>
+  <p class="note">※ 이 3가지가 9월 12일 PEAK500에서 측정하는 항목입니다. 4주 내내 이 방향으로 코칭이 모여야 합니다.</p>
+
+  <h3>베이스 → 빌드, 무엇이 달라지나</h3>
+  <table class="tbl-compact">
+    <thead><tr><th style="width:20%">구분</th><th style="width:40%">베이스 단계 (지난 4주)</th><th style="width:40%">빌드 단계 (이번 4주)</th></tr></thead>
+    <tbody>
+      <tr><td><b>초점</b></td><td>동작의 질, 기술 습득</td><td class="hi">수행 능력 향상</td></tr>
+      <tr><td><b>페이스</b></td><td>통제된 페이스, 중간 강도</td><td class="hi">운동·휴식 구성이 빡빡해짐</td></tr>
+      <tr><td><b>휴식</b></td><td>여유 있음</td><td class="hi">짧아짐</td></tr>
+      <tr><td><b>키우는 능력</b></td><td>유산소 기초, 어깨 안정성, 런지 밸런스</td><td class="hi">반복 유지력 · 한계 지점 적응 · 지친 상태의 근지구력</td></tr>
+      <tr><td><b>코칭 방향</b></td><td>"자세부터 정확하게"</td><td class="hi">"자세 유지한 채로 한 단계 위로"</td></tr>
+    </tbody>
+  </table>
+
+  <div class="box box-key">
+    <b>빌드 단계 훈련 원칙</b>
+    <p style="margin:8px 0 0;">중량과 속도를 올린다 · 의도를 갖고 훈련한다 · <b>통제(control)에서 수행(performance)으로 전환한다</b></p>
+  </div>
+</section>
+
+<!-- 02 -->
+<section id="s2">
+  <h2>02. 요일별 워크아웃 <span class="en">WEEKLY LINEUP — 4주 내내 동일하게 반복</span></h2>
+
+  <div class="box box-tip">
+    <b>4주 동안 요일별 워크아웃은 바뀌지 않습니다.</b>
+    <p style="margin:6px 0 0;">7월 20일부터 8월 16일까지 매주 같은 순서로 반복됩니다. 회원들이 <b>같은 워크아웃을 4번</b> 하게 되므로, 매주 조금씩 중량과 강도를 올려나가는 게 이번 단계의 핵심입니다.</p>
+  </div>
+
+  <div class="days">
+    <div class="day">
+      <div class="day-top c-thr"><span class="dow">월요일</span><span class="min">30분</span></div>
+      <div class="day-body">
+        <div class="w-name">THRESHOLD</div>
+        <div class="w-mean">threshold = 문턱, 경계선</div>
+        <div class="w-kr">스레숄드 · 한계 지점 훈련 <b style="color:#e6a100;">🆕 신규</b></div>
+        <span class="w-tag">하이브리드</span><span class="w-tag">레이스트랙</span><span class="w-tag">3분 × 10스테이션</span>
+        <div class="w-desc">긴 3분 세트와 짧은 45초 휴식으로 <b>유산소 한계 지점</b>을 시험합니다. 1분마다 강도를 올리는 게 규칙.</div>
+      </div>
+    </div>
+
+    <div class="day">
+      <div class="day-top c-tit"><span class="dow">화요일</span><span class="min">27분</span></div>
+      <div class="day-body">
+        <div class="w-name">TITANS</div>
+        <div class="w-mean">titan = 그리스 신화의 거인족</div>
+        <div class="w-kr">타이탄즈 · 근력 집중</div>
+        <span class="w-tag">근력</span><span class="w-tag">중량 위주</span>
+        <div class="w-desc">순수 근력과 <b>한 다리 운동</b>에 집중. 이름 그대로 <b>무게를 올리는 날</b>입니다.</div>
+      </div>
+    </div>
+
+    <div class="day">
+      <div class="day-top c-var"><span class="dow">수요일</span><span class="min">27분</span></div>
+      <div class="day-body">
+        <div class="w-name">VARSITY</div>
+        <div class="w-mean">varsity = 학교 대표팀 (university의 줄임말)</div>
+        <div class="w-kr">바시티 · 랩마다 강도 바꾸기</div>
+        <span class="w-tag">유산소</span><span class="w-tag">3랩 구성</span>
+        <div class="w-desc">대표팀 훈련처럼 랩마다 강도가 <b>널뛰기</b>합니다. 중량은 계속 가볍게, <b>횟수만</b> 8~12 → 12~15 → 15~25로 늘어납니다.</div>
+      </div>
+    </div>
+
+    <div class="day">
+      <div class="day-top c-fif"><span class="dow">목요일</span><span class="min">30분</span></div>
+      <div class="day-body">
+        <div class="w-name">50/50</div>
+        <div class="w-mean">fifty-fifty = 반반</div>
+        <div class="w-kr">피프티피프티 · 근력 반 유산소 반</div>
+        <span class="w-tag">근력+유산소</span>
+        <div class="w-desc">이름 그대로 근력과 심폐를 <b>반반</b>으로 가져갑니다. 한 다리 중량 훈련이 함께 들어갑니다.</div>
+      </div>
+    </div>
+
+    <div class="day">
+      <div class="day-top c-nin"><span class="dow">금요일</span><span class="min">27분</span></div>
+      <div class="day-body">
+        <div class="w-name">THE NINES</div>
+        <div class="w-mean">nine = 9 (모든 세트가 9회)</div>
+        <div class="w-kr">더 나인즈 · 9회 딱 맞추기</div>
+        <span class="w-tag">하이브리드</span><span class="w-tag">횟수 기준</span>
+        <div class="w-desc">시간이 아니라 <b>9회 반복</b>이 기준. 강도가 오르내리는 구성에 폭발적 동작이 반복됩니다.</div>
+      </div>
+    </div>
+
+    <div class="day">
+      <div class="day-top c-her"><span class="dow">토요일</span><span class="min">36분</span></div>
+      <div class="day-body">
+        <div class="w-name">HEROES HOLLYWOOD</div>
+        <div class="w-mean">heroes = 영웅들</div>
+        <div class="w-kr">히어로즈 할리우드 · 주말 대형 클래스</div>
+        <span class="w-tag">하이브리드</span><span class="w-tag">팔로우 더 리더</span>
+        <div class="w-desc">할리우드 계열의 뱀처럼 흐르는 동선. 최고 강도를 끌어내는 주말 대표 클래스.</div>
+      </div>
+    </div>
+
+    <div class="day ref">
+      <div class="day-top c-all"><span class="dow">일요일 <span class="ref-chip">참고</span></span><span class="min">36분</span></div>
+      <div class="day-body">
+        <div class="w-name">ALL STAR</div>
+        <div class="w-mean">all-star = 최고 선수들만 모은 팀</div>
+        <div class="w-kr">올스타 · 페이스 조절</div>
+        <span class="w-tag">근력</span>
+        <div class="w-desc">피로가 쌓여도 <b>처음과 끝의 페이스를 똑같이</b> 유지하는 능력을 기릅니다.<br><b>※ 우리 스튜디오는 일요일 수업이 없어 운영하지 않습니다.</b></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="box box-gray">
+    <b>일요일 · ALL STAR 는 참고용입니다</b>
+    <p style="margin:6px 0 0;">우리 스튜디오는 일요일 클래스를 운영하지 않으므로 <b>실제 편성은 월~토 6종</b>입니다. 일요일 항목은 회원이 다른 지점에서 물어볼 경우를 대비한 참고 정보로만 두었습니다.</p>
+  </div>
+
+  <h3>대체 편성 (스트렝스 플립)</h3>
+  <p>근력 클래스를 앞쪽 요일에 배치한 <b>대체 편성표</b>도 있습니다. 워크아웃 종류는 동일하고 <b>요일 순서만 다릅니다.</b> 스튜디오 사정에 따라 둘 중 하나를 선택해 운영합니다.</p>
+  <table class="tbl-compact">
+    <thead><tr><th style="width:16%">요일</th><th style="width:42%">기본 편성</th><th style="width:42%">대체 편성 (스트렝스 플립)</th></tr></thead>
+    <tbody>
+      <tr><td><b>월</b></td><td>THRESHOLD (30분)</td><td class="hi">TITANS (27분)</td></tr>
+      <tr><td><b>화</b></td><td>TITANS (27분)</td><td class="hi">THRESHOLD (30분)</td></tr>
+      <tr><td><b>수</b></td><td>VARSITY (27분)</td><td class="hi">50/50 (30분)</td></tr>
+      <tr><td><b>목</b></td><td>50/50 (30분)</td><td class="hi">VARSITY (27분)</td></tr>
+      <tr><td><b>금</b></td><td>THE NINES (27분)</td><td class="hi">ALL STAR (36분)</td></tr>
+      <tr><td><b>토</b></td><td>HEROES HOLLYWOOD (36분)</td><td>HEROES HOLLYWOOD (36분)</td></tr>
+      <tr><td class="ref-col"><b>일</b> <span class="ref-chip">참고</span></td><td class="ref-col">ALL STAR (36분)</td><td class="ref-col">THE NINES (27분)</td></tr>
+    </tbody>
+  </table>
+  <p class="note">※ 우리 스튜디오가 어느 편성을 쓰는지 먼저 확정한 뒤 회원 공지에 반영하세요.</p>
+</section>
+
+<!-- 03 -->
+<section id="s3">
+  <h2>03. 4주 캘린더 <span class="en">BUILD PHASE CALENDAR</span></h2>
+  <table class="tbl-compact">
+    <thead>
+      <tr>
+        <th style="width:12%">주차</th><th>월</th><th>화</th><th>수</th><th>목</th><th>금</th><th>토</th>
+        <th class="ref-col">일 <span class="ref-chip" style="background:rgba(255,255,255,.25);color:#fff;">참고</span></th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><b>1주차</b></td>
+        <td>7/20<br>THRESHOLD</td><td>7/21<br>TITANS</td><td>7/22<br>VARSITY</td><td>7/23<br>50/50</td>
+        <td>7/24<br>THE NINES</td><td>7/25<br>HEROES HW</td><td class="ref-col">7/26<br>ALL STAR</td>
+      </tr>
+      <tr>
+        <td><b>2주차</b></td>
+        <td>7/27<br>THRESHOLD</td><td>7/28<br>TITANS</td><td>7/29<br>VARSITY</td><td>7/30<br>50/50</td>
+        <td>7/31<br>THE NINES</td><td>8/01<br>HEROES HW</td><td class="ref-col">8/02<br>ALL STAR</td>
+      </tr>
+      <tr>
+        <td><b>3주차</b></td>
+        <td>8/03<br>THRESHOLD</td><td>8/04<br>TITANS</td><td>8/05<br>VARSITY</td><td>8/06<br>50/50</td>
+        <td>8/07<br>THE NINES</td><td>8/08<br>HEROES HW</td><td class="ref-col">8/09<br>ALL STAR</td>
+      </tr>
+      <tr>
+        <td><b>4주차</b></td>
+        <td>8/10<br>THRESHOLD</td><td>8/11<br>TITANS</td><td>8/12<br>VARSITY</td><td>8/13<br>50/50</td>
+        <td>8/14<br>THE NINES</td><td>8/15<br>HEROES HW</td><td class="ref-col">8/16<br>ALL STAR</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="box box-warn">
+    <b>시리즈 3 전체 일정</b>
+    <ul style="margin:8px 0 0 18px;">
+      <li><b>베이스 단계</b> — 6/22 ~ 7/19 (종료)</li>
+      <li><b>빌드 단계</b> — 7/20 ~ 8/16 <b style="color:#d60010;">← 현재</b></li>
+      <li><b>피크 단계</b> — 8/17 ~ 9/13 (레드라인 · 맥시무스 · 트리플 스렛 · 피너클 · 다운언더 · 스파르탄 · 페가수스)</li>
+      <li><b>PEAK500 측정</b> — <b style="color:#d60010;">9월 12일(토)</b> · 27분+ · 시리즈 3 최종 벤치마크</li>
+    </ul>
+  </div>
+</section>
+
+<!-- 04 -->
+<section id="s4">
+  <h2>04. 신규 클래스 · 스레숄드 <span class="en">THRESHOLD — 이번 단계의 핵심</span></h2>
+
+  <div class="box box-red">
+    <b>스레숄드(Threshold)가 뭔가요?</b>
+    <p style="margin:8px 0 0;">영어로 <b>문턱, 경계선</b>이라는 뜻입니다. 운동에서는 <b>"이보다 더 세게 하면 몸이 급격히 지치기 시작하는 경계선"</b>을 말합니다.</p>
+    <p style="margin:8px 0 0;">이 경계선 근처에서 반복적으로 훈련하면 <b>경계선 자체가 위로 올라갑니다.</b> 즉 예전보다 더 세게 해도 안 지치는 몸이 되는 것.</p>
+    <p style="margin:8px 0 0;"><b>이 클래스의 진짜 난이도는 세게 하는 게 아니라, 처음에 참고 천천히 가는 것입니다.</b></p>
+  </div>
+
+  <h3>기본 정보</h3>
+  <table class="tbl-compact">
+    <tbody>
+      <tr><td style="width:26%"><b>타입</b></td><td>하이브리드 (근력 + 유산소 혼합)</td></tr>
+      <tr><td><b>정원</b></td><td>30명 (스테이션당 3명)</td></tr>
+      <tr><td><b>스테이션</b></td><td>10개</td></tr>
+      <tr><td><b>동선</b></td><td>레이스트랙 — 방을 한 바퀴 도는 원형 동선</td></tr>
+      <tr><td><b>운동 시간</b></td><td>3분</td></tr>
+      <tr><td><b>휴식</b></td><td>45초</td></tr>
+      <tr><td><b>랩</b></td><td>1바퀴</td></tr>
+    </tbody>
+  </table>
+
+  <h3>3분을 1분씩 3구간으로 나눕니다</h3>
+  <p>TV 화면의 <b>초록색 농도가 1분마다 진해집니다.</b> 색이 진해지는 만큼 회원의 강도도 올라가야 합니다.</p>
+
+  <div class="mins">
+    <div class="min-card">
+      <div class="min-head m1">
+        <div class="t">0:00 ~ 1:00 · 연한 초록</div>
+        <div class="n">1분 · 몸풀기 구간</div>
+        <div class="e">Aerobic Foundation</div>
+      </div>
+      <div class="min-body">
+        자세와 호흡 리듬을 잡는 구간. 아직 <b>여유가 있어야</b> 합니다.
+        <div class="rpe">힘의 70~75%</div>
+        <p style="margin-top:10px;font-size:.82rem;color:#8b90a0;">코칭 멘트 — "아직 참으세요. 지금 다 쓰면 3분 못 갑니다."</p>
+      </div>
+    </div>
+    <div class="min-card">
+      <div class="min-head m2">
+        <div class="t">1:00 ~ 2:00 · 중간 초록</div>
+        <div class="n">2분 · 한계 구간</div>
+        <div class="e">Threshold Zone</div>
+      </div>
+      <div class="min-body">
+        몸이 실제로 <b>바뀌는 구간</b>. 심박수가 올라가고 젖산이 쌓이기 시작하지만 아직 버틸 만합니다.
+        <div class="rpe">힘의 80~85%</div>
+        <p style="margin-top:10px;font-size:.82rem;color:#8b90a0;">코칭 멘트 — "지금부터 한 단계 올립니다. 힘들지만 버틸 수 있는 정도."</p>
+      </div>
+    </div>
+    <div class="min-card">
+      <div class="min-head m3">
+        <div class="t">2:00 ~ 3:00 · 진한 초록</div>
+        <div class="n">3분 · 한계 돌파 구간</div>
+        <div class="e">Above Threshold</div>
+      </div>
+      <div class="min-body">
+        지친 상태에서 <b>자세를 무너뜨리지 않고</b> 불편함을 견디는 법을 배우는 구간.
+        <div class="rpe">힘의 90% 이상</div>
+        <p style="margin-top:10px;font-size:.82rem;color:#8b90a0;">코칭 멘트 — "마지막 1분! 자세만 지키면서 다 쏟아내세요."</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="box box-warn">
+    <b>⚠️ 코치 필독</b>
+    <p style="margin:8px 0 0;">스레숄드는 <b>F45 최초로 구체적인 체감 강도(RPE) 목표가 들어간 워크아웃</b>입니다. 첫 수업 전에 반드시 본사 웨비나 시청과 자료 숙지를 완료해 주세요.</p>
+  </div>
+
+  <h3>스레숄드 코칭 핵심 5가지</h3>
+  <ol>
+    <li><b>한 문장으로 각인시키기</b> — "천천히 시작해서 세게 끝낸다"</li>
+    <li><b>수업 시작 전 숫자 3개 못 박기</b> — "1분 70%, 2분 80%, 3분 90%"</li>
+    <li><b>색 변화 짚어주기</b> — "화면 초록색 진해지면 올릴 타이밍입니다"</li>
+    <li><b>3분차 자세 체크</b> — 지쳐도 자세가 무너지면 강도를 낮추게 하세요</li>
+    <li><b>1분차 호흡 강조</b> — 여기서 호흡 리듬을 못 잡으면 3분을 못 버팁니다</li>
+  </ol>
+</section>
+
+<!-- 05 -->
+<section id="s5">
+  <h2>05. 중량 · 반복수 기준표 <span class="en">LOAD + REP RANGE GUIDE</span></h2>
+  <p>회원 수준에 맞춰 이 범위 안에서 안내해 주세요.</p>
+
+  <table>
+    <thead>
+      <tr><th style="width:22%">워크아웃</th><th style="width:38%">구분</th><th style="width:20%">중량</th><th style="width:20%">반복수</th></tr>
+    </thead>
+    <tbody>
+      <tr><td rowspan="2"><b>THRESHOLD</b><br><span class="note">스레숄드</span></td>
+          <td>유산소 · 코어</td><td>가볍게</td><td class="hi">12~20회</td></tr>
+      <tr><td>근력</td><td>중간</td><td class="hi">10~12회</td></tr>
+
+      <tr><td rowspan="2"><b>TITANS</b><br><span class="note">타이탄즈</span></td>
+          <td>작은 근육 (어깨·팔 등)</td><td>가볍게~중간</td><td class="hi">10~15회</td></tr>
+      <tr><td>큰 근육 (다리·등·가슴)</td><td>중간~무겁게</td><td class="hi">8~12회</td></tr>
+
+      <tr><td rowspan="3"><b>VARSITY</b><br><span class="note">바시티 · 전체 가볍게</span></td>
+          <td>1랩</td><td>가볍게</td><td class="hi">8~12회</td></tr>
+      <tr><td>2랩</td><td>가볍게</td><td class="hi">12~15회</td></tr>
+      <tr><td>3랩</td><td>가볍게</td><td class="hi">15~25회</td></tr>
+
+      <tr><td rowspan="2"><b>50/50</b><br><span class="note">피프티피프티</span></td>
+          <td>작은 근육</td><td>가볍게~중간</td><td class="hi">12~15회</td></tr>
+      <tr><td>큰 근육</td><td>중간~무겁게</td><td class="hi">8~12회</td></tr>
+
+      <tr><td rowspan="2"><b>THE NINES</b><br><span class="note">더 나인즈</span></td>
+          <td>유산소</td><td>가볍게</td><td class="hi" rowspan="2">9-9 (횟수 기준)</td></tr>
+      <tr><td>근력</td><td>중간</td></tr>
+
+      <tr><td rowspan="2"><b>HEROES HOLLYWOOD</b><br><span class="note">히어로즈 할리우드 · 2랩 기준</span></td>
+          <td>유산소 · 코어</td><td>가볍게</td><td class="hi">12~20회</td></tr>
+      <tr><td>근력</td><td>중간~무겁게</td><td class="hi">8~15회</td></tr>
+
+      <tr><td rowspan="3" class="ref-col"><b>ALL STAR</b> <span class="ref-chip">참고</span><br><span class="note">올스타 · 일요일 미운영</span></td>
+          <td class="ref-col">작은 근육</td><td class="ref-col">가볍게~중간</td><td class="ref-col">10~15회</td></tr>
+      <tr><td class="ref-col">큰 근육</td><td class="ref-col">중간~무겁게</td><td class="ref-col">8~12회</td></tr>
+      <tr><td class="ref-col">코어</td><td class="ref-col">가볍게</td><td class="ref-col">10~15회</td></tr>
+    </tbody>
+  </table>
+
+  <div class="box box-tip">
+    <b>바시티(VARSITY)는 좀 특이합니다 — 코치 전원 공유 필요</b>
+    <p style="margin:6px 0 0;">중량은 <b>처음부터 끝까지 가볍게 고정</b>이고, <b>횟수만 랩마다 늘어납니다</b> (8~12 → 12~15 → 15~25). 무게를 올리는 날이 아니라 <b>횟수로 몰아치는 날</b>이라고 안내하세요.</p>
+  </div>
+  <div class="box box-warn">
+    <b>THRESHOLD 중량 기준은 잠정값입니다</b>
+    <p style="margin:6px 0 0;">신규 워크아웃이라 세부 기준이 추후 업데이트될 수 있습니다. 현재는 위 범위를 기준으로 운영하고, 본사 공지가 오면 반영하세요.</p>
+  </div>
+</section>
+
+<!-- 06 -->
+<section id="s6">
+  <h2>06. 유산소 강도 기준 <span class="en">CARDIO APPROACH AND EFFORT GUIDE</span></h2>
+  <p><b>① 회원 수준별로 어떻게 대응할지</b> + <b>② 운동 시간이 몇 초냐에 따라 몇 %로 뛰게 할지</b>를 정리한 기준입니다.</p>
+
+  <h3>① 회원 수준별 대응 방법</h3>
+  <div class="lv">
+    <div class="lv-card">
+      <div class="lv-code">BEG</div>
+      <div class="lv-name">초급자</div>
+      <div class="lv-desc">금방 지칠 걸 미리 예상하고, <b>강도·충격을 낮춘 대체 동작</b>을 준비해두세요.</div>
+    </div>
+    <div class="lv-card">
+      <div class="lv-code">INT</div>
+      <div class="lv-name">중급자</div>
+      <div class="lv-desc"><b>자세가 유지될 때만</b> 강도를 올리게 하세요. 저충격 대체 동작도 함께 준비.</div>
+    </div>
+    <div class="lv-card">
+      <div class="lv-code">ADV</div>
+      <div class="lv-name">상급자</div>
+      <div class="lv-desc">쉬지 않고 이어가도록 유도하고, <b>자세가 유지될 때만</b> 목표 횟수를 제시하세요.</div>
+    </div>
+    <div class="lv-card">
+      <div class="lv-code">ELT</div>
+      <div class="lv-name">최상급자</div>
+      <div class="lv-desc">반응과 회복이 빠른 회원에게는 <b>목표 횟수를 더 높여</b> 제시하세요.</div>
+    </div>
+  </div>
+
+  <h3>② 운동 시간별 목표 강도</h3>
+  <table class="tbl-compact">
+    <thead><tr><th style="width:18%">운동 시간</th><th style="width:16%">목표 강도</th><th>의미</th></tr></thead>
+    <tbody>
+      <tr><td><b>20초</b></td><td class="hi">90%</td><td>거의 전력. 짧으니 다 쏟아내도 됩니다.</td></tr>
+      <tr><td><b>30초</b></td><td class="hi">80%</td><td>강하게. 끝까지 유지 가능한 최대치.</td></tr>
+      <tr><td><b>40초</b></td><td class="hi">75%</td><td>중상 강도. 후반에 떨어지지 않게 배분.</td></tr>
+      <tr><td><b>60초</b></td><td class="hi">50%</td><td>절반. 길기 때문에 <b>페이스 배분이 전부</b>입니다.</td></tr>
+    </tbody>
+  </table>
+  <div class="box box-tip"><b>한 줄 원칙</b> — 운동 시간이 <b>짧을수록 세게</b>, <b>길수록 나눠서</b>.</div>
+
+  <h3>에르그 머신 세팅 기준</h3>
+  <table class="tbl-compact">
+    <thead><tr><th style="width:22%">구분</th><th>바이크 🚴</th><th>로워 🚣</th><th>스키어 ⛷️</th></tr></thead>
+    <tbody>
+      <tr><td><b>댐퍼</b></td><td class="hi">6~8</td><td class="hi">5~7</td><td class="hi">5~7</td></tr>
+      <tr><td><b>목표 (55/60초)</b></td><td>500m</td><td>1:3 비율</td><td>1:3 비율</td></tr>
+      <tr><td><b>목표 (40/45초)</b></td><td>400m</td><td>1:2 비율</td><td>1:2 비율</td></tr>
+      <tr><td><b>목표 (20/30초)</b></td><td>200m</td><td>1:1 비율</td><td>1:1 비율</td></tr>
+      <tr><td><b>코칭 큐</b></td><td>"복도" — 어깨가 벽에 닿지 않게</td><td>"빅3" — 다리·코어·팔 / 팔·코어·다리</td><td>"주머니로 당기기" — 힙 힌지</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- 07 -->
+<section id="s7">
+  <h2>07. 요일별 코칭 포인트 <span class="en">COACHING FOCUS</span></h2>
+
+  <h4>월 · THRESHOLD — "천천히 시작해서 세게 끝낸다"</h4>
+  <ul>
+    <li>3분을 1분씩 3개 구간으로 <b>반드시 나눠서</b> 설명 (70 → 80 → 90%)</li>
+    <li>TV 초록색이 진해지는 것 = 강도 올릴 신호</li>
+    <li>1분차에 오버페이스하는 회원 잡아주기 — 이게 이 클래스 최대 실수</li>
+    <li>마지막 1분 자세 무너짐 체크</li>
+  </ul>
+
+  <h4>화 · TITANS / 목 · 50/50 — "무게를 올리는 날"</h4>
+  <ul>
+    <li>매주 조금씩 중량 올리도록 유도 (예: 지난주 12kg → 이번주 14kg)</li>
+    <li><b>자세가 먼저, 무게는 그 다음.</b> 자세 무너지면 즉시 감량</li>
+    <li>한 다리 운동에서 <b>좌우 차이</b> 관찰 — 약한 쪽에 맞춰 안내</li>
+    <li>회원별 사용 중량을 기록해두고 다음 주에 언급해주면 효과가 큽니다</li>
+  </ul>
+
+  <h4>수 · VARSITY / 금 · THE NINES — "강도 널뛰기 + 폭발력"</h4>
+  <ul>
+    <li>랩·세트마다 <b>강도가 달라진다</b>는 걸 미리 명확히 공지</li>
+    <li>바시티는 중량 고정 + 횟수 증가 → "무게 올리지 마시고 횟수로 가세요"</li>
+    <li>나인즈는 9회 딱 맞추기 → 대충 세는 것 방지, 횟수 카운트 유도</li>
+    <li>폭발적으로 밀고 당기는 의도적인 동작 강조</li>
+  </ul>
+
+  <h4>토 · HEROES HOLLYWOOD — "페이스 유지"</h4>
+  <ul>
+    <li>36분 긴 클래스 → <b>초반 오버페이스 경계</b></li>
+    <li>"첫 세트와 마지막 세트가 같은 수준이어야 한다"를 반복 강조</li>
+    <li>피로가 쌓여도 출력이 유지되는지 관찰하고 피드백</li>
+    <li>주말 인원 많은 클래스 → 스테이션 배치와 동선 사전 점검</li>
+  </ul>
+
+  <h3>빌드 단계 공통 코칭 원칙 5</h3>
+  <table class="tbl-compact">
+    <thead><tr><th style="width:26%">원칙</th><th>실행 방법</th></tr></thead>
+    <tbody>
+      <tr><td><b>① 조금씩 더 어렵게</b><br><span class="note">Progressive Overload</span></td><td>매주 중량·횟수·강도·속도 중 <b>하나만</b> 올려도 충분합니다.</td></tr>
+      <tr><td><b>② 자세가 최우선</b></td><td>자세가 무너지는 무게는 그 회원에게 <b>아직 이른 무게</b>입니다.</td></tr>
+      <tr><td><b>③ 의도를 갖고</b></td><td>"이 동작이 왜 필요한지" 한 마디씩 붙여주세요. 집중도가 달라집니다.</td></tr>
+      <tr><td><b>④ 사람마다 다르게</b></td><td>같은 클래스라도 BEG/INT/ADV/ELT 4단계로 다르게 안내.</td></tr>
+      <tr><td><b>⑤ 회복 강조</b></td><td>강도가 올라가는 단계 = 수면·영양 중요성을 자주 언급할 시기.</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- 08 -->
+<section id="s8">
+  <h2>08. 회원 안내 멘트 <span class="en">MEMBER COMMUNICATION</span></h2>
+
+  <div class="script">
+    <div class="label">빌드 단계 첫 주 · 공통 멘트</div>
+    <p>"오늘부터 <b>빌드 단계</b>입니다. 지난 4주 동안 자세를 만드셨다면, 이제부터 4주는 <b>그 자세로 무게와 속도를 올리는 시간</b>이에요.</p>
+    <p>휴식이 조금 짧아지고 강도가 올라갑니다. 대신 목표는 단순합니다 — <b>지난주의 나보다 딱 한 단계만 위로.</b> 무게를 조금 올리든, 한두 개 더 하든, 속도를 조금 높이든 상관없습니다.</p>
+    <p>단, <b>자세가 무너지면 그건 진전이 아니라 부상입니다.</b> 자세 먼저, 무게는 그 다음!"</p>
+  </div>
+
+  <div class="script">
+    <div class="label">스레숄드 첫 수업 · 필수 멘트</div>
+    <p>"오늘은 새로 나온 <b>스레숄드</b>입니다. <b>'한계 지점'</b>이라는 뜻이에요.</p>
+    <p>한 자리에서 <b>3분</b>을 하는데, 이 3분을 <b>1분씩 세 구간</b>으로 나눕니다. 화면 초록색이 1분마다 진해지는데, 색이 진해지는 만큼 여러분도 세게 하시면 됩니다.</p>
+    <p>• <b>1분 — 70%.</b> 아직 참으세요. 여기서 다 쓰면 3분 못 갑니다.<br>
+       • <b>2분 — 80%.</b> 한 단계 올립니다. 힘들지만 버틸 만한 정도.<br>
+       • <b>3분 — 90% 이상.</b> 자세만 지키면서 다 쏟아내세요.</p>
+    <p>이 클래스에서 제일 어려운 건 세게 하는 게 아니라 <b>처음에 참는 것</b>입니다. 천천히 시작해서 세게 끝내기!"</p>
+  </div>
+
+  <div class="script">
+    <div class="label">바시티 수업 · 필수 멘트</div>
+    <p>"오늘은 <b>바시티</b>입니다. '학교 대표팀'이라는 뜻이에요.<br>
+    이 클래스는 <b>무게를 올리는 날이 아닙니다.</b> 중량은 처음부터 끝까지 가볍게 고정하시고, <b>랩이 갈수록 횟수가 늘어납니다.</b><br>
+    1랩 8~12회 → 2랩 12~15회 → 3랩 15~25회.<br>
+    무게 욕심내시면 3랩에서 못 버팁니다. 가볍게 잡고 <b>횟수로 몰아치세요!</b>"</p>
+  </div>
+
+  <div class="script">
+    <div class="label">동기 부여용 한 줄</div>
+    <p>• "9월 12일 PEAK500까지 D-<span class="blank">__</span>일. 지금 4주가 그날 기록을 만듭니다."<br>
+       • "이번 4주는 같은 운동을 4번 반복합니다. 4주 뒤에 <b>같은 무게가 가벼워진 걸</b> 직접 느끼실 거예요."<br>
+       • "F45 앱 켜두시면 측정 기록이 쌓입니다. 기록 없으면 성장도 안 보여요."</p>
+  </div>
+</section>
+
+<!-- 09 -->
+<section id="s9">
+  <h2>09. 용어 사전 <span class="en">TERMINOLOGY</span></h2>
+
+  <h3>워크아웃 이름 뜻</h3>
+  <table class="tbl-compact">
+    <thead><tr><th style="width:24%">워크아웃</th><th style="width:26%">읽는 법</th><th>이름 뜻</th></tr></thead>
+    <tbody>
+      <tr><td><b>THRESHOLD</b></td><td>스레숄드</td><td><b>문턱, 경계선.</b> 이보다 세게 하면 급격히 지치기 시작하는 지점</td></tr>
+      <tr><td><b>TITANS</b></td><td>타이탄즈</td><td><b>그리스 신화의 거인족.</b> 강력한 힘 = 근력 집중 클래스</td></tr>
+      <tr><td><b>VARSITY</b></td><td>바시티</td><td><b>학교 대표팀.</b> university(대학)의 줄임말에서 온 단어로, 학교 최상위 선수들이 뛰는 팀을 뜻함</td></tr>
+      <tr><td><b>50/50</b></td><td>피프티피프티</td><td><b>반반.</b> 근력 절반 + 유산소 절반</td></tr>
+      <tr><td><b>THE NINES</b></td><td>더 나인즈</td><td><b>9.</b> 모든 세트를 9회 반복하는 데서 온 이름</td></tr>
+      <tr><td><b>HEROES HOLLYWOOD</b></td><td>히어로즈 할리우드</td><td><b>영웅들.</b> 할리우드 계열(뱀 모양 동선)의 고강도 버전</td></tr>
+      <tr class="ref-col"><td class="ref-col"><b>ALL STAR</b> <span class="ref-chip">참고</span></td><td class="ref-col">올스타</td><td class="ref-col"><b>최고 선수만 모은 팀.</b> 스포츠의 올스타전에서 온 이름</td></tr>
+    </tbody>
+  </table>
+
+  <h3>빌드 단계에서 자주 나오는 어려운 말</h3>
+  <div class="terms">
+    <div class="term">
+      <div class="t-en">Threshold</div>
+      <div class="t-kr">한계 지점 <span>[스레숄드]</span></div>
+      <p>이보다 세게 하면 급격히 지치기 시작하는 경계선. 이 근처에서 훈련하면 경계선 자체가 올라갑니다.</p>
+    </div>
+    <div class="term">
+      <div class="t-en">Aerobic Threshold</div>
+      <div class="t-kr">유산소 한계 지점 <span>[에어로빅 스레숄드]</span></div>
+      <p>숨이 차기 시작해서 오래 못 버티게 되는 강도의 경계선.</p>
+    </div>
+    <div class="term">
+      <div class="t-en">RPE (Rate of Perceived Exertion)</div>
+      <div class="t-kr">체감 강도 <span>[알피이]</span></div>
+      <p>"내 최대 힘의 몇 % 쓰고 있나"를 본인이 느낌으로 판단하는 것. 70% = 여유 있음 / 85% = 힘들지만 가능 / 90%+ = 거의 전력.</p>
+    </div>
+    <div class="term">
+      <div class="t-en">Unilateral</div>
+      <div class="t-kr">한쪽씩 하는 운동 <span>[유니래터럴]</span></div>
+      <p>양쪽을 동시에 안 쓰고 <b>한 다리·한 팔씩</b> 하는 동작. 런지, 스텝업, 싱글 암 로우 등. 좌우 밸런스를 맞추는 게 목적.</p>
+    </div>
+    <div class="term">
+      <div class="t-en">Contrast-style Conditioning</div>
+      <div class="t-kr">강도 널뛰기 방식 <span>[콘트라스트]</span></div>
+      <p>같은 운동을 랩마다 강도를 확 바꿔가며 하는 것. 예) 1랩 8회 → 3랩 25회. 몸이 강도 변화에 적응하게 만듭니다.</p>
+    </div>
+    <div class="term">
+      <div class="t-en">Repeatability</div>
+      <div class="t-kr">반복 유지력 <span>[리피터빌리티]</span></div>
+      <p>첫 세트와 마지막 세트를 <b>같은 수준으로</b> 해내는 능력. 지쳐도 안 떨어지는 힘.</p>
+    </div>
+    <div class="term">
+      <div class="t-en">Strength Endurance</div>
+      <div class="t-kr">지친 상태의 근지구력</div>
+      <p>피곤한 상태에서도 힘을 계속 낼 수 있는 능력.</p>
+    </div>
+    <div class="term">
+      <div class="t-en">Progressive Overload</div>
+      <div class="t-kr">조금씩 더 어렵게 <span>[프로그레시브 오버로드]</span></div>
+      <p>매주 무게·횟수·강도·속도 중 하나를 조금씩 올려 계속 성장시키는 원칙.</p>
+    </div>
+    <div class="term">
+      <div class="t-en">Time Domain</div>
+      <div class="t-kr">운동/휴식 시간 구성 <span>[타임 도메인]</span></div>
+      <p>몇 초 운동하고 몇 초 쉬는지의 조합. 빌드 단계에서는 이게 더 빡빡해집니다.</p>
+    </div>
+    <div class="term">
+      <div class="t-en">Pacing</div>
+      <div class="t-kr">페이스 배분 <span>[페이싱]</span></div>
+      <p>처음부터 끝까지 힘을 어떻게 나눠 쓸지. 초반 오버페이스가 가장 흔한 실수.</p>
+    </div>
+  </div>
+
+  <h3>F45 공통 용어</h3>
+  <table class="tbl-compact">
+    <tbody>
+      <tr><td style="width:24%"><b>MEMBERS</b> 멤버</td><td>동시에 운동하는 F45 회원 수</td></tr>
+      <tr><td><b>STATIONS</b> 스테이션</td><td>운동 종목(자리)의 개수</td></tr>
+      <tr><td><b>WORK</b> 워크</td><td>운동하는 시간</td></tr>
+      <tr><td><b>REST</b> 레스트</td><td>쉬는 시간</td></tr>
+      <tr><td><b>SET</b> 세트</td><td>한 스테이션에서 수행하는 운동 1회분</td></tr>
+      <tr><td><b>COMBO SET</b> 콤보 세트</td><td>알파벳으로 나뉜 여러 스테이션(A, B…)을 한 세트에 이어서 수행</td></tr>
+      <tr><td><b>LAPS</b> 랩</td><td>팟 또는 전체 동선을 한 바퀴 도는 횟수</td></tr>
+      <tr><td><b>POD</b> 팟</td><td>여러 스테이션을 묶은 워크아웃의 한 구역</td></tr>
+      <tr><td><b>REELS</b> 릴</td><td>TV에 여러 운동이 연속으로 재생되는 형식</td></tr>
+      <tr><td><b>ROUNDS</b> 라운드</td><td>여러 루프를 한 사이클 도는 것</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- 10 -->
+<section id="s10">
+  <h2>10. 동선 방식 3종 <span class="en">MOVEMENT SYSTEMS</span></h2>
+  <p>F45 워크아웃의 동선은 크게 3가지입니다.</p>
+  <table>
+    <thead><tr><th style="width:22%">방식</th><th style="width:48%">설명</th><th style="width:30%">해당 워크아웃</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><b>POD-BASED</b><br><span class="note">팟 방식 · 구역 나누기</span></td>
+        <td>워크아웃을 여러 구역(팟)으로 나누고, 각 팟 안에 몇 개의 스테이션이 들어갑니다.</td>
+        <td>애슬레티카, 로만즈, GOAT</td>
+      </tr>
+      <tr>
+        <td><b>RACETRACK</b><br><span class="note">레이스트랙 · 원형 트랙</span></td>
+        <td>스테이션이 방을 <b>빙 둘러 원형</b>으로 이어집니다. 순서대로 한 바퀴.</td>
+        <td class="hi">스레숄드(신규), 팬서스, T10, 엠파이어</td>
+      </tr>
+      <tr>
+        <td><b>FOLLOW THE LEADER</b><br><span class="note">팔로우 더 리더 · 뱀 모양</span></td>
+        <td>뱀이 기어가듯 <b>지그재그(S자)</b>로 흘러가는 동선.</td>
+        <td>할리우드, 리버티, 베어스</td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- 11 -->
+<section id="s11">
+  <h2>11. 라이언하트 <span class="en">LIONHEART</span></h2>
+  <p>회원이 <b>심박수 존</b>을 실시간으로 확인하고 포인트로 동기 부여를 받는 시스템입니다. 가슴 스트랩이나 팔 스트랩을 착용하면 심박수와 포인트가 계산됩니다.</p>
+
+  <h3>리포트 구성</h3>
+  <table class="tbl-compact">
+    <thead><tr><th style="width:26%">항목</th><th>내용</th></tr></thead>
+    <tbody>
+      <tr><td><b>다이나믹 리포트</b></td><td>캔들스틱 1개 = 1분 데이터. 그 1분간의 <b>최저~최고 심박수 범위</b>를 막대로 표시하며, 심박수 존 색으로 칠해집니다.</td></tr>
+      <tr><td><b>심박수 존</b></td><td>존별 BPM 범위 / 존별 머문 시간 / 색상 구분</td></tr>
+      <tr><td><b>세션 요약</b></td><td>라이언하트 포인트 · 최대 심박수 · 평균 심박수 · 예상 소모 칼로리(존 아래 표시)</td></tr>
+    </tbody>
+  </table>
+  <div class="box box-tip"><b>스레숄드와 궁합이 좋습니다.</b><p style="margin:6px 0 0;">3분을 1분씩 나눠 강도를 올리는 구조라, 라이언하트 화면으로 <b>실제로 존이 올라가는지</b> 확인시켜주면 회원 이해가 훨씬 빠릅니다.</p></div>
+</section>
+
+<!-- 12 -->
+<section id="s12">
+  <h2>12. 인트로 스크립트 양식 <span class="en">WORKOUT INTRO SCRIPTS</span></h2>
+
+  <h3>인트로 5단계</h3>
+  <table class="tbl-compact">
+    <thead><tr><th style="width:8%">순서</th><th style="width:28%">항목</th><th>내용</th></tr></thead>
+    <tbody>
+      <tr><td class="hi"><b>01</b></td><td><b>환영 + 워크아웃 소개</b></td><td>따뜻하게 환영하고 오늘 워크아웃과 플로어 구성 안내 — 타입 / 팟 / 스테이션 / 동선</td></tr>
+      <tr><td class="hi"><b>02</b></td><td><b>신규 회원 소개</b></td><td>신규 회원을 언급해 분위기를 풀고 소속감을 만들어 주기</td></tr>
+      <tr><td class="hi"><b>03</b></td><td><b>타이밍 설명</b></td><td>워크 / 레스트 / 세트 / 랩을 명확하고 간결하게</td></tr>
+      <tr><td class="hi"><b>04</b></td><td><b>부상 · 대체 동작</b></td><td>제약 있는 회원은 <b>웜업 중에</b> 코치에게 알려달라고 안내</td></tr>
+      <tr><td class="hi"><b>05</b></td><td><b>타이밍 재확인</b></td><td>워크-레스트-세트-랩을 압축해서 한 번 더 반복</td></tr>
+    </tbody>
+  </table>
+
+  <div class="script">
+    <div class="label">팟 방식 (POD-BASED)</div>
+    <p>"안녕하세요 여러분! F45에 오신 걸 환영합니다! 저는 <span class="blank">______</span> 코치이고, 이쪽은 <span class="blank">______</span> 코치입니다.<br>
+    오늘 워크아웃은 <span class="blank">__________</span>, <span class="blank">______</span> 타입이고 팟 <span class="blank">__</span>개에 팟당 스테이션 <span class="blank">__</span>개입니다.<br>
+    신규 회원분들, 저희 팀에 오신 걸 환영합니다!<br>
+    타이밍은 운동 <span class="blank">__</span>초 / 휴식 <span class="blank">__</span>초, 스테이션당 <span class="blank">__</span>세트, 팟을 <span class="blank">__</span>바퀴 돕니다.<br>
+    부상이나 대체 동작이 필요하시면 <b>웜업 중에</b> 알려주세요!<br>
+    다시 정리하면 <span class="blank">__</span> 운동 / <span class="blank">__</span> 휴식 / <span class="blank">__</span>세트 / <span class="blank">__</span>바퀴입니다."</p>
+  </div>
+
+  <div class="script">
+    <div class="label">팔로우 더 리더 · 레이스트랙 <span style="color:#8b90a0;">(← 스레숄드가 여기 해당)</span></div>
+    <p>"안녕하세요 여러분! F45에 오신 걸 환영합니다! 저는 <span class="blank">______</span> 코치, 이쪽은 <span class="blank">______</span> 코치입니다.<br>
+    오늘 워크아웃은 <span class="blank">__________</span>, <span class="blank">______</span> 타입이며 팟 1개, 스테이션 <span class="blank">__</span>개, <span class="blank">______</span> 동선입니다.<br>
+    신규 회원분들, 환영합니다!<br>
+    타이밍은 운동 <span class="blank">__</span>초 / 휴식 <span class="blank">__</span>초, 스테이션당 <span class="blank">__</span>세트, 방을 <span class="blank">__</span>바퀴 돕니다.<br>
+    부상이나 대체 동작 필요하시면 웜업 중에 알려주세요!<br>
+    다시 정리하면 <span class="blank">__</span> 운동 / <span class="blank">__</span> 휴식 / <span class="blank">__</span>세트 / <span class="blank">__</span>바퀴입니다."</p>
+  </div>
+
+  <div class="script">
+    <div class="label">랩마다 타이밍이 다를 때 (MULTIPLE LAPS) <span style="color:#8b90a0;">(← 바시티가 여기 해당)</span></div>
+    <p>"…오늘 워크아웃은 <span class="blank">__________</span>, <span class="blank">______</span> 타입이고 팟 <span class="blank">__</span>개, 팟당 스테이션 <span class="blank">__</span>개입니다.<br>
+    타이밍이 랩마다 달라집니다. 총 <span class="blank">__</span>바퀴, 스테이션당 <span class="blank">__</span>세트입니다.<br>
+    • 1랩 — <span class="blank">__</span> 운동 / <span class="blank">__</span> 휴식<br>
+    • 2랩 — <span class="blank">__</span> 운동 / <span class="blank">__</span> 휴식<br>
+    • 3랩 — <span class="blank">__</span> 운동 / <span class="blank">__</span> 휴식<br>
+    부상이나 대체 동작 필요하시면 웜업 중에 알려주세요!<br>
+    다시 정리하면 1랩 <span class="blank">__</span>, 2랩 <span class="blank">__</span>, 3랩 <span class="blank">__</span>, 스테이션당 <span class="blank">__</span>세트입니다."</p>
+  </div>
+
+  <div class="script">
+    <div class="label">특별 구성이 있을 때 (SPECIAL FOCUS)</div>
+    <p>"…팟 1개, 스테이션 <span class="blank">__</span>개, <span class="blank">______</span> 동선입니다.<br>
+    타이밍은 운동 <span class="blank">__</span>초 / 휴식 <span class="blank">__</span>초, 스테이션당 <span class="blank">__</span>세트, 방을 <span class="blank">__</span>바퀴.<br>
+    <b>각 랩이 끝날 때마다 맨몸 릴(bodyweight reel)이 있습니다.</b><br>
+    부상이나 대체 동작 필요하시면 웜업 중에 알려주세요!<br>
+    다시 정리하면 <span class="blank">__</span> 운동 / <span class="blank">__</span> 휴식 / <span class="blank">__</span>세트 / <span class="blank">__</span>바퀴 + 랩마다 맨몸 릴입니다."</p>
+  </div>
+</section>
+
+<!-- 13 -->
+<section id="s13">
+  <h2>13. 선택 워크아웃 · 대형 클래스 세팅 <span class="en">OPTIONAL WORKOUTS & 1.5 CAPACITY</span></h2>
+
+  <h3>선택 워크아웃</h3>
+  <p>아무 요일에나 편성할 수 있지만 <b>매주 정규 편성되는 게 아니므로, 한 단계 내내 정규 수업을 대체하는 용도로는 쓰지 마세요.</b> 단계 중 대체 클래스나 스튜디오 특별 이벤트용으로 활용합니다.</p>
+  <table class="tbl-compact">
+    <tbody>
+      <tr><td style="width:30%"><b>선택 워크아웃 목록</b></td><td>Firestorm · Heroes Hollywood · Valor · The Wringer · Quarterbacks · 45 · Duo · Spartan</td></tr>
+      <tr><td><b>편성 방법</b></td><td>F45 TV 앱 설정 → 'Change program' → 'Optional Workouts' → 워크아웃 선택 → 평소처럼 TV로 로드</td></tr>
+      <tr><td><b>피트니스 측정</b></td><td>Benchmark · 3-Peat · Playoffs<br>→ F45 TV 앱 설정 → 'Change program' → 해당 워크아웃 선택 → TV로 로드</td></tr>
+      <tr><td><b>정규 편성 선택 워크아웃</b></td><td>Hollywood<br>→ F45 TV 앱에서 트레이닝 티어를 넘겨 'mobility' / 'Hollywood Optional'이 보이면 해당 날짜 선택 후 'Load to TVs'</td></tr>
+      <tr><td><b>스페셜 워크아웃</b></td><td>기념일·테마 데이용 일회성 워크아웃. 특정 날짜에만 해당하며 웨비나와 본사 메일로 공지됩니다.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>27스테이션 워크아웃 1.5배 정원 세팅</h3>
+  <p>할리우드·웨스트 할리우드 같은 <b>27스테이션 워크아웃</b>은 54명(스테이션당 2명) 또는 <b>40명(스테이션당 1.5명)</b>으로 운영 가능합니다.</p>
+  <table class="tbl-compact">
+    <thead><tr><th style="width:22%">항목</th><th>세팅 방법</th></tr></thead>
+    <tbody>
+      <tr><td><b>장비 세팅</b></td><td>40명 정원일 때, 에르그를 제외한 모든 스테이션에 장비를 <b>2세트씩</b> 배치</td></tr>
+      <tr><td><b>에르그</b></td><td>등을 맞댄 두 스테이션에 <b>머신 3대</b>를 배치 → 첫 번째 스테이션 2대, 두 번째 스테이션 1대</td></tr>
+      <tr><td><b>인원 배정</b></td><td><b>짝수 번호</b> 스테이션 2명 / <b>홀수 번호</b> 스테이션 1명</td></tr>
+      <tr><td><b>슬레드</b></td><td>슬레드 스테이션은 짝을 이룬 회원이 <b>릴레이 방식</b>으로 수행</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- 14 -->
+<section id="s14">
+  <h2>14. 코치 인증 과정 <span class="en">COACH CERTIFICATION PATHWAY</span></h2>
+  <p>본사에서 전 세계 스튜디오의 코칭 수준을 표준화하기 위해 신규 코치 인증 과정을 론칭했습니다.</p>
+  <table class="tbl-compact">
+    <tbody>
+      <tr><td style="width:24%"><b>대상</b></td><td>현재 활동 중인 <b>모든 코치 (의무)</b></td></tr>
+      <tr><td><b>기한</b></td><td class="hi">60일 이내 이수</td></tr>
+      <tr><td><b>소요 시간</b></td><td>약 3.5시간 (인터랙티브 온라인 과정)</td></tr>
+      <tr><td><b>혜택</b></td><td>수료 시 ISSA를 통해 <b>최대 20 CEU 크레딧</b> 부여 → 다음 자격 갱신 비용 절감</td></tr>
+      <tr><td><b>타 기관 자격 보유자</b></td><td>NASM, ACE 등 다른 기관 자격이 있어도 별도 가이드를 통해 크레딧 신청 가능</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- 15 -->
+<section id="s15">
+  <h2>15. 시작 전 체크리스트 <span class="en">PRE-PHASE CHECKLIST</span></h2>
+  <ul class="check">
+    <li>기본 편성 / 대체 편성(스트렝스 플립) 중 <b>우리 스튜디오가 쓰는 버전</b> 확정</li>
+    <li><b>스레숄드 웨비나 시청 완료</b> (체감 강도 목표가 처음 도입된 워크아웃 — 필수)</li>
+    <li>스레숄드 3구간 숫자 암기 — 70~75% / 80~85% / 90%+</li>
+    <li>레이스트랙 10스테이션 플로어 배치 사전 점검 (정원 30명 = 스테이션당 3명)</li>
+    <li>월~토 워크아웃 6종의 초점 숙지</li>
+    <li>중량·반복수 기준표 출력 후 코치 데스크 비치</li>
+    <li><b>바시티 = 중량 고정 + 횟수 증가</b> 코치 전원 공유</li>
+    <li>회원들에게 <b>PEAK500 (9월 12일)</b> 공지 시작</li>
+    <li>F45 앱 측정 기록 안내 (회원 다운로드 유도)</li>
+    <li>코치 인증 과정 등록 — 60일 이내 이수</li>
+  </ul>
+</section>
+
+</main>
+
+<footer>
+  <p><b>F45 시리즈 3 · 빌드 단계 코치 가이드</b> — 2026년 7월 20일 ~ 8월 16일</p>
+  <p style="margin-top:10px;">모든 수업에서 <b>자세와 안전이 무게보다 우선</b>입니다.</p>
+</footer>
+
+</div>
+</body>
+</html>
