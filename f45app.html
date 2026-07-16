@@ -42,7 +42,7 @@ h1{font-size:20px;font-weight:800}.sub{color:var(--dim);font-size:13px;margin:2p
 .badge{font-size:10px;padding:1px 6px;border-radius:6px}
 .b-트라이얼{background:#3d3512;color:#e0c94f}.b-만료{background:#3d1a1a;color:#e06a6a}.b-횟수권{background:#123a3d;color:#4fd6e0}
 .inj{color:var(--red);font-size:12px}
-#modal{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:flex-end;justify-content:center;z-index:9}
+#modal{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:flex-end;justify-content:center;z-index:100}
 #sheet{background:var(--card);border:1px solid var(--line);border-radius:18px 18px 0 0;width:100%;max-width:560px;max-height:85vh;overflow:auto;padding:20px 18px 40px}
 .close{float:right;color:var(--dim);cursor:pointer;font-size:24px;line-height:1}
 .mhead{display:flex;align-items:center;gap:12px;margin-bottom:12px}.mhead .av{width:84px;height:84px;font-size:26px;cursor:zoom-in}
@@ -679,7 +679,7 @@ async function open_(uid){
  <div class="wklab" style="margin-top:8px">인스타 ID</div><input id="f_insta" value="${esc(m.instagram)}">
  <button class="save" onclick="save('${uid}')">저장</button>
  <div class="hint">저장하면 모든 코치에게 공유돼요.</div>`;
- document.getElementById('modal').style.display='flex';
+ document.getElementById('modal').style.display='flex'; if(!window._sheetOpen){history.pushState({sheet:1},'');window._sheetOpen=true;};
 }
 async function save(uid){
  const patch={injury_note:document.getElementById('f_injury').value,memo:document.getElementById('f_memo').value,instagram:document.getElementById('f_insta').value};
@@ -687,7 +687,19 @@ async function save(uid){
  if(error){alert('저장 실패: '+(error.message||''));return;}
  Object.assign(MEMBERS[uid],patch); close_(); renderDay();
 }
-function close_(){document.getElementById('modal').style.display='none'}
+function close_(fromPop){
+ const md=document.getElementById('modal');
+ if(md.style.display==='none')return;
+ md.style.display='none';
+ // 뒤로가기가 아니라 X/배경으로 닫은 경우, 쌓아둔 history 항목 제거
+ if(!fromPop && window._sheetOpen){history.back();}
+ window._sheetOpen=false;
+}
+// 안드로이드/브라우저 뒤로가기 → 상세 닫기
+window.addEventListener('popstate',function(){
+ const md=document.getElementById('modal');
+ if(md && md.style.display!=='none'){ window._sheetOpen=false; close_(true); }
+});
 function tag(d,i){const ids=SESSIONS[d][i].att.map(a=>(MEMBERS[a.uid]||{}).instagram).filter(x=>x).map(x=>'@'+x.replace('@',''));
  if(!ids.length){alert('등록된 인스타 ID가 없어요.');return}navigator.clipboard.writeText(ids.join(' '));alert('복사됨:\n'+ids.join(' '))}
 boot();
