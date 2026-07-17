@@ -72,11 +72,12 @@ while p <= MAX_PAGES:
     p += 1
 print(f"예약 전체 {len(bookings)}건 수집 (오늘={today}, 실패페이지 {fails}개)")
 
-# ── 오늘 것만 ──
+# ── 오늘 + 미래 예약 전부 (지난 것은 이미 저장돼 있음) ──
 att_rows, new_people, seen = [], [], set()
 for b in bookings:
     ts = str(b.get("time_start") or "")[:19]   # 이미 KST 벽시계
-    if not ts.startswith(today): continue
+    if len(ts) < 10: continue
+    if ts[:10] < today: continue               # 과거는 건너뜀(이미 반영됨)
     uid = str(b.get("user_id","")); eid = str(b.get("event_id",""))
     if not uid or not eid: continue
     key = (uid, eid)
@@ -99,7 +100,7 @@ if new_people:
 if att_rows:
     for i in range(0, len(att_rows), 500):
         sb.table("attendance").upsert(att_rows[i:i+500], on_conflict="glofox_user_id,event_id").execute()
-print(f"✅ 오늘 예약 {len(att_rows)}건 반영 완료 ({datetime.now(KST).strftime('%H:%M')})")
+print(f"✅ 오늘+예정 예약 {len(att_rows)}건 반영 완료 ({datetime.now(KST).strftime('%H:%M')})")
 # 갱신 완료 시각 기록 (앱 새로고침 폴링용)
 try:
     sb.table("sync_state").upsert({"id":1,"synced_at":datetime.now(KST).isoformat()}).execute()
