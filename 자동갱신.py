@@ -46,8 +46,9 @@ def clean(s):
 
 # ── 예약 전체 수집 (검증된 방식) ──
 today = datetime.now(KST).strftime("%Y-%m-%d")
+MAX_PAGES = int(os.environ.get("MAX_PAGES", "140"))   # 빠른 모드에서 낮춰 사용
 bookings, p, fails, empty_ok = [], 1, 0, 0
-while p <= 140:
+while p <= MAX_PAGES:
     d = api(f"{BASE}/2.2/branches/{BRANCH_ID}/bookings?limit=200&page={p}")
     if d is None:                      # 통신 실패 → 멈추지 말고 재시도 후 다음 페이지
         fails += 1
@@ -99,3 +100,8 @@ if att_rows:
     for i in range(0, len(att_rows), 500):
         sb.table("attendance").upsert(att_rows[i:i+500], on_conflict="glofox_user_id,event_id").execute()
 print(f"✅ 오늘 예약 {len(att_rows)}건 반영 완료 ({datetime.now(KST).strftime('%H:%M')})")
+# 갱신 완료 시각 기록 (앱 새로고침 폴링용)
+try:
+    sb.table("sync_state").upsert({"id":1,"synced_at":datetime.now(KST).isoformat()}).execute()
+except Exception as e:
+    print("sync_state 기록 실패:", str(e)[:80])
