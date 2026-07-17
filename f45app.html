@@ -122,14 +122,14 @@ body{padding-bottom:76px}
 .pbar{position:relative;height:8px;background:#0e1a30;border:1px solid var(--line);border-radius:5px;margin-top:8px;overflow:hidden}
 .pfill{position:absolute;left:0;top:0;bottom:0;background:var(--grn);opacity:.8}
 .pmark{position:absolute;top:-2px;bottom:-2px;width:2px;background:#e0c94f}
-.timebar{display:flex;gap:5px;overflow-x:auto;padding:2px 0 8px;position:sticky;top:52px;z-index:39;background:var(--navy);border-bottom:1px solid var(--line)}
+.timebar{display:flex;gap:5px;overflow-x:auto;padding:3px 0 7px;position:sticky;top:46px;z-index:39;background:var(--navy);border-bottom:1px solid var(--line)}
 .tbtn{flex:none;background:#13243d;border:1px solid var(--line);color:var(--dim);border-radius:7px;padding:3px 9px;font-size:11px;cursor:pointer}
 .tbtn:active{background:var(--red);color:#fff}
 </style></head><body>
 <header class="topbar"><button class="ham" onclick="toggleDrawer()">≡</button><h1 id="vtitle">수업 출결</h1><button id="refreshBtn" onclick="loadData(true)">↻</button></header>
 <div class="sub" id="sub">불러오는 중…</div>
 
-<div id="view-att" class="view"><div class="strip" id="strip"></div><div id="app"><div class="center">데이터를 불러오고 있어요…</div></div></div>
+<div id="view-att" class="view"><div class="strip" id="strip"></div><div id="timebar" class="timebar"></div><div id="app"><div class="center">데이터를 불러오고 있어요…</div></div></div>
 <div id="view-risk" class="view" style="display:none"><div class="center">준비중이에요.</div></div>
 <div id="view-expire" class="view" style="display:none"><div class="center">준비중이에요.</div></div>
 <div id="view-search" class="view" style="display:none">
