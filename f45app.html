@@ -5,11 +5,12 @@
 *{box-sizing:border-box;margin:0;padding:0}
 body{background:var(--navy);color:var(--txt);font-family:'Pretendard',-apple-system,sans-serif;padding:16px 14px 60px;max-width:900px;margin:0 auto}
 h1{font-size:20px;font-weight:800}.sub{color:var(--dim);font-size:13px;margin:2px 0 14px}
-.strip{display:flex;gap:6px;overflow-x:auto;padding:8px 0 12px;position:sticky;top:0;z-index:40;background:var(--navy);border-bottom:1px solid var(--line)}
-.day{flex:none;width:46px;text-align:center;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:6px 0;cursor:pointer}
+.strip{display:flex;gap:5px;overflow-x:auto;padding:6px 0 4px;position:sticky;top:0;z-index:40;background:var(--navy)}
+.day{flex:none;width:42px;text-align:center;background:var(--card);border:1px solid var(--line);border-radius:9px;padding:3px 0 4px;cursor:pointer;line-height:1.1}
 .day.sel{background:var(--red);border-color:var(--red)}.day.sel .dn{color:#fff}
-.day .mo{font-size:9px;color:var(--dim)}.day .dw{font-size:10px;color:var(--dim)}.day .dn{font-size:16px;font-weight:800}
-.day .pip{width:5px;height:5px;border-radius:50%;background:var(--grn);margin:2px auto 0}
+.day .mo{font-size:8px;color:var(--red);font-weight:700}
+.day .dw{font-size:9px;color:var(--dim)}.day .dn{font-size:15px;font-weight:800}
+.day .pip{width:4px;height:4px;border-radius:50%;background:var(--grn);margin:1px auto 0}
 .ev{background:var(--card);border:1px solid var(--line);border-radius:14px;margin-bottom:12px;overflow:hidden}
 .evh{display:flex;align-items:center;gap:10px;padding:11px 13px;border-bottom:1px solid var(--line)}
 .time{background:var(--red);color:#fff;font-weight:800;font-size:14px;padding:4px 8px;border-radius:8px;min-width:50px;text-align:center}
@@ -121,6 +122,9 @@ body{padding-bottom:76px}
 .pbar{position:relative;height:8px;background:#0e1a30;border:1px solid var(--line);border-radius:5px;margin-top:8px;overflow:hidden}
 .pfill{position:absolute;left:0;top:0;bottom:0;background:var(--grn);opacity:.8}
 .pmark{position:absolute;top:-2px;bottom:-2px;width:2px;background:#e0c94f}
+.timebar{display:flex;gap:5px;overflow-x:auto;padding:2px 0 8px;position:sticky;top:52px;z-index:39;background:var(--navy);border-bottom:1px solid var(--line)}
+.tbtn{flex:none;background:#13243d;border:1px solid var(--line);color:var(--dim);border-radius:7px;padding:3px 9px;font-size:11px;cursor:pointer}
+.tbtn:active{background:var(--red);color:#fff}
 </style></head><body>
 <header class="topbar"><button class="ham" onclick="toggleDrawer()">≡</button><h1 id="vtitle">수업 출결</h1><button id="refreshBtn" onclick="loadData(true)">↻</button></header>
 <div class="sub" id="sub">불러오는 중…</div>
@@ -510,17 +514,7 @@ async function waitForSync(t0,btn){
 }
 async function loadData(manual){
  const btn=document.getElementById('refreshBtn'); if(btn){btn.disabled=true;btn.textContent='…';}
- if(manual){
-  const t0=await syncStamp();            // 갱신 전 시각
-  const res=await triggerSync();
-  if(res==='ok'){
-   const done=await waitForSync(t0,btn); // 진짜 갱신될 때까지 대기
-   if(!done && btn){ btn.textContent='…'; }  // 지연돼도 일단 최신 읽기 진행
-  } else if(res.startsWith('err')){
-   alert('실시간 갱신 요청 실패('+res+') · 토큰/권한 확인. 저장된 데이터를 불러옵니다.');
-  }
-  // 'notoken'이면 조용히 저장된 데이터만 읽음
- }
+ // 새로고침 = Supabase 최신 읽기 (Webhook 연동 후엔 항상 최신)
  today=new Date().toLocaleDateString('sv-SE',{timeZone:'Asia/Seoul'});
  MEMBERS={};
  let people=[],pf=0;
@@ -565,9 +559,23 @@ function buildSessions(rows){
 }
 const DOW=['일','월','화','수','목','금','토'];
 function render(){renderStrip();renderDay(!window._loaded);window._loaded=true;document.getElementById('sub').textContent=`업데이트 ${window._lastUpdate||''} · 날짜를 골라 지난 수업도 볼 수 있어요`;}
-function renderStrip(){let h='';DATES.forEach(d=>{const dt=new Date(d+'T00:00:00');
- h+=`<div class="day ${d===sel?'sel':''}" onclick="sel='${d}';selEv=null;renderStrip();renderDay(true)"><div class="mo">${dt.getMonth()+1}월</div><div class="dw">${DOW[dt.getDay()]}</div><div class="dn">${dt.getDate()}</div><div class="pip"></div></div>`;});
- document.getElementById('strip').innerHTML=h;const s=document.querySelector('.day.sel');if(s)s.scrollIntoView({inline:'center',block:'nearest'});}
+function renderStrip(){let h='';let lastMo=null;
+ DATES.forEach(d=>{const dt=new Date(d+'T00:00:00');const mo=dt.getMonth()+1;
+  const showMo=(mo!==lastMo); lastMo=mo;
+  h+=`<div class="day ${d===sel?'sel':''}" onclick="sel='${d}';selEv=null;renderStrip();renderTimebar();renderDay(true)">${showMo?`<div class="mo">${mo}월</div>`:''}<div class="dw">${DOW[dt.getDay()]}</div><div class="dn">${dt.getDate()}</div><div class="pip"></div></div>`;});
+ document.getElementById('strip').innerHTML=h;const s=document.querySelector('.day.sel');if(s)s.scrollIntoView({inline:'center',block:'nearest'});
+ renderTimebar();}
+function renderTimebar(){
+ const bar=document.getElementById('timebar'); if(!bar)return;
+ const evs=(SESSIONS[sel]||[]).slice().sort((a,b)=>(a.time||'').localeCompare(b.time||''));
+ if(!evs.length){bar.innerHTML='';bar.style.display='none';return;}
+ bar.style.display='flex';
+ bar.innerHTML=evs.map((ev,i)=>`<button class="tbtn" onclick="jumpTo(${i})">${esc(ev.time||'')}</button>`).join('');
+}
+function jumpTo(i){
+ const el=document.getElementById('ev_'+i);
+ if(el){const y=el.getBoundingClientRect().top+window.scrollY-100;window.scrollTo({top:y,behavior:'smooth'});}
+}
 let selEv=null; const PICK=new Set();
 function renderDay(doScroll){const evs=(SESSIONS[sel]||[]).slice().sort((a,b)=>(a.time||'').localeCompare(b.time||''));
  SESSIONS[sel]=evs; let h='';const nowTs=new Date();
