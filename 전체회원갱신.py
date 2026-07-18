@@ -130,6 +130,23 @@ for pid,p in persons.items():
         row.update(credits(p["glofox_user_id"])); passcnt+=1
     rows.append(row)
 print(f"정제 {len(rows)}명 · 횟수권 조회 {passcnt}명")
+# 수동 수정 이름(name_override) 보존: 있으면 name을 그 값으로 대체
+try:
+    ov = {}
+    frm = 0
+    while True:
+        r = sb.table("people").select("person_id,name_override").range(frm, frm+999).execute()
+        d = r.data or []
+        for x in d:
+            if x.get("name_override"): ov[x["person_id"]] = x["name_override"]
+        if len(d) < 1000: break
+        frm += 1000
+    for row in rows:
+        if row["person_id"] in ov:
+            row["name"] = ov[row["person_id"]]
+    print(f"수동 이름 보존: {len(ov)}명")
+except Exception as e:
+    print("name_override 조회 실패(무시):", str(e)[:80])
 
 # ── 업서트 (photo_url·instagram·care_memo 등 사용자 입력은 미포함=보존) ──
 ok=0
