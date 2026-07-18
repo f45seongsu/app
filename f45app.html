@@ -5,7 +5,8 @@
 *{box-sizing:border-box;margin:0;padding:0}
 body{background:var(--navy);color:var(--txt);font-family:'Pretendard',-apple-system,sans-serif;padding:16px 14px 60px;max-width:900px;margin:0 auto}
 h1{font-size:20px;font-weight:800}.sub{color:var(--dim);font-size:13px;margin:2px 0 14px}
-.strip{display:flex;gap:5px;overflow-x:auto;padding:6px 0 4px;position:sticky;top:0;z-index:40;background:var(--navy)}
+.stickwrap{position:sticky;top:0;z-index:41;background:var(--navy);padding-top:4px}
+.strip{display:flex;gap:5px;overflow-x:auto;padding:2px 0 4px;background:var(--navy)}
 .day{flex:none;width:42px;text-align:center;background:var(--card);border:1px solid var(--line);border-radius:9px;padding:3px 0 4px;cursor:pointer;line-height:1.1}
 .day.sel{background:var(--red);border-color:var(--red)}.day.sel .dn{color:#fff}
 .day .mo{font-size:8px;color:var(--red);font-weight:700}
@@ -122,14 +123,14 @@ body{padding-bottom:76px}
 .pbar{position:relative;height:8px;background:#0e1a30;border:1px solid var(--line);border-radius:5px;margin-top:8px;overflow:hidden}
 .pfill{position:absolute;left:0;top:0;bottom:0;background:var(--grn);opacity:.8}
 .pmark{position:absolute;top:-2px;bottom:-2px;width:2px;background:#e0c94f}
-.timebar{display:flex;gap:5px;overflow-x:auto;padding:3px 0 7px;position:sticky;top:46px;z-index:39;background:var(--navy);border-bottom:1px solid var(--line)}
+.timebar{display:flex;gap:5px;overflow-x:auto;padding:2px 0 7px;background:var(--navy);border-bottom:1px solid var(--line)}
 .tbtn{flex:none;background:#13243d;border:1px solid var(--line);color:var(--dim);border-radius:7px;padding:3px 9px;font-size:11px;cursor:pointer}
 .tbtn:active{background:var(--red);color:#fff}
 </style></head><body>
 <header class="topbar"><button class="ham" onclick="toggleDrawer()">≡</button><h1 id="vtitle">수업 출결</h1><button id="refreshBtn" onclick="loadData(true)">↻</button></header>
 <div class="sub" id="sub">불러오는 중…</div>
 
-<div id="view-att" class="view"><div class="strip" id="strip"></div><div id="timebar" class="timebar"></div><div id="app"><div class="center">데이터를 불러오고 있어요…</div></div></div>
+<div id="view-att" class="view"><div class="stickwrap"><div class="strip" id="strip"></div><div id="timebar" class="timebar"></div></div><div id="app"><div class="center">데이터를 불러오고 있어요…</div></div></div>
 <div id="view-risk" class="view" style="display:none"><div class="center">준비중이에요.</div></div>
 <div id="view-expire" class="view" style="display:none"><div class="center">준비중이에요.</div></div>
 <div id="view-search" class="view" style="display:none">
@@ -483,7 +484,16 @@ async function boot(){
  if(!SUPABASE_URL||!PUBLISHABLE_KEY){document.getElementById('app').innerHTML='<div class="center">앱 설정이 필요해요.<br>파일 상단 SUPABASE_URL / PUBLISHABLE_KEY 를 채워주세요.</div>';return;}
  sb=supabase.createClient(SUPABASE_URL,PUBLISHABLE_KEY,{global:{headers:{'x-app-token':TOKEN}}});
  await loadData();
- setInterval(()=>loadData(), 5*60*1000); // 5분마다 자동 새로고침
+ // 자동 갱신 (1분) — 단, 사용자가 뭔가 하고 있으면 건너뜀
+ setInterval(()=>{
+  const md=document.getElementById('modal');
+  const sheetOpen = md && md.style.display!=='none';   // 회원 상세 보는 중
+  const picking = selEv!=null;                          // 수업 선택모드
+  const drawerOpen = document.getElementById('drawer').style.display!=='none';
+  const editing = document.activeElement && ['INPUT','TEXTAREA'].includes(document.activeElement.tagName); // 메모 입력 중
+  if(sheetOpen||picking||drawerOpen||editing) return;   // 방해 금지
+  loadData();
+ }, 60*1000);
 }
 const GH_OWNER='f45seongsu', GH_REPO='app', GH_WF='update.yml';
 function ghToken(){return new URLSearchParams(location.search).get('gh')||'';}
@@ -524,7 +534,7 @@ async function loadData(manual){
   people=people.concat(data||[]);
   if(!data||data.length<1000)break; pf+=1000;
  }
- people.forEach(p=>{MEMBERS[p.glofox_user_id]=p});
+ people.forEach(p=>{if(p.name_override)p.name=p.name_override;MEMBERS[p.glofox_user_id]=p});
  const since=new Date(today+'T00:00:00');since.setDate(since.getDate()-35);
  let all=[],from=0;
  while(true){
@@ -651,9 +661,9 @@ async function editName(uid){
  const m=MEMBERS[uid]||{};
  const nv=prompt('이름을 수정하세요',m.name||'');
  if(nv==null)return; const name=nv.trim(); if(!name)return;
- try{const{error}=await sb.from('people').update({name:name}).eq('glofox_user_id',uid);
+ try{const{error}=await sb.from('people').update({name_override:name}).eq('glofox_user_id',uid);
   if(error){alert('저장 실패: '+error.message);return;}
-  if(MEMBERS[uid])MEMBERS[uid].name=name; open_(uid);
+  if(MEMBERS[uid]){MEMBERS[uid].name_override=name;MEMBERS[uid].name=name;} open_(uid);
  }catch(e){alert('오류: '+e.message);}
 }
 async function open_(uid){
