@@ -28,6 +28,9 @@ h1{font-size:20px;font-weight:800}.sub{color:var(--dim);font-size:13px;margin:2p
 .selbtn{background:#1c2f4d;border:1px solid var(--line);color:var(--dim);border-radius:8px;padding:4px 11px;font-size:12px;cursor:pointer}
 .selbtn.on{background:var(--red);border-color:var(--red);color:#fff}
 .chip{position:relative}
+.avbadge{position:absolute;top:-2px;left:-2px;background:rgba(0,0,0,.75);color:#ffd76a;font-size:8px;font-weight:800;padding:1px 3px;border-radius:4px;line-height:1;z-index:2;letter-spacing:-.3px}
+.avbadge.b-트라이얼{color:#ffd76a}
+.avbadge.b-횟수권{color:#7ae0a0}
 .chip .ck{position:absolute;top:-5px;right:-5px;width:19px;height:19px;border-radius:50%;background:var(--red);color:#fff;font-size:11px;line-height:19px;text-align:center;display:none;box-shadow:0 0 0 2px var(--navy)}
 .chip.picked .ck{display:block}
 .chip.picked{outline:2px solid var(--red);outline-offset:1px;border-radius:24px}
@@ -127,7 +130,7 @@ body{padding-bottom:76px}
 .tbtn{flex:none;background:#13243d;border:1px solid var(--line);color:var(--dim);border-radius:7px;padding:3px 9px;font-size:11px;cursor:pointer}
 .tbtn:active{background:var(--red);color:#fff}
 </style></head><body>
-<header class="topbar"><button class="ham" onclick="toggleDrawer()">≡</button><h1 id="vtitle">수업 출결</h1><button id="refreshBtn" onclick="loadData(true)">↻</button></header>
+<header class="topbar"><button class="ham" onclick="toggleDrawer()">≡</button><h1 id="vtitle">수업 출결</h1><button id="photoToggle" onclick="togglePhoto()" title="사진 표시/숨김" style="margin-left:auto">📷</button><button id="refreshBtn" onclick="loadData(true)">↻</button></header>
 <div class="sub" id="sub">불러오는 중…</div>
 
 <div id="view-att" class="view"><div class="stickwrap"><div class="strip" id="strip"></div><div id="timebar" class="timebar"></div></div><div id="app"><div class="center">데이터를 불러오고 있어요…</div></div></div>
@@ -176,13 +179,13 @@ let sb, MEMBERS={}, SESSIONS={}, DATES=[], sel='', today='';
 function esc(s){return (s||'').replace(/[<>&"]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]))}
 function initial(n){return (n||'?').trim().slice(-2)}
 function photoOf(m){return m.photo_url||m.glofox_photo||''}
-function avatar(m,cls){const p=photoOf(m);const img=p?`<img src="${esc(p)}" onerror="this.style.display='none'">`:'';return `<span class="av">${esc(initial(m.name))}${img}<span class="rd ${cls}"></span></span>`}
+function avatar(m,cls){const p=(window.HIDE_PHOTO?null:photoOf(m));const img=p?`<img src="${esc(p)}" onerror="this.style.display='none'">`:'';const bd=badgeOf(m);const ov=bd?`<span class="avbadge b-${bd}">${bd==='트라이얼'?'체험':'횟수'}</span>`:'';return `<span class="av">${esc(initial(m.name))}${img}${ov}<span class="rd ${cls}"></span></span>`}
 function recent28(days){const t=new Date(today+'T00:00:00');const lim=new Date(t);lim.setDate(t.getDate()-28);return (days||[]).some(d=>new Date(d+'T00:00:00')>=lim)}
 function badgeOf(m){if(m.stage==='트라이얼')return '트라이얼';if(m.pass_remaining!=null)return '횟수권';if(m.stage==='과거회원')return recent28(m._days)?'횟수권':'만료';return ''}
 
 let VIEW='att';
 function toggleDrawer(){const d=document.getElementById('drawer');d.style.display=d.style.display==='none'?'block':'none';}
-function showView(v){VIEW=v;
+function showView(v){window.CURVIEW=v;VIEW=v;
  ['att','risk','expire','search','trial','pass','photo','member','birthday','mile'].forEach(x=>{const el=document.getElementById('view-'+x);if(el)el.style.display=(x===v?'':'none');});
  document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('on',b.dataset.v===v));
  const T={att:'수업 출결',risk:'이탈 위험군',expire:'만료 임박',search:'회원 검색',trial:'트라이얼 현황',pass:'횟수권 관리',photo:'사진 입력 (수업별)',member:'회원 사진 채우기',birthday:'생일 예정자',mile:'마일스톤 임박'};
@@ -348,12 +351,16 @@ function expiredListHTML(){let list=[];
  return `<div class="listhead">📕 <b>최근 3주 내 만료</b> (미재등록) ${list.length}명 · 재등록 유도 대상</div>`+
   list.map(x=>{const m=MEMBERS[x.uid];const meta=`<b style="color:#e0563a">${-x.dd}일 전 만료</b> · ${esc(m.end_date?m.end_date.slice(0,10):'')}${m.membership?' · '+esc(m.membership):''}`;
    return careCard(x.uid,meta,'expire',false);}).join('');}
+function isSubscription(m){const t=m.membership||'';return t.includes('구독')||t.includes('Subscription');}
+function toggleExpireSub(){window.EXP_HIDE_SUB=!window.EXP_HIDE_SUB;renderExpire();}
 function renderExpire(){let list=[];
- Object.values(MEMBERS).forEach(m=>{if(!m.glofox_user_id||m.stage==='트라이얼'||!payMember(m))return;const dd=ddayOf(m);if(dd!=null&&dd>=0&&dd<=14)list.push({uid:m.glofox_user_id,dd});});
+ Object.values(MEMBERS).forEach(m=>{if(!m.glofox_user_id||m.stage==='트라이얼'||!payMember(m))return;
+  if(window.EXP_HIDE_SUB && isSubscription(m))return;
+  const dd=ddayOf(m);if(dd!=null&&dd>=0&&dd<=14)list.push({uid:m.glofox_user_id,dd});});
  list.sort((a,b)=>a.dd-b.dd);
  const box=document.getElementById('view-expire');
  if(!list.length){box.innerHTML='<div class="center">2주 내 만료 예정 회원이 없어요.</div>';return;}
- box.innerHTML=`<div class="listhead">⏳ 14일 내 만료 예정 <b>${list.length}명</b> · 재등록 상담 대상 (임박순) · 트라이얼 제외</div>`+
+ box.innerHTML=`<div class="listhead">⏳ 14일 내 만료 예정 <b>${list.length}명</b> · 임박순 · 트라이얼 제외 <button class="mini" onclick="toggleExpireSub()" style="margin-left:8px">${window.EXP_HIDE_SUB?'▶ 구독 보기':'구독 숨기기'}</button></div>`+
   list.map(x=>{const m=MEMBERS[x.uid];const ed=m.end_date?m.end_date.slice(0,10):'';
    const meta=`<b style="color:${x.dd<=3?'#e0563a':'#e0954f'}">${x.dd===0?'오늘 만료':'D-'+x.dd}</b> · ${esc(ed)}${m.membership?' · '+esc(m.membership):''}`;
    return careCard(x.uid,meta,'expire',false);}).join('');}
@@ -530,6 +537,7 @@ function renderPass(){
    <div class="smeta" style="margin-top:5px">${paceTxt}${p?` · 지금쯤 <b>${p.expUsed}회</b> 사용 예상 (실제 ${p.usedActual}회)`:''}${warn}</div>
   </div>`;}).join('');
 }
+function togglePhoto(){window.HIDE_PHOTO=!window.HIDE_PHOTO;const b=document.getElementById('photoToggle');if(b)b.textContent=window.HIDE_PHOTO?'🚫':'📷';const v=CURVIEW||'att';if(v==='att')renderDay(false);else showView(v);}
 async function boot(){
  const il=document.getElementById('inputLink');if(il)il.href='회원입력.html'+location.search;
  if(!SUPABASE_URL||!PUBLISHABLE_KEY){document.getElementById('app').innerHTML='<div class="center">앱 설정이 필요해요.<br>파일 상단 SUPABASE_URL / PUBLISHABLE_KEY 를 채워주세요.</div>';return;}
@@ -667,7 +675,7 @@ function renderDay(doScroll){const evs=(SESSIONS[sel]||[]).slice().sort((a,b)=>(
    const click=on?`pick('${a.uid}')`:`open_('${a.uid}')`;
    const drop=on?'':`ondragover="dOverChip(event)" ondragleave="dLeaveChip(event)" ondrop="dropChip(event,'${a.uid}')"`;
    const ig=(m.instagram||'').replace('@','').trim();
-   h+=`<div class="chip s-${a._st} ${pk?'picked':''}" onclick="${click}" ${drop}>${avatar(m,a._st)}<span class="nmwrap"><span class="nm">${esc(m.name)}</span>${(()=>{const vt=visitTotal(m);const igt=ig?`@${esc(ig)}`:'';const vtt=vt!=null?`${vt}회`:'';return (igt||vtt)?`<span class="submini">${[igt,vtt].filter(Boolean).join(' · ')}</span>`:'';})()}</span>${bd?`<span class="badge b-${bd}">${bd}</span>`:''}${m.injury_note?'<span class="inj">⚠</span>':''}${isBdayToday(m)?'<span title="오늘 생일">🎂</span>':''}<span class="ck">✓</span></div>`;});
+   h+=`<div class="chip s-${a._st} ${pk?'picked':''}" onclick="${click}" ${drop}>${avatar(m,a._st)}<span class="nmwrap"><span class="nm">${esc(m.name)}</span>${(()=>{const vt=visitTotal(m);const r4=recent4wCount(m);const igShort=ig.length>3?ig.slice(0,3)+'..':ig;const igt=ig?`@${esc(igShort)}`:'';const vc=freqColor4w(r4);const vtt=vt!=null?`<b style="color:${vc}" title="최근 4주 ${r4}회">${vt}</b>`:'';return (igt||vtt)?`<span class="submini">${[igt,vtt].filter(Boolean).join(' · ')}</span>`:'';})()}</span>${m.injury_note?'<span class="inj">⚠</span>':''}${isBdayToday(m)?'<span title="오늘 생일">🎂</span>':''}<span class="ck">✓</span></div>`;});
   h+='</div>';
   if(on){h+=`<div class="selbar"><span class="selcnt">${PICK.size}명 선택</span><button onclick="pickAll(${i})">전체</button><button onclick="pickNone()">해제</button><button class="pri" onclick="copyInsta()">@ 인스타복사</button><button class="pri" onclick="copyPhones()">번호복사</button><button onclick="smsOpen()">문자앱</button></div>`;}
   h+='</div>';});
@@ -706,6 +714,18 @@ function copyTxt(t,msg){navigator.clipboard.writeText(t);alert(msg+'\n'+t)}
 function bigPhoto(url){if(!url)return;document.getElementById('lightbox').innerHTML=`<img src="${url}">`;document.getElementById('lightbox').style.display='flex'}
 
 function ageInfo(b){if(!b||b.length<10)return null;const by=+b.slice(0,4),bm=+b.slice(5,7),bd=+b.slice(8,10);const n=new Date();let man=n.getFullYear()-by;if(n.getMonth()+1<bm||(n.getMonth()+1===bm&&n.getDate()<bd))man--;const kor=n.getFullYear()-by+1;return{man,kor,disp:`${b} · 만 ${man}세 (한국 ${kor}세)`};}
+function recent4wCount(m){
+ const d28=ddaysAgo(28);
+ return (m._days||[]).filter(d=>d>d28).length;
+}
+function freqColor4w(n){
+ // 4주 기준 · 주단위 페이스
+ if(n==null||n===0)return 'var(--dim)';     // 회색 - 안 옴
+ if(n<=7)return '#5ac0e0';                  // 하늘 - 주 2회 미만
+ if(n<=11)return '#5ec770';                 // 초록 - 주 2회 (정착)
+ if(n<=15)return '#e0563a';                 // 빨강 - 주 3회 (열심)
+ return '#b070e0';                          // 보라 - 주 4회+ (폭발)
+}
 function visitTotal(m){const days=(m._days||[]);if(m.visit_base==null){return days.length||null;}const vbd=m.visit_base_date||'2000-01-01';const after=days.filter(d=>d>vbd).length;return (m.visit_base||0)+after;}
 function isBdayToday(m){if(!m.birth||m.birth.length<10)return false;const n=new Date();return (+m.birth.slice(5,7))===n.getMonth()+1&&(+m.birth.slice(8,10))===n.getDate();}
 function daysToBday(m){if(!m.birth||m.birth.length<10)return 999;const n=new Date();const b=new Date(n.getFullYear(),+m.birth.slice(5,7)-1,+m.birth.slice(8,10));const t=new Date(n.getFullYear(),n.getMonth(),n.getDate());let d=Math.round((b-t)/86400000);if(d<0)d+=365;return d;}
