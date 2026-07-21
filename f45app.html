@@ -29,6 +29,7 @@ h1{font-size:20px;font-weight:800}.sub{color:var(--dim);font-size:13px;margin:2p
 .selbtn.on{background:var(--red);border-color:var(--red);color:#fff}
 .chip{position:relative}
 .avbadge{position:absolute;top:-2px;left:-2px;background:rgba(0,0,0,.75);color:#ffd76a;font-size:8px;font-weight:800;padding:1px 3px;border-radius:4px;line-height:1;z-index:2;letter-spacing:-.3px}
+.avnum{position:absolute;bottom:-3px;left:-3px;color:#fff;font-size:9px;font-weight:800;padding:1px 4px;border-radius:8px;line-height:1;z-index:2;box-shadow:0 0 0 1.5px var(--navy);min-width:14px;text-align:center}
 .avbadge.b-트라이얼{color:#ffd76a}
 .avbadge.b-횟수권{color:#7ae0a0}
 .chip .ck{position:absolute;top:-5px;right:-5px;width:19px;height:19px;border-radius:50%;background:var(--red);color:#fff;font-size:11px;line-height:19px;text-align:center;display:none;box-shadow:0 0 0 2px var(--navy)}
@@ -43,7 +44,7 @@ h1{font-size:20px;font-weight:800}.sub{color:var(--dim);font-size:13px;margin:2p
 .nm{font-weight:600;font-size:14px}
 .nmwrap{display:flex;flex-direction:column;line-height:1.15}
 .igmini{font-size:9px;color:var(--dim);margin-top:1px}
-.submini{font-size:9px;color:var(--dim);margin-top:1px}
+.submini{font-size:8px;color:var(--dim);margin-top:1px;letter-spacing:-.2px}
 .badge{font-size:10px;padding:1px 6px;border-radius:6px}
 .b-트라이얼{background:#3d3512;color:#e0c94f}.b-만료{background:#3d1a1a;color:#e06a6a}.b-횟수권{background:#123a3d;color:#4fd6e0}
 .inj{color:var(--red);font-size:12px}
@@ -179,7 +180,7 @@ let sb, MEMBERS={}, SESSIONS={}, DATES=[], sel='', today='';
 function esc(s){return (s||'').replace(/[<>&"]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]))}
 function initial(n){return (n||'?').trim().slice(-2)}
 function photoOf(m){return m.photo_url||m.glofox_photo||''}
-function avatar(m,cls){const p=(window.HIDE_PHOTO?null:photoOf(m));const img=p?`<img src="${esc(p)}" onerror="this.style.display='none'">`:'';const bd=badgeOf(m);const ov=bd?`<span class="avbadge b-${bd}">${bd==='트라이얼'?'체험':'횟수'}</span>`:'';return `<span class="av">${esc(initial(m.name))}${img}${ov}<span class="rd ${cls}"></span></span>`}
+function avatar(m,cls){const p=(window.HIDE_PHOTO?null:photoOf(m));const img=p?`<img src="${esc(p)}" onerror="this.style.display='none'">`:'';const bd=badgeOf(m);const ov=bd?`<span class="avbadge b-${bd}">${bd==='트라이얼'?'체험':'횟수'}</span>`:'';const vt=visitTotal(m);const r4=recent4wCount(m);const vc=freqColor4w(r4);const numOv=(vt!=null)?`<span class="avnum" style="background:${vc}" title="최근 4주 ${r4}회">${vt}</span>`:'';return `<span class="av">${esc(initial(m.name))}${img}${ov}${numOv}<span class="rd ${cls}"></span></span>`}
 function recent28(days){const t=new Date(today+'T00:00:00');const lim=new Date(t);lim.setDate(t.getDate()-28);return (days||[]).some(d=>new Date(d+'T00:00:00')>=lim)}
 function badgeOf(m){if(m.stage==='트라이얼')return '트라이얼';if(m.pass_remaining!=null)return '횟수권';if(m.stage==='과거회원')return recent28(m._days)?'횟수권':'만료';return ''}
 
@@ -675,7 +676,7 @@ function renderDay(doScroll){const evs=(SESSIONS[sel]||[]).slice().sort((a,b)=>(
    const click=on?`pick('${a.uid}')`:`open_('${a.uid}')`;
    const drop=on?'':`ondragover="dOverChip(event)" ondragleave="dLeaveChip(event)" ondrop="dropChip(event,'${a.uid}')"`;
    const ig=(m.instagram||'').replace('@','').trim();
-   h+=`<div class="chip s-${a._st} ${pk?'picked':''}" onclick="${click}" ${drop}>${avatar(m,a._st)}<span class="nmwrap"><span class="nm">${esc(m.name)}</span>${(()=>{const vt=visitTotal(m);const r4=recent4wCount(m);const igShort=ig.length>3?ig.slice(0,3)+'..':ig;const igt=ig?`@${esc(igShort)}`:'';const vc=freqColor4w(r4);const vtt=vt!=null?`<b style="color:${vc}" title="최근 4주 ${r4}회">${vt}</b>`:'';return (igt||vtt)?`<span class="submini">${[igt,vtt].filter(Boolean).join(' · ')}</span>`:'';})()}</span>${m.injury_note?'<span class="inj">⚠</span>':''}${isBdayToday(m)?'<span title="오늘 생일">🎂</span>':''}<span class="ck">✓</span></div>`;});
+   h+=`<div class="chip s-${a._st} ${pk?'picked':''}" onclick="${click}" ${drop}>${avatar(m,a._st)}<span class="nmwrap"><span class="nm">${esc(m.name)}</span>${(()=>{const igShort=ig.length>8?ig.slice(0,8)+'..':ig;const igt=ig?`@${esc(igShort)}`:'';return igt?`<span class="submini">${igt}</span>`:'';})()}</span>${m.injury_note?'<span class="inj">⚠</span>':''}${isBdayToday(m)?'<span title="오늘 생일">🎂</span>':''}<span class="ck">✓</span></div>`;});
   h+='</div>';
   if(on){h+=`<div class="selbar"><span class="selcnt">${PICK.size}명 선택</span><button onclick="pickAll(${i})">전체</button><button onclick="pickNone()">해제</button><button class="pri" onclick="copyInsta()">@ 인스타복사</button><button class="pri" onclick="copyPhones()">번호복사</button><button onclick="smsOpen()">문자앱</button></div>`;}
   h+='</div>';});
@@ -692,7 +693,7 @@ function pickNone(){PICK.clear();renderDay(false);}
 function pickedMembers(){return [...PICK].map(u=>MEMBERS[u]).filter(m=>m);}
 function copyInsta(){const ids=pickedMembers().map(m=>(m.instagram||'').replace('@','').trim()).filter(x=>x).map(x=>'@'+x);
  if(!ids.length){alert('선택된 회원 중 인스타 ID가 없어요.');return;}
- navigator.clipboard.writeText(ids.join(' '));alert(`${ids.length}명 인스타 복사됨:\n`+ids.join(' '));}
+ navigator.clipboard.writeText(ids.join('\n'));alert(`${ids.length}명 인스타 복사됨:\n`+ids.join('\n'));}
 function copyPhones(){const ph=pickedMembers().map(m=>(m.phone||'').replace(/[^0-9]/g,'')).filter(x=>x);
  if(!ph.length){alert('선택된 회원 중 번호가 없어요.');return;}
  navigator.clipboard.writeText(ph.join(', '));alert(`${ph.length}명 번호 복사됨 (문자앱 수신자칸에 붙여넣기):\n`+ph.join(', '));}
@@ -801,6 +802,6 @@ window.addEventListener('popstate',function(){
  if(md && md.style.display!=='none'){ window._sheetOpen=false; close_(true); }
 });
 function tag(d,i){const ids=SESSIONS[d][i].att.map(a=>(MEMBERS[a.uid]||{}).instagram).filter(x=>x).map(x=>'@'+x.replace('@',''));
- if(!ids.length){alert('등록된 인스타 ID가 없어요.');return}navigator.clipboard.writeText(ids.join(' '));alert('복사됨:\n'+ids.join(' '))}
+ if(!ids.length){alert('등록된 인스타 ID가 없어요.');return}navigator.clipboard.writeText(ids.join('\n'));alert('복사됨:\n'+ids.join('\n'))}
 boot();
 </script></body></html>
