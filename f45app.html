@@ -871,7 +871,7 @@ async function open_(uid){
  <div class="wklab" style="margin-top:14px">부상/주의</div><textarea id="f_injury">${esc(m.injury_note)}</textarea>
  <div class="wklab" style="margin-top:8px">메모</div><textarea id="f_memo">${esc(m.memo)}</textarea>
  <div class="wklab" style="margin-top:14px">코치 코멘트 ${COACH?`· <span style="color:var(--dim);font-weight:400">${esc(COACH)}(으)로 남겨요</span>`:'<span style="color:#e0954f;font-weight:400"> · 링크에 코치 이름이 없어요</span>'}</div>
- <div id="memoLogList">${(mlog||[]).map(x=>{const d=new Date(x.created_at);const ds=`${d.getMonth()+1}/${d.getDate()}`;return `<div class="memoLogItem"><b>${ds}</b> <span style="color:#5aa0e0">${esc(x.coach_name||'?')}</span> · ${esc(x.content)}</div>`;}).join('')||'<div class="mini" style="color:var(--dim)">아직 코멘트가 없어요.</div>'}</div>
+ <div id="memoLogList">${(mlog||[]).map(x=>{const d=new Date(x.created_at);const ds=`${String(d.getFullYear()).slice(2)}.${String(d.getMonth()+1).padStart(2,'0')}.${String(d.getDate()).padStart(2,'0')}`;return `<div class="memoLogItem"><b>${ds}</b> <span style="color:#5aa0e0">${esc(x.coach_name||'?')}</span> · ${esc(x.content)}</div>`;}).join('')||'<div class="mini" style="color:var(--dim)">아직 코멘트가 없어요.</div>'}</div>
  <div style="display:flex;gap:6px;margin-top:6px"><input id="f_newcomment" class="memoin" style="margin-top:0" placeholder="코멘트 입력 (예: 통화함·재등록 예정)" onkeydown="if(event.key==='Enter')addComment('${uid}')"><button class="mini" style="white-space:nowrap" onclick="addComment('${uid}')">추가</button></div>
  <div class="wklab" style="margin-top:8px">인스타 ID</div><input id="f_insta" value="${esc(m.instagram)}">
  <button class="save" onclick="save('${uid}')">저장</button>
