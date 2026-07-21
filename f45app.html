@@ -312,11 +312,26 @@ function miniGrid(m){const set=new Set(m._days||[]);const t=new Date(today+'T00:
  return c;}
 
 // ===== AI 문구 생성 (Gemini Edge Function 호출) =====
+function weeklyPattern(m,weeks){
+ // 최근 weeks주간, 각 주(월~일)별 출석 횟수 배열 (최근 주가 마지막)
+ const t=new Date(today+'T00:00:00');
+ const dow=(t.getDay()+6)%7; const thisMon=new Date(t); thisMon.setDate(t.getDate()-dow);
+ const days=new Set(m._days||[]);
+ const arr=[];
+ for(let w=weeks-1;w>=0;w--){
+  const start=new Date(thisMon); start.setDate(thisMon.getDate()-w*7);
+  let cnt=0;
+  for(let d=0;d<7;d++){const cur=new Date(start); cur.setDate(start.getDate()+d); if(cur>t)break; if(days.has(fmt(cur)))cnt++;}
+  arr.push(cnt);
+ }
+ return arr; // 예: [3,2,0,0,1] = 5주치, 오래된순→최근순
+}
 async function aiMsg(uid,type){
  const m=MEMBERS[uid]||{};
- const situationMap={trial:'체험 후 미등록 상태',risk:'출석이 급감해 이탈 위험이 있음',expire:'멤버십 만료가 임박함'};
+ const situationMap={trial:'체험 후 미등록 상태',risk:'출석 흐름을 보고 상황에 맞게 재등원 유도',expire:'멤버십 만료가 임박함'};
  const lv=lastVisit(m);
- const detail=`멤버십: ${m.membership||'-'}${lv?` · 마지막 방문 ${lv}`:''}${m.end_date?` · 만료일 ${m.end_date.slice(0,10)}`:''}`;
+ const pattern=weeklyPattern(m,5); // 최근 5주, 오래된주→최근주 순
+ const detail=`멤버십: ${m.membership||'-'}${lv?` · 마지막 방문 ${lv}`:''}${m.end_date?` · 만료일 ${m.end_date.slice(0,10)}`:''} · 최근 5주간 주별 출석횟수(오래된순→최근순): [${pattern.join(', ')}]`;
  try{
   const {data,error}=await sb.functions.invoke('glofox-ai',{body:{type:'message',name:m.name||'회원',situation:situationMap[type]||type,detail}});
   if(error||!data?.text){alert('AI 문구 생성 실패: '+(error?.message||'응답을 받지 못했어요'));return;}
