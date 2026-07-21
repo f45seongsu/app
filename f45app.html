@@ -575,10 +575,20 @@ function renderPass(){
 }
 
 // ===== 리포트 탭 (회원수 추이 + AI 코멘트) =====
-function weekEndDates(n){
- const t=new Date(today+'T00:00:00');const dow=t.getDay();
- const thisSun=new Date(t);thisSun.setDate(t.getDate()+(dow===0?0:7-dow));
- const arr=[];for(let i=n-1;i>=0;i--){const d=new Date(thisSun);d.setDate(thisSun.getDate()-i*7);arr.push(fmt(d));}
+function monthEndDates(n){
+ const t=new Date(today+'T00:00:00');
+ const arr=[];
+ for(let i=n-1;i>=0;i--){
+  let d=new Date(t.getFullYear(),t.getMonth()-i+1,0);
+  if(d>t)d=t;
+  arr.push(fmt(d));
+ }
+ return arr;
+}
+function monthLabels(n){
+ const t=new Date(today+'T00:00:00');
+ const arr=[];
+ for(let i=n-1;i>=0;i--){const d=new Date(t.getFullYear(),t.getMonth()-i,1);arr.push((d.getMonth()+1)+'월');}
  return arr;
 }
 function activeCountAt(dateStr){
@@ -586,35 +596,40 @@ function activeCountAt(dateStr){
  Object.values(MEMBERS).forEach(m=>{
   if(!m.glofox_user_id||!payMember(m)||!['회원','과거회원'].includes(m.stage))return;
   const jd=m.join_date&&m.join_date.length>=10?m.join_date.slice(0,10):null;
+  if(!jd||jd>dateStr)return;                         // 가입일 없거나 미래면 제외
+  if(isSubscription(m)){ c++; return; }               // 구독형은 계속 활성으로 간주
   const ed=m.end_date&&m.end_date.length>=10?m.end_date.slice(0,10):null;
-  if(jd&&jd>dateStr)return; if(ed&&ed<dateStr)return; c++;
+  if(!ed||ed<dateStr)return;                          // 만료일 없거나 이미 지났으면 비활성 처리 (핵심 수정)
+  c++;
  });
  return c;
 }
 function renderReport(){
  const box=document.getElementById('view-report');
- const weeks=weekEndDates(8), counts=weeks.map(activeCountAt);
- const newS=weeks.map((w,i)=>{const p=i?weeks[i-1]:ddaysAgo(70);
-  return Object.values(MEMBERS).filter(m=>m.join_date&&m.join_date.slice(0,10)>p&&m.join_date.slice(0,10)<=w).length;});
- const expd=weeks.map((w,i)=>{const p=i?weeks[i-1]:ddaysAgo(70);
-  return Object.values(MEMBERS).filter(m=>m.end_date&&m.end_date.slice(0,10)>p&&m.end_date.slice(0,10)<=w&&payMember(m)).length;});
+ const N=4; // 최근 4개월(예: 4,5,6,7월)
+ const months=monthEndDates(N), labels=monthLabels(N), counts=months.map(activeCountAt);
+ const newS=months.map((mEnd,i)=>{const p=i?months[i-1]:ddaysAgo(120);
+  return Object.values(MEMBERS).filter(m=>m.join_date&&m.join_date.slice(0,10)>p&&m.join_date.slice(0,10)<=mEnd).length;});
+ const expd=months.map((mEnd,i)=>{const p=i?months[i-1]:ddaysAgo(120);
+  return Object.values(MEMBERS).filter(m=>m.end_date&&m.end_date.slice(0,10)>p&&m.end_date.slice(0,10)<=mEnd&&payMember(m)&&!isSubscription(m)).length;});
  const max=Math.max(...counts,1);
- const bars=weeks.map((w,i)=>{const h=Math.round(counts[i]/max*70)+10;
+ const bars=labels.map((lb,i)=>{const h=Math.round(counts[i]/max*70)+10;
   return `<div style="display:flex;flex-direction:column;align-items:center;gap:4px;flex:1">
-   <div style="font-size:11px;color:var(--dim)">${counts[i]}</div>
-   <div style="width:70%;height:${h}px;background:var(--red);border-radius:4px 4px 0 0"></div>
-   <div style="font-size:9px;color:var(--dim)">${w.slice(5).replace('-','/')}</div></div>`;}).join('');
- const diff=counts[7]-counts[0];
- box.innerHTML=`<div class="listhead">📊 <b>주별 활성 회원수 추이</b> (최근 8주)</div>
-  <div style="display:flex;align-items:flex-end;gap:4px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 10px;margin-bottom:14px">${bars}</div>
+   <div style="font-size:12px;color:var(--dim)">${counts[i]}</div>
+   <div style="width:60%;height:${h}px;background:var(--red);border-radius:4px 4px 0 0"></div>
+   <div style="font-size:11px;color:var(--dim)">${lb}</div></div>`;}).join('');
+ const diff=counts[N-1]-counts[0];
+ box.innerHTML=`<div class="listhead">📊 <b>월별 순수 활성 회원수 추이</b> (구독·횟수권·트라이얼 제외, 만료일 없는 데이터는 비활성 처리)</div>
+  <div style="display:flex;align-items:flex-end;gap:8px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 10px;margin-bottom:14px">${bars}</div>
   <div class="stats" style="margin-bottom:14px">
-   <div class="stat"><b>${counts[7]}</b><span>현재 활성</span></div>
-   <div class="stat"><b style="color:${diff>=0?'var(--grn)':'#e0563a'}">${diff>=0?'+':''}${diff}</b><span>8주 순증감</span></div>
-   <div class="stat"><b>${newS.reduce((a,b)=>a+b,0)}</b><span>8주 신규</span></div>
+   <div class="stat"><b>${counts[N-1]}</b><span>현재 활성</span></div>
+   <div class="stat"><b style="color:${diff>=0?'var(--grn)':'#e0563a'}">${diff>=0?'+':''}${diff}</b><span>${N}개월 순증감</span></div>
+   <div class="stat"><b>${newS.reduce((a,b)=>a+b,0)}</b><span>${N}개월 신규</span></div>
   </div>
   <div id="aiReportBox"><button class="mini" onclick="genAiReport()">🤖 AI 코멘트 생성</button></div>`;
- window._reportStats={weeks,counts,newS,expd};
+ window._reportStats={weeks:labels,counts,newS,expd};
 }
+ 
 async function genAiReport(){
  const box=document.getElementById('aiReportBox');
  box.innerHTML='<div class="center">AI 분석 중…</div>';
