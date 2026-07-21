@@ -561,8 +561,11 @@ function buildSessions(rows){
   e.att[r.glofox_user_id]={attended:(r.attended||prev.attended||false),status:r.status||prev.status||''};
   if(r.attended){const m=MEMBERS[r.glofox_user_id];if(m){(m._days=m._days||[]);if(!m._days.includes(ds))m._days.push(ds);(m._att=m._att||[]);m._att.push(ds+' '+tm);}}
  });
+ // 같은 (날짜·시간·수업명)이 여러 event_id로 갈린 경우 → 예약 많은 쪽만 채택(유령 제거)
+ const bySlot={};
+ Object.values(ev).forEach(e=>{const cnt=Object.keys(e.att).length;const key=e.date+'|'+e.time+'|'+e.name;if(!bySlot[key]||cnt>bySlot[key]._cnt){e._cnt=cnt;bySlot[key]=e;}});
  SESSIONS={};
- Object.values(ev).forEach(e=>{(SESSIONS[e.date]=SESSIONS[e.date]||[]).push({time:e.time,name:e.name,att:Object.entries(e.att).map(([uid,a])=>({uid,attended:a.attended,status:a.status}))})});
+ Object.values(bySlot).forEach(e=>{(SESSIONS[e.date]=SESSIONS[e.date]||[]).push({time:e.time,name:e.name,att:Object.entries(e.att).map(([uid,a])=>({uid,attended:a.attended,status:a.status}))})});
  Object.keys(SESSIONS).forEach(d=>SESSIONS[d].sort((a,b)=>a.time<b.time?-1:1));
  DATES=Object.keys(SESSIONS).sort();
  sel=DATES.includes(today)?today:DATES[DATES.length-1];
@@ -593,6 +596,13 @@ function renderDay(doScroll){const evs=(SESSIONS[sel]||[]).slice().sort((a,b)=>(
   const passed=new Date(sel+'T'+(ev.time||'23:59')+':00')<nowTs;
   ev.att.forEach(a=>{a._st=a.status==='CANCELED'?'cancel':(a.attended?'att':(passed?'noshow':'bk'));});
   ev.att=ev.att.filter(a=>a._st!=='cancel');
+  // Drop in 회원 여러 명 → 하나의 칩으로 묶기
+  const drops=ev.att.filter(a=>{const m=MEMBERS[a.uid]||{};return /^Drop in\b/i.test(m.name||'');});
+  if(drops.length){
+   ev.att=ev.att.filter(a=>{const m=MEMBERS[a.uid]||{};return !/^Drop in\b/i.test(m.name||'');});
+   const attCnt=drops.filter(a=>a._st==='att').length;
+   ev.att.push({uid:'__dropin_'+ev.time,_st:attCnt?'att':drops[0]._st,_dropin:drops.length});
+  }
   const ordr={att:0,bk:1,noshow:2};
   ev.att.sort((x,y)=>ordr[x._st]-ordr[y._st]);
   const present=ev.att.filter(a=>a._st==='att').length;
@@ -601,7 +611,7 @@ function renderDay(doScroll){const evs=(SESSIONS[sel]||[]).slice().sort((a,b)=>(
   const cntTxt=`${ev.att.length}명 · ${present} 출석`+(noshow?` · <span style="color:#e0563a">${noshow} 노쇼</span>`:'')+(cancel?` · <span style="color:#e0954f">${cancel} 취소</span>`:'');
   const on=selEv===i;
   h+=`<div class="ev" id="ev_${i}"><div class="evh"><span class="time">${ev.time}</span><span class="enm">${esc(ev.name)}</span><span class="cnt">${cntTxt}</span><button class="selbtn ${on?'on':''}" onclick="toggleSel(${i})">${on?'완료':'선택'}</button></div><div class="grid">`;
-  ev.att.forEach(a=>{const m=MEMBERS[a.uid]||{name:'(미등록)'};const bd=badgeOf(m);
+  ev.att.forEach(a=>{if(a._dropin){h+=`<div class="chip s-${a._st}" style="cursor:default"><span class="ini" style="background:#4a5980">D</span><span class="nmwrap"><span class="nm">Drop in${a._dropin>1?` (${a._dropin}명)`:''}</span></span></div>`;return;}const m=MEMBERS[a.uid]||{name:'(미등록)'};const bd=badgeOf(m);
    const pk=on&&PICK.has(a.uid);
    const click=on?`pick('${a.uid}')`:`open_('${a.uid}')`;
    const drop=on?'':`ondragover="dOverChip(event)" ondragleave="dLeaveChip(event)" ondrop="dropChip(event,'${a.uid}')"`;
@@ -645,7 +655,7 @@ function copyTxt(t,msg){navigator.clipboard.writeText(t);alert(msg+'\n'+t)}
 function bigPhoto(url){if(!url)return;document.getElementById('lightbox').innerHTML=`<img src="${url}">`;document.getElementById('lightbox').style.display='flex'}
 
 function ageInfo(b){if(!b||b.length<10)return null;const by=+b.slice(0,4),bm=+b.slice(5,7),bd=+b.slice(8,10);const n=new Date();let man=n.getFullYear()-by;if(n.getMonth()+1<bm||(n.getMonth()+1===bm&&n.getDate()<bd))man--;const kor=n.getFullYear()-by+1;return{man,kor,disp:`${b} · 만 ${man}세 (한국 ${kor}세)`};}
-function visitTotal(m){if(m.visit_base==null)return null;const vbd=m.visit_base_date||'2000-01-01';const after=(m._days||[]).filter(d=>d>vbd).length;return (m.visit_base||0)+after;}
+function visitTotal(m){const days=(m._days||[]);if(m.visit_base==null){return days.length||null;}const vbd=m.visit_base_date||'2000-01-01';const after=days.filter(d=>d>vbd).length;return (m.visit_base||0)+after;}
 function isBdayToday(m){if(!m.birth||m.birth.length<10)return false;const n=new Date();return (+m.birth.slice(5,7))===n.getMonth()+1&&(+m.birth.slice(8,10))===n.getDate();}
 function daysToBday(m){if(!m.birth||m.birth.length<10)return 999;const n=new Date();const b=new Date(n.getFullYear(),+m.birth.slice(5,7)-1,+m.birth.slice(8,10));const t=new Date(n.getFullYear(),n.getMonth(),n.getDate());let d=Math.round((b-t)/86400000);if(d<0)d+=365;return d;}
 function msgBday(uid){const m=MEMBERS[uid]||{};const nm=m.name||'회원';const k=ageInfo(m.birth);return `${nm}님, 생일 진심으로 축하드려요! 🎉 F45 성수에서 올 한 해도 건강하고 활기차게 보내세요 💪 생일 기념 방문하시면 작은 선물 준비해뒀어요 😊`;}
@@ -675,6 +685,7 @@ async function open_(uid){
  const total=(att||[]).length; const w=weekGrid(dayHour); const bd=badgeOf(m);
  let fullVisits=total;
  if(m.visit_base!=null){const vbd=m.visit_base_date||'2000-01-01';const after=(att||[]).filter(a=>(a.class_time||'').slice(0,10)>vbd).length;fullVisits=(m.visit_base||0)+after;}
+ // visit_base 없는 신규회원은 attendance만으로 이미 total에 담겨있음
  const ph=(m.phone||'').replace(/[^0-9]/g,''); const ig=(m.instagram||'').replace('@','');
  const passHTML = m.pass_remaining!=null ? `<div class="pass">횟수권 · 잔여 <b>${m.pass_remaining}회</b> / 총 ${m.pass_total||'-'}회<br><span style="color:var(--dim);font-size:12px">만료 ${esc(m.pass_expiry)||'-'}</span></div>`:'';
  document.getElementById('sheet').innerHTML=`<span class="close" onclick="close_()">×</span>
