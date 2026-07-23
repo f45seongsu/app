@@ -148,6 +148,7 @@ body{padding-bottom:76px}
 <div id="view-photo" class="view" style="display:none"></div>
 <div id="view-member" class="view" style="display:none"></div>
 <div id="view-birthday" class="view" style="display:none"></div>
+<div id="view-mile" class="view" style="display:none"></div>
 <div id="view-tshirt" class="view" style="display:none"></div>
 <div id="view-aiconfig" class="view" style="display:none"></div>
 <div id="view-report" class="view" style="display:none"></div>
@@ -166,6 +167,7 @@ body{padding-bottom:76px}
   <button onclick="showView('pass')">🎫 횟수권 관리</button>
   <button onclick="showView('photo')">📸 사진 입력 (수업별)</button>
   <button onclick="showView('birthday')">🎂 생일 예정자</button>
+  <button onclick="showView('mile')">💯 마일스톤 임박</button>
   <button onclick="showView('tshirt')">🎽 마일스톤 티셔츠</button>
   <button onclick="if(checkAdminPw())showView('aiconfig')">⚙️ AI 프롬프트 설정</button>
   <button onclick="showView('member')">📷 회원 사진 채우기</button>
@@ -206,9 +208,9 @@ function badgeOf(m){if(m.stage==='트라이얼')return '트라이얼';if(m.pass_
 let VIEW='att';
 function toggleDrawer(){const d=document.getElementById('drawer');d.style.display=d.style.display==='none'?'block':'none';}
 function showView(v){window.CURVIEW=v;VIEW=v;
- ['att','risk','expire','search','trial','pass','photo','member','birthday','report','coach'].forEach(x=>{const el=document.getElementById('view-'+x);if(el)el.style.display=(x===v?'':'none');});
+ ['att','risk','expire','search','trial','pass','photo','member','birthday','mile','tshirt','report','coach','aiconfig'].forEach(x=>{const el=document.getElementById('view-'+x);if(el)el.style.display=(x===v?'':'none');});
  document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('on',b.dataset.v===v));
- const T={att:'수업 출결',risk:'이탈 위험군',expire:'만료 임박',search:'회원 검색',trial:'트라이얼 현황',pass:'횟수권 관리',tshirt:'마일스톤 티셔츠',photo:'사진 입력 (수업별)',member:'회원 사진 채우기',birthday:'생일 예정자',report:'리포트',coach:'코치 링크 관리'};
+ const T={att:'수업 출결',risk:'이탈 위험군',expire:'만료 임박',search:'회원 검색',trial:'트라이얼 현황',pass:'횟수권 관리',mile:'마일스톤 임박',tshirt:'마일스톤 티셔츠',photo:'사진 입력 (수업별)',member:'회원 사진 채우기',birthday:'생일 예정자',report:'리포트',coach:'코치 링크 관리'};
  document.getElementById('vtitle').textContent=T[v]||'';
  document.getElementById('sub').style.display=(v==='att'?'':'none');
  document.getElementById('drawer').style.display='none';
@@ -222,6 +224,7 @@ function showView(v){window.CURVIEW=v;VIEW=v;
  if(v==='coach')renderCoachAdmin();
  if(v==='birthday')renderBirthday();
  if(v==='report')renderReport();
+ if(v==='mile')renderMilestone();
  if(v==='tshirt')renderTshirt();
  if(v==='aiconfig')renderAiConfig();
 }
@@ -956,6 +959,8 @@ async function renderAiConfig(){
     <div class="wklab" style="margin-top:10px">🗣 톤/스타일 설정</div>
     <textarea id="cfg_tone" class="memoin" style="min-height:70px;width:100%" placeholder="예: 친절하되 너무 여성스럽지 않게, 담백하고 약간 남자다운 톤으로. 이모지는 최소화.">${esc(c.tone||'')}</textarea>
     <button class="mini" style="margin-top:10px" onclick="saveAiConfig()">저장</button>
+    <button class="mini" style="margin-top:10px;margin-left:6px" onclick="testAiConnection()">🔌 AI 연결 테스트</button>
+    <div id="aiTestResult" style="margin-top:8px"></div>
    </div>`;
  }catch(e){box.innerHTML='<div class="center">오류: '+esc(e.message)+'</div>';}
 }
@@ -974,6 +979,24 @@ async function saveAiConfig(){
   if(error){alert('저장 실패: '+error.message);return;}
   alert('AI 설정이 저장됐어요.');
  }catch(e){alert('오류: '+e.message);}
+}
+async function testAiConnection(){
+ const box=document.getElementById('aiTestResult');
+ box.innerHTML='<div class="mini" style="color:var(--dim)">테스트 중…</div>';
+ try{
+  const {data,error}=await sb.functions.invoke('glofox-ai',{body:{type:'name',name:'Test Name'}});
+  if(error){
+   box.innerHTML='<div class="mini" style="color:#e0563a">❌ 실패: '+esc(error.message||JSON.stringify(error))+'</div>';
+   return;
+  }
+  if(!data||!data.text){
+   box.innerHTML='<div class="mini" style="color:#e0563a">❌ 응답은 왔는데 text가 없어요: '+esc(JSON.stringify(data))+'</div>';
+   return;
+  }
+  box.innerHTML='<div class="mini" style="color:var(--grn)">✅ 성공! AI 응답: '+esc(data.text)+'</div>';
+ }catch(e){
+  box.innerHTML='<div class="mini" style="color:#e0563a">❌ 예외 발생: '+esc(e.message)+'</div>';
+ }
 }
 let _aiConfigCache=null;
 async function getAiConfig(){
