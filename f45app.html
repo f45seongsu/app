@@ -149,6 +149,7 @@ body{padding-bottom:76px}
 <div id="view-member" class="view" style="display:none"></div>
 <div id="view-birthday" class="view" style="display:none"></div>
 <div id="view-tshirt" class="view" style="display:none"></div>
+<div id="view-aiconfig" class="view" style="display:none"></div>
 <div id="view-report" class="view" style="display:none"></div>
 
 <nav class="tabbar">
@@ -166,6 +167,7 @@ body{padding-bottom:76px}
   <button onclick="showView('photo')">📸 사진 입력 (수업별)</button>
   <button onclick="showView('birthday')">🎂 생일 예정자</button>
   <button onclick="showView('tshirt')">🎽 마일스톤 티셔츠</button>
+  <button onclick="if(checkAdminPw())showView('aiconfig')">⚙️ AI 프롬프트 설정</button>
   <button onclick="showView('member')">📷 회원 사진 채우기</button>
   <button onclick="if(checkAdminPw())showView('report')">📊 리포트</button>
   <button onclick="if(checkAdminPw())showView('coach')">🔑 코치 링크 관리</button>
@@ -221,6 +223,7 @@ function showView(v){window.CURVIEW=v;VIEW=v;
  if(v==='birthday')renderBirthday();
  if(v==='report')renderReport();
  if(v==='tshirt')renderTshirt();
+ if(v==='aiconfig')renderAiConfig();
 }
 function renderSearch(){
  const q=(document.getElementById('q').value||'').trim().toLowerCase();
@@ -326,30 +329,58 @@ function weeklyPattern(m,weeks){
  }
  return arr;
 }
-async function aiMsg(uid,type){
+async function aiMsg(uid,type,btn){
  const m=MEMBERS[uid]||{};
  const situationMap={trial:'체험 후 미등록 상태',risk:'출석 흐름을 보고 상황에 맞게 재등원 유도',expire:'멤버십 만료가 임박함'};
  const lv=lastVisit(m);
  const pattern=weeklyPattern(m,5);
  const daysSince=lv?Math.round((new Date(today+'T00:00:00')-new Date(lv+'T00:00:00'))/86400000):null;
- const detail=`멤버십: ${m.membership||'-'}${lv?` · 마지막 방문 ${lv} (오늘 기준 ${daysSince}일 전)`:' · 방문기록 없음'}${m.end_date?` · 만료일 ${m.end_date.slice(0,10)}`:''} · 최근 5주간 주별 출석횟수(오래된순→최근순): [${pattern.join(', ')}]`;
+ let detail=`멤버십: ${m.membership||'-'}${lv?` · 마지막 방문 ${lv} (오늘 기준 ${daysSince}일 전)`:' · 방문기록 없음'}${m.end_date?` · 만료일 ${m.end_date.slice(0,10)}`:''} · 최근 5주간 주별 출석횟수(오래된순→최근순): [${pattern.join(', ')}]`;
+
+ // 트라이얼: 최근 7일 출석 횟수 기준 톤 분기 지시를 명시적으로 포함
+ if(type==='trial'){
+  const d7=ddaysAgo(7);
+  const weekCnt=(m._days||[]).filter(d=>d>d7).length;
+  detail += ` · 최근 7일간 출석 ${weekCnt}회.`;
+  detail += weekCnt<3
+   ? ' [지시] 출석이 적은 편이니 강하게 등록을 권유하지 말고, 어떠셨는지·불편한 점은 없었는지 안부를 묻는 부드러운 톤으로 작성하세요.'
+   : ' [지시] 출석이 많은(3회 이상) 적극적인 분이니, 자신감 있게 지금 등록하면 좋은 이유를 담아 적극적으로 등록을 권유하는 톤으로 작성하세요.';
+ }
+
+ // 특별 요청사항(코치가 직접 입력)
+ const extraEl=document.getElementById('extra_'+type+'_'+uid);
+ const extra=extraEl?extraEl.value.trim():'';
+ if(extra) detail += ` · [코치의 특별 요청사항] ${extra}`;
+
+ // 브랜드 설정(가격표/안내/횟수권/약관/톤) 반영
+ const cfg=await getAiConfig();
+ let brand='';
+ if(cfg.tone) brand += ` [톤 지침] ${cfg.tone}.`;
+ if(cfg.price_list) brand += ` [가격표 참고](필요시에만 언급) ${cfg.price_list}`;
+ if(cfg.notices) brand += ` [안내사항 참고](관련 있을 때만) ${cfg.notices}`;
+ if(cfg.pass_info) brand += ` [횟수권 안내 참고](관련 있을 때만) ${cfg.pass_info}`;
+ if(brand) detail += brand;
+
+ if(btn){btn.disabled=true;btn.textContent='생성중...';}
  try{
   const {data,error}=await sb.functions.invoke('glofox-ai',{body:{type:'message',name:m.name||'회원',situation:situationMap[type]||type,detail}});
+  if(btn){btn.disabled=false;btn.textContent='🤖AI문구';}
   if(error||!data?.text){alert('AI 문구 생성 실패: '+(error?.message||'응답을 받지 못했어요'));return;}
   if(confirm('아래 AI 생성 문구를 복사할까요?\n\n'+data.text)){
    navigator.clipboard.writeText(data.text);
   }
- }catch(e){alert('오류: '+e.message);}
+ }catch(e){if(btn){btn.disabled=false;btn.textContent='🤖AI문구';} alert('오류: '+e.message);}
 }
 
-function careCard(uid,metaHtml,type,showGrid){const m=MEMBERS[uid]||{name:'?'};const bd=badgeOf(m);const ph=(m.phone||'').replace(/[^0-9]/g,'');
+function careCard(uid,metaHtml,type,showGrid){const m=MEMBERS[uid]||{name:'?'};const bd=badgeOf(m);
  return `<div class="carecard">
    <div class="srow" style="border:0;padding:0;margin:0;background:none">
      <span onclick="open_('${uid}')">${avatar(m,'bk')}</span>
      <div class="sinfo" onclick="open_('${uid}')"><div class="nm">${esc(m.name)||'(이름없음)'}${bd?` <span class="badge b-${bd}">${bd}</span>`:''}</div><div class="smeta">${metaHtml}</div></div>
-     <div class="cacts">${ph?`<button class="mini" onclick="smsMsg('${uid}','${type}')">문자</button><button class="mini" onclick="copyMsg('${uid}','${type}')">문구</button><button class="mini" onclick="aiMsg('${uid}','${type}')">🤖AI문구</button>`:'<span class="smeta">번호없음</span>'}</div>
+     <div class="cacts"><button class="mini" onclick="aiMsg('${uid}','${type}',this)">🤖AI문구</button></div>
    </div>
    ${showGrid?`<div class="mini4w-wrap"><span class="m4lab">↑ 4주 전</span><div class="mini4w">${miniGrid(m)}</div><span class="m4lab">↓ 이번 주</span></div>`:''}
+   <input id="extra_${type}_${uid}" class="memoin" placeholder="AI에게 특별 요청사항 (예: 이번주 세일 언급해줘)">
    <input class="memoin" value="${esc(m.care_memo||'')}" placeholder="메모 (예: 6/20 통화함·안받음)" onchange="saveMemo('${uid}',this.value)">
  </div>`;}
 function payMember(m){
@@ -438,8 +469,10 @@ function renderTrial(){
      <div class="srow" style="border:0;padding:0;margin:0;background:none">
        <span onclick="open_('${uid}')">${avatar(m,'bk')}</span>
        <div class="sinfo" onclick="open_('${uid}')"><div class="nm">${esc(m.name)||'(이름없음)'} <span class="badge b-트라이얼">트라이얼</span></div><div class="smeta">${meta}</div></div>
-       <div class="cacts">${ph?`<button class="mini" onclick="smsMsg('${uid}','trial')">문자</button><button class="mini" onclick="copyMsg('${uid}','trial')">문구</button><button class="mini" onclick="aiMsg('${uid}','trial')">🤖AI문구</button>`:'<span class="smeta">번호없음</span>'}</div>
+       <div class="cacts"><button class="mini" onclick="aiMsg('${uid}','trial',this)">🤖AI문구</button></div>
      </div>
+     <div class="mini4w-wrap"><span class="m4lab">↑ 4주 전</span><div class="mini4w">${miniGrid(m)}</div><span class="m4lab">↓ 이번 주</span></div>
+     <input id="extra_trial_${uid}" class="memoin" placeholder="AI에게 특별 요청사항 (예: 이번주 세일 언급해줘)">
      <input class="memoin" value="${esc(m.trial_memo||'')}" placeholder="트라이얼 메모 (예: 7/2 통화·고민중)" onchange="saveTrialMemo('${uid}',this.value)">
    </div>`;}).join('');
 }
@@ -640,6 +673,8 @@ async function renderReport(){
 
  const newS=ranges.map((r,i)=>{const p=i?ranges[i-1].end:ddaysAgo(120);
   return Object.values(MEMBERS).filter(m=>payMember(m)&&['회원','과거회원'].includes(m.stage)&&m.join_date&&m.join_date.slice(0,10)>p&&m.join_date.slice(0,10)<=r.end).length;});
+ const expd=ranges.map((r,i)=>{const p=i?ranges[i-1].end:ddaysAgo(120);
+  return Object.values(MEMBERS).filter(m=>payMember(m)&&m.end_date&&m.end_date.slice(0,10)>p&&m.end_date.slice(0,10)<=r.end).length;});
 
  const validCounts=counts.filter(c=>c!=null);
  const max=Math.max(...validCounts,1);
@@ -671,7 +706,7 @@ async function renderReport(){
   </div>
   <button class="mini" onclick="saveSnapshot()">📌 이번 달 스냅샷 저장 (${thisMonthKey})</button>
   <div id="aiReportBox" style="margin-top:10px"><button class="mini" onclick="genAiReport()">🤖 AI 코멘트 생성</button></div>`;
- window._reportStats={weeks:ranges.map(r=>r.label),counts,newS};
+ window._reportStats={weeks:ranges.map(r=>r.label),counts:counts.map(c=>c??0),newS,expd};
 }
 async function saveSnapshot(){
  const key=`${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,'0')}`;
@@ -901,6 +936,54 @@ async function addMilestoneRow(){
  }catch(e){alert('오류: '+e.message);}
 }
 function togglePhoto(){window.HIDE_PHOTO=!window.HIDE_PHOTO;const b=document.getElementById('photoToggle');if(b)b.textContent=window.HIDE_PHOTO?'🚫':'📷';const v=CURVIEW||'att';if(v==='att')renderDay(false);else showView(v);}
+async function renderAiConfig(){
+ const box=document.getElementById('view-aiconfig');
+ box.innerHTML='<div class="center">불러오는 중…</div>';
+ try{
+  const{data,error}=await sb.from('ai_config').select('*').eq('id',1).maybeSingle();
+  if(error){box.innerHTML='<div class="center">불러오기 실패: '+esc(error.message)+'</div>';return;}
+  const c=data||{};
+  box.innerHTML=`<div class="listhead">⚙️ <b>AI 프롬프트 설정</b> · 여기 입력한 내용을 AI 메시지 생성 때 참고해요</div>
+   <div class="carecard">
+    <div class="wklab">💰 가격표</div>
+    <textarea id="cfg_price" class="memoin" style="min-height:80px;width:100%">${esc(c.price_list||'')}</textarea>
+    <div class="wklab" style="margin-top:10px">📋 안내사항 (실내운동화 필참, 운동시간표 등)</div>
+    <textarea id="cfg_notices" class="memoin" style="min-height:80px;width:100%">${esc(c.notices||'')}</textarea>
+    <div class="wklab" style="margin-top:10px">🎫 횟수권 안내</div>
+    <textarea id="cfg_pass" class="memoin" style="min-height:60px;width:100%">${esc(c.pass_info||'')}</textarea>
+    <div class="wklab" style="margin-top:10px">📄 약관 (참고용, AI가 필요시만 참고)</div>
+    <textarea id="cfg_terms" class="memoin" style="min-height:60px;width:100%">${esc(c.terms||'')}</textarea>
+    <div class="wklab" style="margin-top:10px">🗣 톤/스타일 설정</div>
+    <textarea id="cfg_tone" class="memoin" style="min-height:70px;width:100%" placeholder="예: 친절하되 너무 여성스럽지 않게, 담백하고 약간 남자다운 톤으로. 이모지는 최소화.">${esc(c.tone||'')}</textarea>
+    <button class="mini" style="margin-top:10px" onclick="saveAiConfig()">저장</button>
+   </div>`;
+ }catch(e){box.innerHTML='<div class="center">오류: '+esc(e.message)+'</div>';}
+}
+async function saveAiConfig(){
+ const payload={
+  id:1,
+  price_list:document.getElementById('cfg_price').value,
+  notices:document.getElementById('cfg_notices').value,
+  pass_info:document.getElementById('cfg_pass').value,
+  terms:document.getElementById('cfg_terms').value,
+  tone:document.getElementById('cfg_tone').value,
+  updated_at:new Date().toISOString(),
+ };
+ try{
+  const{error}=await sb.from('ai_config').upsert(payload);
+  if(error){alert('저장 실패: '+error.message);return;}
+  alert('AI 설정이 저장됐어요.');
+ }catch(e){alert('오류: '+e.message);}
+}
+let _aiConfigCache=null;
+async function getAiConfig(){
+ if(_aiConfigCache)return _aiConfigCache;
+ try{
+  const{data}=await sb.from('ai_config').select('*').eq('id',1).maybeSingle();
+  _aiConfigCache=data||{};
+ }catch(e){ _aiConfigCache={}; }
+ return _aiConfigCache;
+}
 async function boot(){
  const il=document.getElementById('inputLink');if(il)il.href='회원입력.html'+location.search;
  if(!SUPABASE_URL||!PUBLISHABLE_KEY){document.getElementById('app').innerHTML='<div class="center">앱 설정이 필요해요.<br>파일 상단 SUPABASE_URL / PUBLISHABLE_KEY 를 채워주세요.</div>';return;}
