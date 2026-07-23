@@ -167,7 +167,7 @@ body{padding-bottom:76px}
   <button onclick="showView('birthday')">🎂 생일 예정자</button>
   <button onclick="showView('tshirt')">🎽 마일스톤 티셔츠</button>
   <button onclick="showView('member')">📷 회원 사진 채우기</button>
-  <button onclick="showView('report')">📊 리포트</button>
+  <button onclick="if(checkAdminPw())showView('report')">📊 리포트</button>
   <button onclick="if(checkAdminPw())showView('coach')">🔑 코치 링크 관리</button>
   <button onclick="if(checkAdminPw())makeCoachLink()">🔗 코치 링크 생성</button>
  </div>
@@ -352,7 +352,15 @@ function careCard(uid,metaHtml,type,showGrid){const m=MEMBERS[uid]||{name:'?'};c
    ${showGrid?`<div class="mini4w-wrap"><span class="m4lab">↑ 4주 전</span><div class="mini4w">${miniGrid(m)}</div><span class="m4lab">↓ 이번 주</span></div>`:''}
    <input class="memoin" value="${esc(m.care_memo||'')}" placeholder="메모 (예: 6/20 통화함·안받음)" onchange="saveMemo('${uid}',this.value)">
  </div>`;}
-function payMember(m){const t=m.membership||'';return !(t.includes('횟수권')||t.includes('Class Pass')||t.includes('무료혜택')||t.includes('Complimentary'));}
+function payMember(m){
+ const t=m.membership||'';
+ if(t.includes('무료혜택')||t.includes('Complimentary'))return false;
+ if(t.includes('횟수권')||t.includes('Class Pass')){
+  const total=m.pass_total||0; const remain=(m.pass_remaining!=null)?m.pass_remaining:total;
+  return total>=10 && remain>0;   // 10회 이상 팩 + 잔여 있으면 활성으로 포함, 1회권 등은 제외
+ }
+ return true;
+}
 let riskTab='risk';
 function setRiskTab(t){riskTab=t;renderRisk();}
 function renderRisk(){
@@ -702,7 +710,8 @@ function toggleTshirtSection(){window._tshirtOpen=!window._tshirtOpen;renderTshi
 async function renderTshirt(){
  const box=document.getElementById('view-tshirt');
  box.innerHTML='<div class="center">불러오는 중…</div>';
- try{ await ensureMileData(); }catch(e){ box.innerHTML='<div class="center">출석 집계 실패: '+esc(e.message)+'</div>'; return; }
+ try{
+ await ensureMileData();
 
  function isMileValue(n){return n===45 || (n>=100 && n%100===0);}
  function totalVisits(m){
@@ -836,6 +845,10 @@ async function renderTshirt(){
   </div>`;
 
  box.innerHTML = achievedHTML + backlogHTML + upcomingHTML + invHTML + orderFormHTML;
+ }catch(e){
+  box.innerHTML='<div class="center">오류가 발생했어요:<br>'+esc(e.message)+'<br><span class="mini" style="color:var(--dim)">'+esc((e.stack||'').slice(0,300))+'</span></div>';
+  console.error('renderTshirt error:', e);
+ }
 }
 function toggleTshirtBacklog(){window._tshirtBacklogOpen = (window._tshirtBacklogOpen===false)?true:false; renderTshirt();}
 async function addTshirtOrder(){
