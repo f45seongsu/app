@@ -148,7 +148,6 @@ body{padding-bottom:76px}
 <div id="view-photo" class="view" style="display:none"></div>
 <div id="view-member" class="view" style="display:none"></div>
 <div id="view-birthday" class="view" style="display:none"></div>
-<div id="view-mile" class="view" style="display:none"></div>
 <div id="view-tshirt" class="view" style="display:none"></div>
 <div id="view-report" class="view" style="display:none"></div>
 
@@ -166,7 +165,6 @@ body{padding-bottom:76px}
   <button onclick="showView('pass')">🎫 횟수권 관리</button>
   <button onclick="showView('photo')">📸 사진 입력 (수업별)</button>
   <button onclick="showView('birthday')">🎂 생일 예정자</button>
-  <button onclick="showView('mile')">💯 마일스톤 임박</button>
   <button onclick="showView('tshirt')">🎽 마일스톤 티셔츠</button>
   <button onclick="showView('member')">📷 회원 사진 채우기</button>
   <button onclick="showView('report')">📊 리포트</button>
@@ -206,9 +204,9 @@ function badgeOf(m){if(m.stage==='트라이얼')return '트라이얼';if(m.pass_
 let VIEW='att';
 function toggleDrawer(){const d=document.getElementById('drawer');d.style.display=d.style.display==='none'?'block':'none';}
 function showView(v){window.CURVIEW=v;VIEW=v;
- ['att','risk','expire','search','trial','pass','photo','member','birthday','mile','report','coach'].forEach(x=>{const el=document.getElementById('view-'+x);if(el)el.style.display=(x===v?'':'none');});
+ ['att','risk','expire','search','trial','pass','photo','member','birthday','report','coach'].forEach(x=>{const el=document.getElementById('view-'+x);if(el)el.style.display=(x===v?'':'none');});
  document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('on',b.dataset.v===v));
- const T={att:'수업 출결',risk:'이탈 위험군',expire:'만료 임박',search:'회원 검색',trial:'트라이얼 현황',pass:'횟수권 관리',tshirt:'마일스톤 티셔츠',photo:'사진 입력 (수업별)',member:'회원 사진 채우기',birthday:'생일 예정자',mile:'마일스톤 임박',report:'리포트',coach:'코치 링크 관리'};
+ const T={att:'수업 출결',risk:'이탈 위험군',expire:'만료 임박',search:'회원 검색',trial:'트라이얼 현황',pass:'횟수권 관리',tshirt:'마일스톤 티셔츠',photo:'사진 입력 (수업별)',member:'회원 사진 채우기',birthday:'생일 예정자',report:'리포트',coach:'코치 링크 관리'};
  document.getElementById('vtitle').textContent=T[v]||'';
  document.getElementById('sub').style.display=(v==='att'?'':'none');
  document.getElementById('drawer').style.display='none';
@@ -221,7 +219,6 @@ function showView(v){window.CURVIEW=v;VIEW=v;
  if(v==='pass')renderPass();
  if(v==='coach')renderCoachAdmin();
  if(v==='birthday')renderBirthday();
- if(v==='mile')renderMilestone();
  if(v==='report')renderReport();
  if(v==='tshirt')renderTshirt();
 }
@@ -713,9 +710,18 @@ async function renderTshirt(){
   if(m.visit_base!=null){const bd=m.visit_base_date||'2000-01-01';const after=dates.filter(d=>d>bd).length;return (m.visit_base||0)+after;}
   return dates.length;
  }
+ function achievedMilestoneOf(t){
+  if(t<45)return null;
+  let v=45; while(true){const nxt=(v===45?100:v+100); if(nxt>t)break; v=nxt;}
+  return v;
+ }
  const d14=ddaysAgo(14);
 
- // ── 1) 최근 14일 이내 마일스톤 달성 ──
+ // ── 이미 지급한 기록 ──
+ const{data:givenRows}=await sb.from('tshirt_given').select('glofox_user_id,milestone,size');
+ const givenMap={}; (givenRows||[]).forEach(g=>givenMap[g.glofox_user_id+'_'+g.milestone]=g.size);
+
+ // ── 1) 최근 14일 이내 마일스톤 달성 (우선순위 높음) ──
  let achieved=[];
  Object.values(MEMBERS).forEach(m=>{
   if(!m.glofox_user_id)return;
@@ -724,18 +730,29 @@ async function renderTshirt(){
   const t=totalVisits(m);
   const past14=dates.filter(d=>d>d14);
   if(!past14.length)return;
-  const t14=t-past14.length;   // 14일 전 시점의 총 방문수
+  const t14=t-past14.length;
   for(let v=45;v<=t;v=(v===45?100:v+100)){
    if(v>t14 && v<=t && isMileValue(v)){ achieved.push({uid:m.glofox_user_id,t,mile:v}); break; }
   }
  });
  achieved.sort((a,b)=>b.mile-a.mile);
+ const achievedKeys=new Set(achieved.map(a=>a.uid+'_'+a.mile));
 
- // 이미 지급한 사람 표시(마일스톤별)
- const{data:givenRows}=await sb.from('tshirt_given').select('glofox_user_id,milestone,size');
- const givenMap={}; (givenRows||[]).forEach(g=>givenMap[g.glofox_user_id+'_'+g.milestone]=g.size);
+ // ── 2) 전체 미지급 백로그 (14일 이전에 달성했지만 아직 티셔츠 안 준 사람 전체) ──
+ let backlog=[];
+ Object.values(MEMBERS).forEach(m=>{
+  if(!m.glofox_user_id)return;
+  const t=totalVisits(m);
+  const ms=achievedMilestoneOf(t);
+  if(!ms)return;
+  const key=m.glofox_user_id+'_'+ms;
+  if(achievedKeys.has(key))return;       // 이미 최근달성 목록에 있음
+  if(givenMap[key])return;               // 이미 지급함
+  backlog.push({uid:m.glofox_user_id,t,mile:ms});
+ });
+ backlog.sort((a,b)=>b.t-a.t);
 
- // ── 2) 다가오는(20회 이내) ──
+ // ── 3) 다가오는(20회 이내) ──
  let upcoming=[];
  Object.values(MEMBERS).forEach(m=>{
   if(!m.glofox_user_id)return;
@@ -743,32 +760,41 @@ async function renderTshirt(){
   const recent=dates.filter(d=>d>d14).length; if(recent<1)return;
   const t=totalVisits(m); if(t<40)return;
   const nm=nextMile(t); const rem=nm-t; if(rem>20)return;
-  if(achieved.find(a=>a.uid===m.glofox_user_id))return; // 이미 달성한 사람은 제외
+  if(achievedKeys.has(m.glofox_user_id+'_'+nm))return;
   upcoming.push({uid:m.glofox_user_id,t,nm,rem});
  });
  upcoming.sort((a,b)=>a.rem-b.rem);
 
- // ── 3) 재고 현황 ──
+ // ── 4) 재고 & 주문기록 ──
  const{data:inv}=await sb.from('tshirt_inventory').select('milestone,size,qty').order('milestone');
  const invMap={}; (inv||[]).forEach(r=>{invMap[r.milestone+'_'+r.size]=r.qty;});
- const milestones=[...new Set([...(inv||[]).map(r=>r.milestone), ...achieved.map(a=>a.mile), ...upcoming.map(u=>u.nm)])].sort((a,b)=>a-b);
+ const milestones=[...new Set([...(inv||[]).map(r=>r.milestone), ...achieved.map(a=>a.mile), ...backlog.map(b=>b.mile), ...upcoming.map(u=>u.nm)])].sort((a,b)=>a-b);
  const SIZES=['S','M','L','XL'];
+ const{data:orders}=await sb.from('tshirt_orders').select('id,milestone,size,qty,note,ordered_at').order('ordered_at',{ascending:false}).limit(20);
 
  const achOpen=window._tshirtOpen;
- const achievedHTML = !achieved.length ?
-  `<div class="listhead">🎉 <b>최근 14일 이내 마일스톤 달성</b> 0명</div><div class="center">해당자가 없어요.</div>` :
-  `<div class="listhead" style="cursor:pointer;background:linear-gradient(90deg,#3a2a4d,#2a1d3d);border-color:#7a5aa0" onclick="toggleTshirtSection()">🎉 <b>최근 14일 이내 마일스톤 달성</b> ${achieved.length}명 ${achOpen?'▲ 접기':'▼ 펼치기'}</div>` +
-  (achOpen ? achieved.map(x=>{
-   const m=MEMBERS[x.uid]; const givenSize=givenMap[x.uid+'_'+x.mile];
-   return `<div class="carecard" style="border-color:#7a5aa0">
-    <div class="srow" style="border:0;padding:0;margin:0;background:none">
-     <span onclick="open_('${x.uid}')">${avatar(m,'bk')}</span>
-     <div class="sinfo" onclick="open_('${x.uid}')"><div class="nm">${esc(m.name)||'(이름없음)'}</div>
-      <div class="smeta">🎉 <b style="color:#c88ae0">${x.mile}회 달성!</b> · 현재 ${x.t}회</div></div>
-     <div class="cacts">${givenSize?`<span class="badge" style="background:#3a7a4a">✅ ${givenSize} 지급완료</span>`:`
-      ${SIZES.map(sz=>`<button class="mini" onclick="giveTshirt('${x.uid}',${x.mile},'${sz}')">${sz}</button>`).join('')}`}</div>
-    </div></div>`;
-  }).join('') : '');
+ const bkOpen=window._tshirtBacklogOpen!==false;
+
+ function personRow(x,badgeTxt){
+  const m=MEMBERS[x.uid]; const givenSize=givenMap[x.uid+'_'+x.mile];
+  return `<div class="carecard" style="border-color:#7a5aa0">
+   <div class="srow" style="border:0;padding:0;margin:0;background:none">
+    <span onclick="open_('${x.uid}')">${avatar(m,'bk')}</span>
+    <div class="sinfo" onclick="open_('${x.uid}')"><div class="nm">${esc(m.name)||'(이름없음)'}</div>
+     <div class="smeta">${badgeTxt} <b style="color:#c88ae0">${x.mile}회</b> · 현재 ${x.t}회</div></div>
+    <div class="cacts">${givenSize?`<span class="badge" style="background:#3a7a4a">✅ ${givenSize} 지급완료</span>`:
+     SIZES.map(sz=>`<button class="mini" onclick="giveTshirt('${x.uid}',${x.mile},'${sz}')">${sz}</button>`).join('')}</div>
+   </div></div>`;
+ }
+
+ const achievedHTML = !achieved.length ? '' :
+  `<div class="listhead" style="cursor:pointer;background:linear-gradient(90deg,#3a2a4d,#2a1d3d);border-color:#7a5aa0" onclick="toggleTshirtSection()">🎉 <b>최근 14일 이내 달성</b> ${achieved.length}명 ${achOpen?'▲ 접기':'▼ 펼치기'}</div>` +
+  (achOpen ? achieved.map(x=>personRow(x,'🎉 달성!')).join('') : '');
+
+ const backlogHTML = !backlog.length ?
+  `<div class="listhead" style="margin-top:14px">📋 <b>전체 미지급자</b> 0명 · 밀린 사람 없어요</div>` :
+  `<div class="listhead" style="margin-top:14px;cursor:pointer" onclick="toggleTshirtBacklog()">📋 <b>전체 미지급자</b> ${backlog.length}명 (14일 이전 달성분 포함) ${bkOpen?'▲ 접기':'▼ 펼치기'}</div>` +
+  (bkOpen ? backlog.map(x=>personRow(x,'미지급 ·')).join('') : '');
 
  const upcomingHTML = !upcoming.length ? '' :
   `<div class="listhead" style="margin-top:14px">🔜 <b>다가오는 마일스톤 (20회 이내)</b> ${upcoming.length}명</div>` +
@@ -781,7 +807,7 @@ async function renderTshirt(){
     </div></div>`;
   }).join('');
 
- const invHTML = `<div class="listhead" style="margin-top:14px">📦 <b>사이즈별 재고</b></div>
+ const invHTML = `<div class="listhead" style="margin-top:14px">📦 <b>사이즈별 재고</b> <span class="smeta">(오늘 실제 보유수량을 그대로 입력하세요)</span></div>
   <div class="carecard">
    <div style="display:grid;grid-template-columns:60px repeat(4,1fr);gap:6px;align-items:center;font-size:12px">
     <div></div>${SIZES.map(sz=>`<div style="text-align:center;color:var(--dim)">${sz}</div>`).join('')}
@@ -793,7 +819,42 @@ async function renderTshirt(){
    </div>
   </div>`;
 
- box.innerHTML = achievedHTML + upcomingHTML + invHTML;
+ const orderFormHTML = `<div class="listhead" style="margin-top:14px">🛒 <b>추가주문 기록</b></div>
+  <div class="carecard">
+   <div style="display:flex;gap:6px;flex-wrap:wrap">
+    <input id="ordMs" type="number" placeholder="마일스톤(예:100)" class="memoin" style="margin-top:0;flex:1;min-width:90px">
+    <select id="ordSize" class="memoin" style="margin-top:0;flex:0 0 70px">${SIZES.map(sz=>`<option value="${sz}">${sz}</option>`).join('')}</select>
+    <input id="ordQty" type="number" placeholder="수량" class="memoin" style="margin-top:0;flex:0 0 80px">
+   </div>
+   <input id="ordNote" placeholder="메모(선택, 예: OO업체 발주)" class="memoin">
+   <button class="mini" style="margin-top:6px" onclick="addTshirtOrder()">주문 등록 (재고에 자동 반영)</button>
+   <div style="margin-top:10px;border-top:1px solid var(--line);padding-top:8px">
+    ${(orders&&orders.length)?orders.map(o=>{const d=new Date(o.ordered_at);const ds=`${String(d.getFullYear()).slice(2)}.${String(d.getMonth()+1).padStart(2,'0')}.${String(d.getDate()).padStart(2,'0')}`;
+      return `<div class="memoLogItem"><b>${ds}</b> ${o.milestone}회 · ${o.size} · ${o.qty}개${o.note?' · '+esc(o.note):''}</div>`;}).join('')
+     : '<div class="mini" style="color:var(--dim)">주문 기록이 없어요.</div>'}
+   </div>
+  </div>`;
+
+ box.innerHTML = achievedHTML + backlogHTML + upcomingHTML + invHTML + orderFormHTML;
+}
+function toggleTshirtBacklog(){window._tshirtBacklogOpen = (window._tshirtBacklogOpen===false)?true:false; renderTshirt();}
+async function addTshirtOrder(){
+ const ms=parseInt(document.getElementById('ordMs').value,10);
+ const size=document.getElementById('ordSize').value;
+ const qty=parseInt(document.getElementById('ordQty').value,10);
+ const note=document.getElementById('ordNote').value.trim();
+ if(!ms||ms<=0){alert('마일스톤 번호를 입력하세요.');return;}
+ if(!qty||qty<=0){alert('수량을 입력하세요.');return;}
+ try{
+  const{error:e1}=await sb.from('tshirt_orders').insert({milestone:ms,size,qty,note});
+  if(e1){alert('주문 기록 실패: '+e1.message);return;}
+  const{data:cur}=await sb.from('tshirt_inventory').select('qty').eq('milestone',ms).eq('size',size).maybeSingle();
+  const newQty=(cur?.qty??0)+qty;
+  const{error:e2}=await sb.from('tshirt_inventory').upsert({milestone:ms,size,qty:newQty});
+  if(e2){alert('재고 반영 실패: '+e2.message);return;}
+  alert(`주문 등록 완료! ${ms}회 ${size} 사이즈 재고가 ${newQty}개로 늘었어요.`);
+  renderTshirt();
+ }catch(e){alert('오류: '+e.message);}
 }
 async function giveTshirt(uid,milestone,size){
  const m=MEMBERS[uid]||{};
