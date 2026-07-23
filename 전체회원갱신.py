@@ -87,6 +87,17 @@ today=datetime.now(KST).strftime("%Y-%m-%d")
 def stage_of(u,mem):
     ls=(u.get("lead_status")or"").upper()
     mn=(mem.get("membership_name")or mem.get("plan_name")) if mem else None
+    st=(mem.get("status")or"").upper() if mem else ""
+    # ── 글로폭스가 주는 실제 status를 최우선으로 신뢰 ──
+    # ACTIVE/LOCKED/PAUSED = 현재 유효한 멤버십(락/일시정지도 회원 자격 유지)
+    # EXPIRED/CANCELLED = 종료됨, FUTURE = 아직 시작 전
+    if st in ("ACTIVE","LOCKED","PAUSED") and mn and not is_trial_mem(mn):
+        return "회원"
+    if st in ("EXPIRED","CANCELLED"):
+        return "과거회원"
+    if st == "FUTURE":
+        return "과거회원"   # 시작 전이라 아직 활성 아님(리포트상 미노출), 예정자는 별도 처리 가능
+    # status 정보가 없는 예외 케이스만 과거 방식으로 보조 판단
     exp=edate(mem.get("expiry_date")) if mem else ""
     sub=(mem.get("subscription")or{}).get("auto_renewal") if mem else False
     active=(exp>=today if exp else False) or bool(sub)
