@@ -132,7 +132,7 @@ body{padding-bottom:76px}
 .tbtn{flex:none;background:#13243d;border:1px solid var(--line);color:var(--dim);border-radius:7px;padding:3px 9px;font-size:11px;cursor:pointer}
 .tbtn:active{background:var(--red);color:#fff}
 </style></head><body>
-<header class="topbar"><button class="ham" onclick="toggleDrawer()">≡</button><h1 id="vtitle">수업 출결</h1><button id="photoToggle" onclick="togglePhoto()" title="사진 표시/숨김" style="margin-left:auto">📷</button><button id="refreshBtn" onclick="loadData(true)">↻</button></header>
+<header class="topbar"><button class="ham" onclick="toggleDrawer()">≡</button><h1 id="vtitle">수업 출결</h1><button id="staffBtn" onclick="pickStaff()" style="background:#1c2f4d;border:1px solid var(--line);color:var(--txt);border-radius:9px;padding:6px 10px;font-size:13px;cursor:pointer;margin-left:auto">🙋 -</button><button id="photoToggle" onclick="togglePhoto()" title="사진 표시/숨김">📷</button><button id="refreshBtn" onclick="loadData(true)">↻</button></header>
 <div class="sub" id="sub">불러오는 중…</div>
 
 <div id="view-att" class="view"><div class="stickwrap"><div class="strip" id="strip"></div><div id="timebar" class="timebar"></div></div><div id="app"><div class="center">데이터를 불러오고 있어요…</div></div></div>
@@ -150,6 +150,8 @@ body{padding-bottom:76px}
 <div id="view-birthday" class="view" style="display:none"></div>
 <div id="view-mile" class="view" style="display:none"></div>
 <div id="view-tshirt" class="view" style="display:none"></div>
+<div id="view-handoff" class="view" style="display:none"></div>
+<div id="view-leads" class="view" style="display:none"></div>
 <div id="view-aiconfig" class="view" style="display:none"></div>
 <div id="view-report" class="view" style="display:none"></div>
 
@@ -169,6 +171,8 @@ body{padding-bottom:76px}
   <button onclick="showView('birthday')">🎂 생일 예정자</button>
   <button onclick="showView('mile')">💯 마일스톤 임박</button>
   <button onclick="showView('tshirt')">🎽 마일스톤 티셔츠</button>
+  <button onclick="showView('handoff')">📋 인수인계 관리</button>
+  <button onclick="showView('leads')">🎯 리드 관리</button>
   <button onclick="if(checkAdminPw())showView('aiconfig')">⚙️ AI 프롬프트 설정</button>
   <button onclick="showView('member')">📷 회원 사진 채우기</button>
   <button onclick="if(checkAdminPw())showView('report')">📊 리포트</button>
@@ -208,9 +212,9 @@ function badgeOf(m){if(m.stage==='트라이얼')return '트라이얼';if(m.pass_
 let VIEW='att';
 function toggleDrawer(){const d=document.getElementById('drawer');d.style.display=d.style.display==='none'?'block':'none';}
 function showView(v){window.CURVIEW=v;VIEW=v;
- ['att','risk','expire','search','trial','pass','photo','member','birthday','mile','tshirt','report','coach','aiconfig'].forEach(x=>{const el=document.getElementById('view-'+x);if(el)el.style.display=(x===v?'':'none');});
+ ['att','risk','expire','search','trial','pass','photo','member','birthday','mile','tshirt','handoff','leads','report','coach','aiconfig'].forEach(x=>{const el=document.getElementById('view-'+x);if(el)el.style.display=(x===v?'':'none');});
  document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('on',b.dataset.v===v));
- const T={att:'수업 출결',risk:'이탈 위험군',expire:'만료 임박',search:'회원 검색',trial:'트라이얼 현황',pass:'횟수권 관리',mile:'마일스톤 임박',tshirt:'마일스톤 티셔츠',photo:'사진 입력 (수업별)',member:'회원 사진 채우기',birthday:'생일 예정자',report:'리포트',coach:'코치 링크 관리'};
+ const T={att:'수업 출결',risk:'이탈 위험군',expire:'만료 임박',search:'회원 검색',trial:'트라이얼 현황',pass:'횟수권 관리',mile:'마일스톤 임박',tshirt:'마일스톤 티셔츠',handoff:'인수인계 관리',leads:'리드 관리',photo:'사진 입력 (수업별)',member:'회원 사진 채우기',birthday:'생일 예정자',report:'리포트',coach:'코치 링크 관리'};
  document.getElementById('vtitle').textContent=T[v]||'';
  document.getElementById('sub').style.display=(v==='att'?'':'none');
  document.getElementById('drawer').style.display='none';
@@ -226,6 +230,8 @@ function showView(v){window.CURVIEW=v;VIEW=v;
  if(v==='report')renderReport();
  if(v==='mile')renderMilestone();
  if(v==='tshirt')renderTshirt();
+ if(v==='handoff')renderHandoff();
+ if(v==='leads')renderLeads();
  if(v==='aiconfig')renderAiConfig();
 }
 function renderSearch(){
@@ -334,7 +340,7 @@ function weeklyPattern(m,weeks){
 }
 async function aiMsg(uid,type,btn){
  const m=MEMBERS[uid]||{};
- const situationMap={trial:'체험 후 미등록 상태',risk:'출석 흐름을 보고 상황에 맞게 재등원 유도',expire:'멤버십 만료가 임박함'};
+ const situationMap={trial:'체험 후 미등록 상태',risk:'출석 흐름을 보고 상황에 맞게 재등원 유도',expire:'멤버십 만료가 임박함',lead:'F45 성수 앱에 가입/검색했으나 아직 한 번도 방문한 적 없음. 첫 방문을 유도해야 함'};
  const lv=lastVisit(m);
  const pattern=weeklyPattern(m,5);
  const daysSince=lv?Math.round((new Date(today+'T00:00:00')-new Date(lv+'T00:00:00'))/86400000):null;
@@ -369,13 +375,27 @@ async function aiMsg(uid,type,btn){
   const {data,error}=await sb.functions.invoke('glofox-ai',{body:{type:'message',name:m.name||'회원',situation:situationMap[type]||type,detail}});
   if(btn){btn.disabled=false;btn.textContent='🤖AI문구';}
   if(error||!data?.text){alert('AI 문구 생성 실패: '+(error?.message||'응답을 받지 못했어요'));return;}
-  if(confirm('아래 AI 생성 문구를 복사할까요?\n\n'+data.text)){
-   navigator.clipboard.writeText(data.text);
+  const ph=(m.phone||'').replace(/[^0-9]/g,'');
+  if(ph){
+   if(confirm(data.text+'\n\n─────────\n확인=문자 앱 열기 · 취소=복사만')){
+    location.href='sms:'+ph+'&body='+encodeURIComponent(data.text);
+   }else{
+    navigator.clipboard.writeText(data.text); alert('복사됐어요!');
+   }
+  }else{
+   if(confirm(data.text+'\n\n─────────\n번호가 없어요. 복사할까요?')){
+    navigator.clipboard.writeText(data.text); alert('복사됐어요!');
+   }
   }
  }catch(e){if(btn){btn.disabled=false;btn.textContent='🤖AI문구';} alert('오류: '+e.message);}
 }
 
 function careCard(uid,metaHtml,type,showGrid){const m=MEMBERS[uid]||{name:'?'};const bd=badgeOf(m);
+ const leadBtns = type==='lead' ? `<div style="display:flex;gap:6px;margin-top:8px">
+   <button class="mini" style="flex:1;color:var(--grn)" onclick="logLeadAttempt('${uid}','연락함')">📞 연락함</button>
+   <button class="mini" style="flex:1;color:#e0954f" onclick="logLeadAttempt('${uid}','응답없음')">🚫 응답없음</button>
+   <button class="mini" style="flex:1;color:#5aa0e0" onclick="logLeadAttempt('${uid}','재방문예정')">📅 재방문예정</button>
+  </div>` : '';
  return `<div class="carecard">
    <div class="srow" style="border:0;padding:0;margin:0;background:none">
      <span onclick="open_('${uid}')">${avatar(m,'bk')}</span>
@@ -383,9 +403,33 @@ function careCard(uid,metaHtml,type,showGrid){const m=MEMBERS[uid]||{name:'?'};c
      <div class="cacts"><button class="mini" onclick="aiMsg('${uid}','${type}',this)">🤖AI문구</button></div>
    </div>
    ${showGrid?`<div class="mini4w-wrap"><span class="m4lab">↑ 4주 전</span><div class="mini4w">${miniGrid(m)}</div><span class="m4lab">↓ 이번 주</span></div>`:''}
+   ${leadBtns}
    <input id="extra_${type}_${uid}" class="memoin" placeholder="AI에게 특별 요청사항 (예: 이번주 세일 언급해줘)">
-   <input class="memoin" value="${esc(m.care_memo||'')}" placeholder="메모 (예: 6/20 통화함·안받음)" onchange="saveMemo('${uid}',this.value)">
+   <input id="care_${uid}" class="memoin" value="${esc(m.care_memo||'')}" placeholder="메모 (예: 6/20 통화함·안받음)" onchange="saveMemo('${uid}',this.value)">
+   ${channelRow('care_'+uid)}
  </div>`;}
+async function logLeadAttempt(uid,statusText){
+ const author=COACH||ACTIVE_STAFF||'미지정';
+ const today2=new Date().toLocaleDateString('sv-SE',{timeZone:'Asia/Seoul'}).slice(5).replace('-','/');
+ const quickTxt=statusText+' ('+today2+')';
+ try{
+  const{error}=await sb.from('memo_log').insert({glofox_user_id:uid,coach_name:author,content:`[${today2}] ${statusText}`});
+  if(error){alert('저장 실패: '+error.message);return;}
+  await sb.from('people').update({care_memo:quickTxt}).eq('glofox_user_id',uid);
+  if(MEMBERS[uid])MEMBERS[uid].care_memo=quickTxt;
+  renderLeads();
+ }catch(e){alert('오류: '+e.message);}
+}
+function channelRow(inputId){
+ const chans=[['전화','📞'],['문자','💬'],['카톡','💛'],['DM','📷'],['대면','🤝']];
+ return `<div style="display:flex;gap:4px;margin-top:3px">${chans.map(([label,ic])=>`<button type="button" class="mini" style="padding:1px 6px;font-size:10px;opacity:.65" onclick="insertChannelTag('${inputId}','${label}')">${ic}</button>`).join('')}</div>`;
+}
+function insertChannelTag(inputId,label){
+ const el=document.getElementById(inputId); if(!el)return;
+ const tag='['+label+'] ';
+ if(!el.value.startsWith(tag)) el.value = tag + el.value;
+ el.focus();
+}
 function payMember(m){
  const t=m.membership||'';
  if(t.includes('무료혜택')||t.includes('Complimentary'))return false;
@@ -397,11 +441,45 @@ function payMember(m){
 }
 let riskTab='risk';
 function setRiskTab(t){riskTab=t;renderRisk();}
-function renderRisk(){
+async function renderRisk(){
  const box=document.getElementById('view-risk');
  const tab=(k,l)=>`<button class="${riskTab===k?'on':''}" onclick="setRiskTab('${k}')">${l}</button>`;
- const tabs=`<div class="subtabs">${tab('risk','급감 위험')}${tab('long','장기 미출석')}${tab('expired','최근 만료')}</div>`;
+ const tabs=`<div class="subtabs">${tab('risk','급감 위험')}${tab('long','장기 미출석')}${tab('expired','최근 만료')}${tab('noshow','노쇼 반복')}</div>`;
+ if(riskTab==='noshow'){
+  box.innerHTML=tabs+'<div class="center">집계 중…</div>';
+  box.innerHTML=tabs+await noshowListHTML();
+  return;
+ }
  box.innerHTML=tabs+(riskTab==='risk'?riskListHTML():riskTab==='long'?longAbsHTML():expiredListHTML());
+}
+let NOSHOWDATA=null;
+async function ensureNoShowData(){
+ if(NOSHOWDATA)return;
+ const cnt={};let frm=0;
+ const nowIso=new Date().toISOString();
+ while(true){
+  const{data,error}=await sb.from('attendance').select('glofox_user_id,class_time,status').eq('attended',false).neq('status','CANCELED').lt('class_time',nowIso).range(frm,frm+999);
+  if(error)throw new Error(error.message);
+  (data||[]).forEach(a=>{const u=a.glofox_user_id;if(!u)return;(cnt[u]=cnt[u]||[]).push((a.class_time||'').slice(0,10));});
+  if(!data||data.length<1000)break; frm+=1000;
+ }
+ NOSHOWDATA=cnt;
+}
+async function noshowListHTML(){
+ try{ await ensureNoShowData(); }catch(e){ return '<div class="center">집계 실패: '+esc(e.message)+'</div>'; }
+ const d56=ddaysAgo(56); // 최근 8주 기준
+ let list=[];
+ Object.values(MEMBERS).forEach(m=>{
+  if(!m.glofox_user_id)return;
+  const dates=(NOSHOWDATA[m.glofox_user_id]||[]).filter(d=>d>d56);
+  if(dates.length>=3) list.push({uid:m.glofox_user_id,cnt:dates.length,last:dates.sort().slice(-1)[0]});
+ });
+ list.sort((a,b)=>b.cnt-a.cnt);
+ if(!list.length) return '<div class="center">최근 8주간 노쇼 3회 이상인 회원이 없어요 👍</div>';
+ return `<div class="listhead">🚫 <b>노쇼 반복</b> ${list.length}명 · 최근 8주 기준 3회 이상</div>`+
+  list.map(x=>{const m=MEMBERS[x.uid];
+   const meta=`<b style="color:#e0563a">노쇼 ${x.cnt}회</b> · 최근 노쇼 ${x.last.slice(5).replace('-','/')}`;
+   return careCard(x.uid,meta,'risk',false);}).join('');
 }
 function eligibleActive(m){ // 유효 유료회원(만료 전), 횟수권·무료혜택 제외
  if(m.stage!=='회원'||!payMember(m))return false;
@@ -458,25 +536,39 @@ function renderExpire(){let list=[];
   list.map(x=>{const m=MEMBERS[x.uid];const ed=m.end_date?m.end_date.slice(0,10):'';
    const meta=`<b style="color:${x.dd<=3?'#e0563a':'#e0954f'}">${x.dd===0?'오늘 만료':'D-'+x.dd}</b> · ${esc(ed)}${m.membership?' · '+esc(m.membership):''}`;
    return careCard(x.uid,meta,'expire',false);}).join('');}
+function isTrialLike(m){
+ if(!m.glofox_user_id)return false;
+ if(m.stage==='트라이얼')return true;
+ if(m.stage==='회원')return false; // 이미 정회원이면 트라이얼 아님
+ // 최근 가입(또는 최근 첫출석) + 예약/출석 기록이 있으면 → 결제 미처리라도 실질적 트라이얼로 추정
+ const d21=ddaysAgo(21);
+ const jd=m.join_date&&m.join_date.length>=10?m.join_date.slice(0,10):null;
+ const firstDay=(m._days||[]).slice().sort()[0]||null;
+ const recentSignal=(jd&&jd>d21)||(firstDay&&firstDay>d21);
+ const hasBooking=(m._days&&m._days.length>0);
+ return !!(recentSignal&&hasBooking);
+}
 function renderTrial(){
- let list=Object.values(MEMBERS).filter(m=>m.stage==='트라이얼'&&m.glofox_user_id);
+ let list=Object.values(MEMBERS).filter(isTrialLike);
  list.sort((a,b)=>(b.join_date||'').localeCompare(a.join_date||''));
  const box=document.getElementById('view-trial');
  if(!list.length){box.innerHTML='<div class="center">트라이얼 회원이 없어요.</div>';return;}
- box.innerHTML=`<div class="listhead">⚡ 체험 회원 <b>${list.length}명</b> (최근 등록순) · 아직 정회원 전환 안 한 분들이에요. 등록 유도 + 메모로 관리하세요.</div>`+
+ box.innerHTML=`<div class="listhead">⚡ 체험 회원 <b>${list.length}명</b> (최근 등록순) · 아직 정회원 전환 안 한 분들이에요. 등록 유도 + 메모로 관리하세요. <span class="mini" style="background:none;border:none;color:var(--dim)">(⚡추정 = 글로폭스에 아직 미확정, 예약기록으로 추정)</span></div>`+
   list.map(m=>{const uid=m.glofox_user_id;const bd=badgeOf(m);const ph=(m.phone||'').replace(/[^0-9]/g,'');
+   const inferred=m.stage!=='트라이얼';
    const ed=m.end_date?m.end_date.slice(0,10):'';const dd=ddayOf(m);
    const expTxt=ed?(dd!=null?(dd<0?`체험 만료 (${-dd}일 전)`:(dd===0?'오늘 만료':`체험 D-${dd}`)):ed):'';
    const meta=`${esc(m.source||m.join_date||'')}${ed?` · ${expTxt}`:''}${m.join_date?` · 등록 ${m.join_date.slice(2,10).replace(/-/g,'.')}`:''}`;
    return `<div class="carecard">
      <div class="srow" style="border:0;padding:0;margin:0;background:none">
        <span onclick="open_('${uid}')">${avatar(m,'bk')}</span>
-       <div class="sinfo" onclick="open_('${uid}')"><div class="nm">${esc(m.name)||'(이름없음)'} <span class="badge b-트라이얼">트라이얼</span></div><div class="smeta">${meta}</div></div>
+       <div class="sinfo" onclick="open_('${uid}')"><div class="nm">${esc(m.name)||'(이름없음)'} <span class="badge b-트라이얼">${inferred?'⚡추정':'트라이얼'}</span></div><div class="smeta">${meta}</div></div>
        <div class="cacts"><button class="mini" onclick="aiMsg('${uid}','trial',this)">🤖AI문구</button></div>
      </div>
      <div class="mini4w-wrap"><span class="m4lab">↑ 4주 전</span><div class="mini4w">${miniGrid(m)}</div><span class="m4lab">↓ 이번 주</span></div>
      <input id="extra_trial_${uid}" class="memoin" placeholder="AI에게 특별 요청사항 (예: 이번주 세일 언급해줘)">
-     <input class="memoin" value="${esc(m.trial_memo||'')}" placeholder="트라이얼 메모 (예: 7/2 통화·고민중)" onchange="saveTrialMemo('${uid}',this.value)">
+     <input id="trial_${uid}" class="memoin" value="${esc(m.trial_memo||'')}" placeholder="트라이얼 메모 (예: 7/2 통화·고민중)" onchange="saveTrialMemo('${uid}',this.value)">
+     ${channelRow('trial_'+uid)}
    </div>`;}).join('');
 }
 function renderBirthday(){
@@ -771,7 +863,7 @@ async function renderTshirt(){
  // ── 1) 최근 14일 이내 마일스톤 달성 (우선순위 높음) ──
  let achieved=[];
  Object.values(MEMBERS).forEach(m=>{
-  if(!m.glofox_user_id)return;
+  if(!m.glofox_user_id||m.stage!=='회원'||!payMember(m))return;
   const dates=(MILEDATA[m.glofox_user_id]||[]).slice().sort();
   if(!dates.length)return;
   const t=totalVisits(m);
@@ -788,7 +880,7 @@ async function renderTshirt(){
  // ── 2) 전체 미지급 백로그 (14일 이전에 달성했지만 아직 티셔츠 안 준 사람 전체) ──
  let backlog=[];
  Object.values(MEMBERS).forEach(m=>{
-  if(!m.glofox_user_id)return;
+  if(!m.glofox_user_id||m.stage!=='회원'||!payMember(m))return;
   const t=totalVisits(m);
   const ms=achievedMilestoneOf(t);
   if(!ms)return;
@@ -799,25 +891,56 @@ async function renderTshirt(){
  });
  backlog.sort((a,b)=>b.t-a.t);
 
- // ── 3) 다가오는(20회 이내) ──
+ // ── 3) 다가오는(20회 이내) — 출석 속도 기반 예상일 포함 ──
+ function weeklyPace(m){
+  const dates=MILEDATA[m.glofox_user_id]||[];
+  const d28=ddaysAgo(28);
+  const recent=dates.filter(d=>d>d28).length;
+  return recent/4; // 최근 4주 평균 주당 출석
+ }
+ function predictDays(rem,pace){
+  if(pace<=0)return null;
+  return Math.round(rem/(pace/7));
+ }
  let upcoming=[];
  Object.values(MEMBERS).forEach(m=>{
-  if(!m.glofox_user_id)return;
+  if(!m.glofox_user_id||m.stage!=='회원'||!payMember(m))return;
   const dates=MILEDATA[m.glofox_user_id]||[];
   const recent=dates.filter(d=>d>d14).length; if(recent<1)return;
   const t=totalVisits(m); if(t<40)return;
   const nm=nextMile(t); const rem=nm-t; if(rem>20)return;
   if(achievedKeys.has(m.glofox_user_id+'_'+nm))return;
-  upcoming.push({uid:m.glofox_user_id,t,nm,rem});
+  const pace=weeklyPace(m); const days=predictDays(rem,pace);
+  upcoming.push({uid:m.glofox_user_id,t,nm,rem,days});
  });
  upcoming.sort((a,b)=>a.rem-b.rem);
+
+ // ── 3-2) 예상 캘린더용 넓은 후보군 (21~100회 남은 사람까지, 최근 활동 있는 사람만) ──
+ let forecast=[];
+ Object.values(MEMBERS).forEach(m=>{
+  if(!m.glofox_user_id||m.stage!=='회원'||!payMember(m))return;
+  const dates=MILEDATA[m.glofox_user_id]||[];
+  const recent=dates.filter(d=>d>d14).length; if(recent<1)return;
+  const t=totalVisits(m); if(t<40)return;
+  const nm=nextMile(t); const rem=nm-t;
+  if(rem<=20)return; // 임박자 목록과 중복 방지 (이미 위에 있음)
+  const pace=weeklyPace(m); const days=predictDays(rem,pace);
+  if(days==null||days>90)return; // 예측 불가하거나 너무 먼 미래는 제외
+  forecast.push({uid:m.glofox_user_id,t,nm,rem,days});
+ });
+ // 주간 버킷으로 묶기 (이번주/1주후/2주후.../8주 이후)
+ const weekBuckets={};
+ forecast.forEach(x=>{
+  const wk=Math.min(Math.floor(x.days/7),8);
+  (weekBuckets[wk]=weekBuckets[wk]||[]).push(x);
+ });
 
  // ── 4) 재고 & 주문기록 ──
  const{data:inv}=await sb.from('tshirt_inventory').select('milestone,size,qty').order('milestone');
  const invMap={}; (inv||[]).forEach(r=>{invMap[r.milestone+'_'+r.size]=r.qty;});
  const milestones=[...new Set([...(inv||[]).map(r=>r.milestone), ...achieved.map(a=>a.mile), ...backlog.map(b=>b.mile), ...upcoming.map(u=>u.nm)])].sort((a,b)=>a-b);
  const SIZES=['S','M','L','XL'];
- const{data:orders}=await sb.from('tshirt_orders').select('id,milestone,size,qty,note,ordered_at').order('ordered_at',{ascending:false}).limit(20);
+ const{data:incoming}=await sb.from('tshirt_incoming').select('id,milestone,size,qty,expected_date').eq('arrived',false).order('expected_date');
 
  const achOpen=window._tshirtOpen;
  const bkOpen=window._tshirtBacklogOpen!==false;
@@ -843,6 +966,11 @@ async function renderTshirt(){
   `<div class="listhead" style="margin-top:14px;cursor:pointer" onclick="toggleTshirtBacklog()">📋 <b>전체 미지급자</b> ${backlog.length}명 (14일 이전 달성분 포함) ${bkOpen?'▲ 접기':'▼ 펼치기'}</div>` +
   (bkOpen ? backlog.map(x=>personRow(x,'미지급 ·')).join('') : '');
 
+ function predDateTxt(days){
+  if(days==null)return '<span style="color:var(--dim)">최근 페이스 부족(예측불가)</span>';
+  const d=new Date(); d.setDate(d.getDate()+days);
+  return `예상 <b style="color:#c88ae0">${d.getMonth()+1}/${d.getDate()}</b>경`;
+ }
  const upcomingHTML = !upcoming.length ? '' :
   `<div class="listhead" style="margin-top:14px">🔜 <b>다가오는 마일스톤 (20회 이내)</b> ${upcoming.length}명</div>` +
   upcoming.map(x=>{const m=MEMBERS[x.uid];
@@ -850,9 +978,22 @@ async function renderTshirt(){
     <div class="srow" style="border:0;padding:0;margin:0;background:none">
      <span onclick="open_('${x.uid}')">${avatar(m,'bk')}</span>
      <div class="sinfo" onclick="open_('${x.uid}')"><div class="nm">${esc(m.name)}</div>
-      <div class="smeta">현재 ${x.t}회 · ${x.nm}회까지 ${x.rem}회</div></div>
+      <div class="smeta">현재 ${x.t}회 · ${x.nm}회까지 ${x.rem}회 · ${predDateTxt(x.days)}</div></div>
     </div></div>`;
   }).join('');
+
+ const wkLabel=(w)=>w===0?'이번 주':w===8?'8주 이후':`${w}주 후`;
+ const forecastKeys=Object.keys(weekBuckets).map(Number).sort((a,b)=>a-b);
+ const forecastHTML = !forecastKeys.length ? '' :
+  `<div class="listhead" style="margin-top:14px;cursor:pointer" onclick="toggleTshirtForecast()">📅 <b>마일스톤 예상 캘린더</b> (21~100회 남은 사람, 최근 페이스 기준) ${window._tshirtForecastOpen?'▲ 접기':'▼ 펼치기'}</div>` +
+  (window._tshirtForecastOpen ? forecastKeys.map(w=>{
+   const items=weekBuckets[w].sort((a,b)=>a.days-b.days);
+   const bySize={}; // 사이즈별 미리 안 나눠지므로 그냥 인원수만
+   return `<div class="carecard">
+     <div class="nm" style="margin-bottom:6px">${wkLabel(w)} · ${items.length}명 필요 예상</div>
+     ${items.map(x=>{const m=MEMBERS[x.uid];return `<div class="smeta" style="cursor:pointer" onclick="open_('${x.uid}')">${esc(m.name)} · ${x.nm}회 목표 (현재${x.t}) · ${predDateTxt(x.days)}</div>`;}).join('')}
+   </div>`;
+  }).join('') : '');
 
  const invHTML = `<div class="listhead" style="margin-top:14px">📦 <b>사이즈별 재고</b> <span class="smeta">(오늘 실제 보유수량을 그대로 입력하세요)</span></div>
   <div class="carecard">
@@ -866,29 +1007,59 @@ async function renderTshirt(){
    </div>
   </div>`;
 
- const orderFormHTML = `<div class="listhead" style="margin-top:14px">🛒 <b>추가주문 기록</b></div>
+ const incomingHTML = `<div class="listhead" style="margin-top:14px">📥 <b>입고 예정</b> <span class="smeta">(주문했지만 아직 안 온 것 · 도착하면 "도착 처리"로 재고에 반영)</span></div>
   <div class="carecard">
    <div style="display:flex;gap:6px;flex-wrap:wrap">
-    <input id="ordMs" type="number" placeholder="마일스톤(예:100)" class="memoin" style="margin-top:0;flex:1;min-width:90px">
-    <select id="ordSize" class="memoin" style="margin-top:0;flex:0 0 70px">${SIZES.map(sz=>`<option value="${sz}">${sz}</option>`).join('')}</select>
-    <input id="ordQty" type="number" placeholder="수량" class="memoin" style="margin-top:0;flex:0 0 80px">
+    <input id="incMs" type="number" placeholder="마일스톤(예:100)" class="memoin" style="margin-top:0;flex:1;min-width:90px">
+    <select id="incSize" class="memoin" style="margin-top:0;flex:0 0 70px">${SIZES.map(sz=>`<option value="${sz}">${sz}</option>`).join('')}</select>
+    <input id="incQty" type="number" placeholder="수량" class="memoin" style="margin-top:0;flex:0 0 80px">
    </div>
-   <input id="ordNote" placeholder="메모(선택, 예: OO업체 발주)" class="memoin">
-   <button class="mini" style="margin-top:6px" onclick="addTshirtOrder()">주문 등록 (재고에 자동 반영)</button>
+   <input id="incDate" type="date" class="memoin" placeholder="입고 예정일">
+   <button class="mini" style="margin-top:6px" onclick="addIncoming()">입고 예정 등록</button>
    <div style="margin-top:10px;border-top:1px solid var(--line);padding-top:8px">
-    ${(orders&&orders.length)?orders.map(o=>{const d=new Date(o.ordered_at);const ds=`${String(d.getFullYear()).slice(2)}.${String(d.getMonth()+1).padStart(2,'0')}.${String(d.getDate()).padStart(2,'0')}`;
-      return `<div class="memoLogItem"><b>${ds}</b> ${o.milestone}회 · ${o.size} · ${o.qty}개${o.note?' · '+esc(o.note):''}</div>`;}).join('')
-     : '<div class="mini" style="color:var(--dim)">주문 기록이 없어요.</div>'}
+    ${(incoming&&incoming.length)?incoming.map(o=>{
+      return `<div class="memoLogItem" style="display:flex;justify-content:space-between;align-items:center">
+        <span>${o.milestone}회 · ${o.size} · ${o.qty}개${o.expected_date?' · 예정 '+o.expected_date.slice(5).replace('-','/'):''}</span>
+        <button class="mini" onclick="markIncomingArrived(${o.id})">도착 처리</button>
+      </div>`;}).join('')
+     : '<div class="mini" style="color:var(--dim)">대기 중인 입고 예정이 없어요. 새로 주문하셨으면 위에서 등록하세요 (=주문은 넣었는데 아직 안 온 상태).</div>'}
    </div>
   </div>`;
 
- box.innerHTML = achievedHTML + backlogHTML + upcomingHTML + invHTML + orderFormHTML;
+ box.innerHTML = achievedHTML + backlogHTML + upcomingHTML + forecastHTML + invHTML + incomingHTML;
  }catch(e){
   box.innerHTML='<div class="center">오류가 발생했어요:<br>'+esc(e.message)+'<br><span class="mini" style="color:var(--dim)">'+esc((e.stack||'').slice(0,300))+'</span></div>';
   console.error('renderTshirt error:', e);
  }
 }
+async function addIncoming(){
+ const ms=parseInt(document.getElementById('incMs').value,10);
+ const size=document.getElementById('incSize').value;
+ const qty=parseInt(document.getElementById('incQty').value,10);
+ const expected=document.getElementById('incDate').value||null;
+ if(!ms||ms<=0){alert('마일스톤 번호를 입력하세요.');return;}
+ if(!qty||qty<=0){alert('수량을 입력하세요.');return;}
+ try{
+  const{error}=await sb.from('tshirt_incoming').insert({milestone:ms,size,qty,expected_date:expected});
+  if(error){alert('등록 실패: '+error.message);return;}
+  renderTshirt();
+ }catch(e){alert('오류: '+e.message);}
+}
+async function markIncomingArrived(id){
+ try{
+  const{data:row,error:e0}=await sb.from('tshirt_incoming').select('milestone,size,qty').eq('id',id).maybeSingle();
+  if(e0||!row){alert('조회 실패');return;}
+  const{data:cur}=await sb.from('tshirt_inventory').select('qty').eq('milestone',row.milestone).eq('size',row.size).maybeSingle();
+  const newQty=(cur?.qty??0)+row.qty;
+  const{error:e1}=await sb.from('tshirt_inventory').upsert({milestone:row.milestone,size:row.size,qty:newQty});
+  if(e1){alert('재고 반영 실패: '+e1.message);return;}
+  await sb.from('tshirt_incoming').update({arrived:true}).eq('id',id);
+  alert(`도착 처리 완료! ${row.milestone}회 ${row.size} 재고가 ${newQty}개로 늘었어요.`);
+  renderTshirt();
+ }catch(e){alert('오류: '+e.message);}
+}
 function toggleTshirtBacklog(){window._tshirtBacklogOpen = (window._tshirtBacklogOpen===false)?true:false; renderTshirt();}
+function toggleTshirtForecast(){window._tshirtForecastOpen = !window._tshirtForecastOpen; renderTshirt();}
 async function addTshirtOrder(){
  const ms=parseInt(document.getElementById('ordMs').value,10);
  const size=document.getElementById('ordSize').value;
@@ -1007,6 +1178,163 @@ async function getAiConfig(){
  }catch(e){ _aiConfigCache={}; }
  return _aiConfigCache;
 }
+let ACTIVE_STAFF = localStorage.getItem('active_staff') || '';
+function updateStaffBtn(){
+ const b=document.getElementById('staffBtn');
+ if(b)b.textContent='🙋 '+(ACTIVE_STAFF||'선택안됨');
+}
+const BRIEFING_TIMES=['06:50','07:10','11:50','17:30']; // ⚠️ 시간 확인 필요하면 여기서 수정하세요
+async function checkBriefing(){
+ const now=new Date();
+ const hm=String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0');
+ for(const slot of BRIEFING_TIMES){
+  const key='briefing_'+today+'_'+slot;
+  if(localStorage.getItem(key))continue;
+  const [sh,sm]=slot.split(':').map(Number);
+  const slotDate=new Date(now); slotDate.setHours(sh,sm,0,0);
+  const diffMin=(now-slotDate)/60000;
+  if(diffMin>=0 && diffMin<=120){ // 정시 이후 2시간 이내면 아직 안 봤으니 띄움
+   localStorage.setItem(key,'1');
+   await showBriefing(slot);
+   break; // 한 번에 하나씩
+  }
+ }
+}
+async function showBriefing(slot){
+ const bdays=Object.values(MEMBERS).filter(m=>m.glofox_user_id&&daysToBday(m)===0);
+ let handoffs=[];
+ try{
+  const{data}=await sb.from('handoff_notes').select('id,glofox_user_id,created_by,content,remind_at').eq('done',false).lte('remind_at',new Date().toISOString()).order('remind_at');
+  handoffs=data||[];
+ }catch(e){}
+ if(!bdays.length && !handoffs.length)return; // 알릴 내용 없으면 조용히 넘어감
+ let html=`<div style="text-align:center;margin-bottom:14px"><div style="font-size:28px">🔔</div><div style="font-weight:800;font-size:16px">${slot} 브리핑</div></div>`;
+ if(bdays.length){
+  html+=`<div class="wklab">🎂 오늘 생일 (${bdays.length}명)</div>`;
+  html+=bdays.map(m=>`<div class="srow" onclick="close_();open_('${m.glofox_user_id}')">${avatar(m,'bk')}<div class="sinfo"><div class="nm">${esc(m.name)}</div></div></div>`).join('');
+ }
+ if(handoffs.length){
+  html+=`<div class="wklab" style="margin-top:14px">📋 인수인계 (${handoffs.length}건)</div>`;
+  html+=handoffs.map(h=>{const m=h.glofox_user_id?MEMBERS[h.glofox_user_id]:null;
+   return `<div class="carecard">
+     <div class="smeta">${m?esc(m.name)+' · ':''}${esc(h.created_by||'?')}</div>
+     <div style="margin:4px 0">${esc(h.content)}</div>
+     <button class="mini" onclick="markHandoffDone(${h.id},this)">완료 처리</button>
+   </div>`;}).join('');
+ }
+ document.getElementById('sheet').innerHTML=html+'<button class="save" style="margin-top:14px" onclick="close_()">확인</button>';
+ document.getElementById('modal').style.display='flex';
+ if(!window._sheetOpen){history.pushState({sheet:1},'');window._sheetOpen=true;}
+}
+async function markHandoffDone(id,btn){
+ try{
+  const{error}=await sb.from('handoff_notes').update({done:true}).eq('id',id);
+  if(error){alert('처리 실패: '+error.message);return;}
+  if(btn){btn.textContent='✅ 완료됨';btn.disabled=true;}
+ }catch(e){alert('오류: '+e.message);}
+}
+function renderLeads(){
+ const box=document.getElementById('view-leads');
+ let list=Object.values(MEMBERS).filter(m=>m.glofox_user_id&&m.stage==='리드'&&(!m._days||m._days.length===0));
+ list.sort((a,b)=>(b.join_date||'').localeCompare(a.join_date||''));
+ if(!list.length){box.innerHTML='<div class="center">방문 이력 없는 리드가 없어요 👍</div>';return;}
+ box.innerHTML=`<div class="listhead">🎯 <b>리드 관리</b> ${list.length}명 · 앱 가입은 했지만 한 번도 안 오신 분들 · 최근 가입순</div>`+
+  list.map(m=>{const uid=m.glofox_user_id;
+   const meta=`${esc(m.source||'')}${m.join_date?' · 가입 '+m.join_date.slice(2,10).replace(/-/g,'.'):''}${m.care_memo?' · <span style="color:#5aa0e0">📝 '+esc(m.care_memo)+'</span>':''}`;
+   return careCard(uid,meta,'lead',false);}).join('');
+}
+async function renderHandoff(){
+ const box=document.getElementById('view-handoff');
+ box.innerHTML='<div class="center">불러오는 중…</div>';
+ let list=[];
+ try{
+  const{data,error}=await sb.from('handoff_notes').select('id,glofox_user_id,created_by,content,remind_at,done').order('remind_at',{ascending:false}).limit(100);
+  if(error){box.innerHTML='<div class="center">불러오기 실패: '+esc(error.message)+'</div>';return;}
+  list=data||[];
+ }catch(e){box.innerHTML='<div class="center">오류: '+esc(e.message)+'</div>';return;}
+
+ const nowIso=new Date().toISOString().slice(0,16);
+ box.innerHTML=`<div class="listhead">📋 <b>인수인계 관리</b> · 다음 사람에게 남길 메모를 시간 지정해서 등록하세요</div>
+  <div class="carecard">
+   <textarea id="ho_content" class="memoin" placeholder="인수인계 내용 (예: OO회원 내일 재등록 여부 확인 필요)" style="min-height:60px"></textarea>
+   <div style="display:flex;gap:6px;margin-top:6px">
+    <input id="ho_when" type="datetime-local" class="memoin" style="margin-top:0" value="${nowIso}">
+    <button class="mini" onclick="addHandoff()">등록</button>
+   </div>
+  </div>
+  <div class="wklab" style="margin-top:14px">최근 100건</div>`+
+  list.map(h=>{const m=h.glofox_user_id?MEMBERS[h.glofox_user_id]:null;
+   const d=new Date(h.remind_at);const ds=`${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+   return `<div class="carecard" style="opacity:${h.done?0.5:1}">
+     <div class="smeta">${ds} · ${m?esc(m.name)+' · ':''}${esc(h.created_by||'?')}</div>
+     <div style="margin:4px 0">${esc(h.content)}</div>
+     ${h.done?'<span class="badge" style="background:#2a5a3a">완료됨</span>':`<button class="mini" onclick="markHandoffDone(${h.id},this)">완료 처리</button>`}
+   </div>`;}).join('') || '<div class="center">인수인계 기록이 없어요.</div>';
+}
+async function addHandoff(){
+ const content=document.getElementById('ho_content').value.trim();
+ const when=document.getElementById('ho_when').value;
+ if(!content){alert('내용을 입력하세요.');return;}
+ if(!when){alert('시각을 선택하세요.');return;}
+ const author=COACH||ACTIVE_STAFF||'미지정';
+ try{
+  const{error}=await sb.from('handoff_notes').insert({created_by:author,content,remind_at:new Date(when).toISOString()});
+  if(error){alert('등록 실패: '+error.message);return;}
+  alert('인수인계 등록됐어요.');
+  renderHandoff();
+ }catch(e){alert('오류: '+e.message);}
+}
+async function addHandoffForMember(uid){
+ const m=MEMBERS[uid]||{};
+ const content=prompt(`${m.name||'회원'}님 관련 인수인계 내용을 입력하세요`);
+ if(!content)return;
+ const when=prompt('언제 알림받을까요? (YYYY-MM-DD HH:MM, 비우면 내일 아침 7시)','');
+ let remindAt;
+ if(when&&when.trim()){
+  const d=new Date(when.replace(' ','T'));
+  if(isNaN(d.getTime())){alert('형식이 올바르지 않아요.');return;}
+  remindAt=d.toISOString();
+ }else{
+  const d=new Date(); d.setDate(d.getDate()+1); d.setHours(7,0,0,0);
+  remindAt=d.toISOString();
+ }
+ const author=COACH||ACTIVE_STAFF||'미지정';
+ try{
+  const{error}=await sb.from('handoff_notes').insert({glofox_user_id:uid,created_by:author,content,remind_at:remindAt});
+  if(error){alert('등록 실패: '+error.message);return;}
+  alert('인수인계 등록됐어요.');
+ }catch(e){alert('오류: '+e.message);}
+}
+async function pickStaff(){
+ let list=[];
+ try{
+  const{data,error}=await sb.from('staff_list').select('id,name,active').eq('active',true).order('created_at');
+  if(!error)list=data||[];
+ }catch(e){}
+ let msg='작성자를 선택하세요 (숫자 입력):\n\n';
+ list.forEach((s,i)=>{ msg+=`${i+1}. ${s.name}\n`; });
+ msg+=`\n0. 새 이름 추가/관리자 설정`;
+ const pick=prompt(msg);
+ if(pick===null)return;
+ const idx=parseInt(pick,10);
+ if(idx===0){
+  if(!checkAdminPw())return;
+  const nm=prompt('추가할 이름을 입력하세요 (기존 이름을 끄려면 별도로 관리자에게 문의)');
+  if(!nm)return; const name=nm.trim(); if(!name)return;
+  try{
+   const{error}=await sb.from('staff_list').insert({name,active:true});
+   if(error){alert('추가 실패: '+error.message);return;}
+   alert(name+' 추가됐어요. 다시 눌러서 선택하세요.');
+  }catch(e){alert('오류: '+e.message);}
+  return;
+ }
+ const chosen=list[idx-1];
+ if(!chosen){alert('잘못된 번호예요.');return;}
+ ACTIVE_STAFF=chosen.name;
+ localStorage.setItem('active_staff',ACTIVE_STAFF);
+ updateStaffBtn();
+ alert('작성자: '+ACTIVE_STAFF+' (으)로 설정됐어요.\n이 기기에 저장돼서 다음에 열어도 유지돼요.');
+}
 async function boot(){
  const il=document.getElementById('inputLink');if(il)il.href='회원입력.html'+location.search;
  if(!SUPABASE_URL||!PUBLISHABLE_KEY){document.getElementById('app').innerHTML='<div class="center">앱 설정이 필요해요.<br>파일 상단 SUPABASE_URL / PUBLISHABLE_KEY 를 채워주세요.</div>';return;}
@@ -1026,7 +1354,10 @@ async function boot(){
   }
  }
  await loadData();
+ updateStaffBtn();
+ checkBriefing();
  setInterval(()=>{
+  checkBriefing();
   const md=document.getElementById('modal');
   const sheetOpen = md && md.style.display!=='none';
   const picking = selEv!=null;
@@ -1329,9 +1660,12 @@ async function open_(uid){
  <div style="display:flex;gap:12px;margin-top:6px;font-size:11px"><span style="color:#e06a6a">■ 오전</span><span style="color:#e0c94f">■ 점심</span><span style="color:#5aa0e0">■ 오후/저녁</span></div>
  <div class="wklab" style="margin-top:14px">부상/주의</div><textarea id="f_injury">${esc(m.injury_note)}</textarea>
  <div class="wklab" style="margin-top:8px">메모</div><textarea id="f_memo">${esc(m.memo)}</textarea>
- <div class="wklab" style="margin-top:14px">코치 코멘트 ${COACH?`· <span style="color:var(--dim);font-weight:400">${esc(COACH)}(으)로 남겨요</span>`:'<span style="color:#e0954f;font-weight:400"> · 링크에 코치 이름이 없어요</span>'}</div>
+ ${channelRow('f_memo')}
+ <div class="wklab" style="margin-top:14px">코치 코멘트 ${(COACH||ACTIVE_STAFF)?`· <span style="color:var(--dim);font-weight:400">${esc(COACH||ACTIVE_STAFF)}(으)로 남겨요</span>`:'<span style="color:#e0954f;font-weight:400"> · 작성자 미선택 (상단 🙋 버튼)</span>'}</div>
  <div id="memoLogList">${(mlog||[]).map(x=>{const d=new Date(x.created_at);const ds=`${String(d.getFullYear()).slice(2)}.${String(d.getMonth()+1).padStart(2,'0')}.${String(d.getDate()).padStart(2,'0')}`;return `<div class="memoLogItem"><b>${ds}</b> <span style="color:#5aa0e0">${esc(x.coach_name||'?')}</span> · ${esc(x.content)}</div>`;}).join('')||'<div class="mini" style="color:var(--dim)">아직 코멘트가 없어요.</div>'}</div>
  <div style="display:flex;gap:6px;margin-top:6px"><input id="f_newcomment" class="memoin" style="margin-top:0" placeholder="코멘트 입력 (예: 통화함·재등록 예정)" onkeydown="if(event.key==='Enter')addComment('${uid}')"><button class="mini" style="white-space:nowrap" onclick="addComment('${uid}')">추가</button></div>
+ ${channelRow('f_newcomment')}
+ <button class="mini" style="margin-top:6px" onclick="addHandoffForMember('${uid}')">🔔 인수인계로 등록</button>
  <div class="wklab" style="margin-top:8px">인스타 ID</div><input id="f_insta" value="${esc(m.instagram)}">
  <button class="save" onclick="save('${uid}')">저장</button>
  <div class="hint">저장하면 모든 코치에게 공유돼요.</div>`;
@@ -1340,9 +1674,10 @@ async function open_(uid){
 async function addComment(uid){
  const el=document.getElementById('f_newcomment'); const val=(el.value||'').trim();
  if(!val)return;
- if(!COACH){ if(!confirm('코치 이름이 없는 링크예요. "미지정"으로 남길까요?'))return; }
+ const effectiveName = COACH || ACTIVE_STAFF || '';
+ if(!effectiveName){ if(!confirm('작성자가 선택 안 됐어요. 상단 🙋 버튼으로 먼저 선택하는 걸 추천해요.\n그래도 "미지정"으로 남길까요?'))return; }
  try{
-  const {error}=await sb.from('memo_log').insert({glofox_user_id:uid,coach_name:COACH||'미지정',content:val});
+  const {error}=await sb.from('memo_log').insert({glofox_user_id:uid,coach_name:effectiveName||'미지정',content:val});
   if(error){alert('저장 실패: '+error.message);return;}
   el.value=''; open_(uid);
  }catch(e){alert('오류: '+e.message);}
