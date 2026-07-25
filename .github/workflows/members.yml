@@ -1,26 +1,24 @@
 name: F45 회원정보 갱신
- 
+
 on:
   schedule:
-    - cron: '0 19 * * *'       # 매일 UTC 19:00 = KST 04:00 (하루 1회)
-  workflow_dispatch:            # 수동 실행(앱 버튼/직접)
- 
-concurrency:
-  group: f45-members
-  cancel-in-progress: false
- 
+    # 한국시간(KST) 06:00 / 11:00 / 17:00 / 22:00 하루 4회
+    # (KST = UTC+9 이므로 UTC 21:00 / 02:00 / 08:00 / 13:00)
+    - cron: '0 21,2,8,13 * * *'
+  workflow_dispatch:   # 수동 실행 버튼
+
 jobs:
-  refresh:
+  update-members:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
       - name: 라이브러리 설치
-        run: pip install supabase
-      - name: 전체 회원 갱신 실행
+        run: pip install requests supabase
+
+      - name: 전체회원갱신 실행
         env:
           GLOFOX_API_KEY: ${{ secrets.GLOFOX_API_KEY }}
           GLOFOX_API_TOKEN: ${{ secrets.GLOFOX_API_TOKEN }}
