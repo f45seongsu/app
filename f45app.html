@@ -381,12 +381,11 @@ async function aiMsg(uid,type,btn){
   alert('문구가 복사됐어요! ✅\n\n'+data.text+'\n\n─────────\n옆의 "문자보내기" 버튼을 누르면 이 문구로 바로 문자 앱이 열려요.');
  }catch(e){if(btn){btn.disabled=false;btn.textContent='🤖AI문구';} alert('오류: '+e.message);}
 }
-function sendLastAiText(uid){
- if(window._lastAiUid!==uid||!window._lastAiText){alert('먼저 🤖AI문구로 문구를 생성하세요.');return;}
+function sendSms(uid){
  const m=MEMBERS[uid]||{};
  const ph=(m.phone||'').replace(/[^0-9]/g,'');
  if(!ph){alert('이 회원은 전화번호가 없어요.');return;}
- location.href='sms:'+ph+'&body='+encodeURIComponent(window._lastAiText);
+ location.href='sms:'+ph;
 }
 
 function careCard(uid,metaHtml,type,showGrid){const m=MEMBERS[uid]||{name:'?'};const bd=badgeOf(m);
@@ -399,7 +398,7 @@ function careCard(uid,metaHtml,type,showGrid){const m=MEMBERS[uid]||{name:'?'};c
    <div class="srow" style="border:0;padding:0;margin:0;background:none">
      <span onclick="open_('${uid}')">${avatar(m,'bk')}</span>
      <div class="sinfo" onclick="open_('${uid}')"><div class="nm">${esc(m.name)||'(이름없음)'}${bd?` <span class="badge b-${bd}">${bd}</span>`:''}</div><div class="smeta">${metaHtml}</div></div>
-     <div class="cacts"><button class="mini" onclick="aiMsg('${uid}','${type}',this)">🤖AI문구</button><button class="mini" onclick="sendLastAiText('${uid}')">📱문자보내기</button></div>
+     <div class="cacts"><button class="mini" onclick="aiMsg('${uid}','${type}',this)">🤖AI문구</button><button class="mini" onclick="sendSms('${uid}')">📱문자보내기</button></div>
    </div>
    ${showGrid?`<div class="mini4w-wrap"><span class="m4lab">↑ 4주 전</span><div class="mini4w">${miniGrid(m)}</div><span class="m4lab">↓ 이번 주</span></div>`:''}
    ${leadBtns}
@@ -539,6 +538,11 @@ function isTrialLike(m){
  if(!m.glofox_user_id)return false;
  if(m.stage==='트라이얼')return true;
  if(m.stage==='회원')return false; // 이미 정회원이면 트라이얼 아님
+ // 총 방문횟수가 많으면(=명백한 기존 회원) 절대 트라이얼로 안 봄 — 데이터 결측으로 인한 오분류 방지
+ const totalVisits = totalVisitsOf(m);
+ if(totalVisits>=3) return false; // 최근 방문일 데이터가 35일치만 있어서 낮게 잡음 — 3회 이상이면 이미 자리잡은 회원으로 판단
+ // 유효 횟수권을 보유 중이면 트라이얼 아님
+ if(m.pass_remaining!=null && (m.pass_total||0)>=10) return false;
  // 최근 가입(또는 최근 첫출석) + 예약/출석 기록이 있으면 → 결제 미처리라도 실질적 트라이얼로 추정
  const d21=ddaysAgo(21);
  const jd=m.join_date&&m.join_date.length>=10?m.join_date.slice(0,10):null;
@@ -546,6 +550,15 @@ function isTrialLike(m){
  const recentSignal=(jd&&jd>d21)||(firstDay&&firstDay>d21);
  const hasBooking=(m._days&&m._days.length>0);
  return !!(recentSignal&&hasBooking);
+}
+function totalVisitsOf(m){
+ const days=(m._days||[]);
+ if(m.visit_base!=null){
+  const vbd=m.visit_base_date||'2000-01-01';
+  const after=days.filter(d=>d>vbd).length;
+  return (m.visit_base||0)+after;
+ }
+ return days.length;
 }
 function renderTrial(){
  let list=Object.values(MEMBERS).filter(m=>isTrialLike(m)&&!m.trial_hidden);
@@ -562,7 +575,7 @@ function renderTrial(){
      <div class="srow" style="border:0;padding:0;margin:0;background:none">
        <span onclick="open_('${uid}')">${avatar({...m,stage:'트라이얼',pass_remaining:null},'bk')}</span>
        <div class="sinfo" onclick="open_('${uid}')"><div class="nm">${esc(m.name)||'(이름없음)'} <span class="badge b-트라이얼">${inferred?'⚡추정':'트라이얼'}</span></div><div class="smeta">${meta}</div></div>
-       <div class="cacts"><button class="mini" onclick="aiMsg('${uid}','trial',this)">🤖AI문구</button><button class="mini" onclick="sendLastAiText('${uid}')">📱문자보내기</button><button class="mini" style="color:var(--dim)" onclick="hideTrial('${uid}')">숨기기</button></div>
+       <div class="cacts"><button class="mini" onclick="aiMsg('${uid}','trial',this)">🤖AI문구</button><button class="mini" onclick="sendSms('${uid}')">📱문자보내기</button><button class="mini" style="color:var(--dim)" onclick="hideTrial('${uid}')">숨기기</button></div>
      </div>
      <div class="mini4w-wrap"><span class="m4lab">↑ 4주 전</span><div class="mini4w">${miniGrid(m)}</div><span class="m4lab">↓ 이번 주</span></div>
      <input id="extra_trial_${uid}" class="memoin" placeholder="AI에게 특별 요청사항 (예: 이번주 세일 언급해줘)">
@@ -719,7 +732,7 @@ function renderPass(){
     <span onclick="open_('${uid}')">${avatar(m,'bk')}</span>
     <div class="sinfo" onclick="open_('${uid}')"><div class="nm">${esc(m.name)||'(이름없음)'}</div>
       <div class="smeta">잔여 <b>${rem!=null?rem:'-'}</b> / 총 ${tot||'-'}회 · 만료 ${esc((m.pass_expiry||'').slice(0,10))||'-'} · ${ddtxt}</div></div>
-    <div class="cacts"><button class="mini" onclick="aiMsg('${uid}','expire',this)">🤖AI문구</button><button class="mini" onclick="sendLastAiText('${uid}')">📱문자보내기</button></div>
+    <div class="cacts"><button class="mini" onclick="aiMsg('${uid}','expire',this)">🤖AI문구</button><button class="mini" onclick="sendSms('${uid}')">📱문자보내기</button></div>
    </div>
    ${bar}
    <div class="smeta" style="margin-top:5px">${paceTxt}${p?` · 지금쯤 <b>${p.expUsed}회</b> 사용 예상 (실제 ${p.usedActual}회)`:''}${warn}</div>
