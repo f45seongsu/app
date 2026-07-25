@@ -316,8 +316,28 @@ function msgFor(uid,type){const m=MEMBERS[uid]||{};const nm=m.name||'회원';
 function smsMsg(uid,type){const m=MEMBERS[uid]||{};const ph=(m.phone||'').replace(/[^0-9]/g,'');if(!ph){alert('번호가 없어요.');return;}location.href='sms:'+ph+'&body='+encodeURIComponent(msgFor(uid,type));}
 function copyMsg(uid,type){const t=msgFor(uid,type);navigator.clipboard.writeText(t);alert('문구 복사됨:\n'+t);}
 function isUnlimited(m){const s=m.membership||'';return s.includes('무제한')||s.includes('Unlimited')||s.includes('파운데이션')||s.includes('Foundation');}
-function saveTrialMemo(uid,val){sb.from('people').update({trial_memo:val}).eq('glofox_user_id',uid).then(({error})=>{if(error)alert('메모 저장 실패: '+error.message);else if(MEMBERS[uid])MEMBERS[uid].trial_memo=val;});}
-function saveMemo(uid,val){sb.from('people').update({care_memo:val}).eq('glofox_user_id',uid).then(({error})=>{if(error)alert('메모 저장 실패: '+error.message);else if(MEMBERS[uid])MEMBERS[uid].care_memo=val;});}
+async function saveTrialMemo(uid,val){
+ try{
+  const{error}=await sb.from('people').update({trial_memo:val}).eq('glofox_user_id',uid);
+  if(error){alert('메모 저장 실패: '+error.message);return;}
+  if(MEMBERS[uid])MEMBERS[uid].trial_memo=val;
+  if(val&&val.trim()){
+   const author=COACH||ACTIVE_STAFF||'미지정';
+   sb.from('memo_log').insert({glofox_user_id:uid,coach_name:author,content:val}).then(()=>{},()=>{});
+  }
+ }catch(e){alert('오류: '+e.message);}
+}
+async function saveMemo(uid,val){
+ try{
+  const{error}=await sb.from('people').update({care_memo:val}).eq('glofox_user_id',uid);
+  if(error){alert('메모 저장 실패: '+error.message);return;}
+  if(MEMBERS[uid])MEMBERS[uid].care_memo=val;
+  if(val&&val.trim()){
+   const author=COACH||ACTIVE_STAFF||'미지정';
+   sb.from('memo_log').insert({glofox_user_id:uid,coach_name:author,content:val}).then(()=>{},()=>{});
+  }
+ }catch(e){alert('오류: '+e.message);}
+}
 function miniGrid(m){const set=new Set(m._days||[]);const t=new Date(today+'T00:00:00');
  const dow=(t.getDay()+6)%7;const mon=new Date(t);mon.setDate(t.getDate()-dow);let c='';
  for(let w=3;w>=0;w--)for(let d=0;d<6;d++){const cur=new Date(mon);cur.setDate(mon.getDate()-w*7+d);
@@ -405,6 +425,7 @@ function careCard(uid,metaHtml,type,showGrid){const m=MEMBERS[uid]||{name:'?'};c
    <input id="extra_${type}_${uid}" class="memoin" placeholder="AI에게 특별 요청사항 (예: 이번주 세일 언급해줘)">
    <input id="care_${uid}" class="memoin" value="${esc(m.care_memo||'')}" placeholder="메모 (예: 6/20 통화함·안받음)" onchange="saveMemo('${uid}',this.value)">
    ${channelRow('care_'+uid)}
+   ${managerRow()}
  </div>`;}
 async function logLeadAttempt(uid,statusText){
  const author=COACH||ACTIVE_STAFF||'미지정';
@@ -581,6 +602,7 @@ function renderTrial(){
      <input id="extra_trial_${uid}" class="memoin" placeholder="AI에게 특별 요청사항 (예: 이번주 세일 언급해줘)">
      <input id="trial_${uid}" class="memoin" value="${esc(m.trial_memo||'')}" placeholder="트라이얼 메모 (예: 7/2 통화·고민중)" onchange="saveTrialMemo('${uid}',this.value)">
      ${channelRow('trial_'+uid)}
+     ${managerRow()}
    </div>`;}).join('');
 }
 function renderBirthday(){
@@ -738,6 +760,7 @@ function renderPass(){
    <div class="smeta" style="margin-top:5px">${paceTxt}${p?` · 지금쯤 <b>${p.expUsed}회</b> 사용 예상 (실제 ${p.usedActual}회)`:''}${warn}</div>
    <input id="care_${uid}" class="memoin" value="${esc(m.care_memo||'')}" placeholder="메모 (예: 6/20 통화함·안받음)" onchange="saveMemo('${uid}',this.value)">
    ${channelRow('care_'+uid)}
+   ${managerRow()}
   </div>`;}).join('');
 }
 
@@ -1235,6 +1258,29 @@ async function getAiConfig(){
  return _aiConfigCache;
 }
 let ACTIVE_STAFF = localStorage.getItem('active_staff') || '';
+let STAFF_LIST = [];
+async function loadStaffList(){
+ try{
+  const{data,error}=await sb.from('staff_list').select('name').eq('active',true).order('created_at');
+  if(!error) STAFF_LIST = (data||[]).map(s=>s.name);
+ }catch(e){}
+}
+function managerRow(){
+ if(!STAFF_LIST.length)return '';
+ return `<div style="display:flex;gap:4px;margin-top:3px;flex-wrap:wrap">${STAFF_LIST.map(n=>`<button type="button" class="mini" style="padding:1px 7px;font-size:10px;opacity:${n===ACTIVE_STAFF?'1':'.6'};${n===ACTIVE_STAFF?'border-color:var(--red);color:var(--red)':''}" onclick="quickSetStaff('${n}',this)">${n}</button>`).join('')}</div>`;
+}
+function quickSetStaff(name,btn){
+ ACTIVE_STAFF=name;
+ localStorage.setItem('active_staff',ACTIVE_STAFF);
+ updateStaffBtn();
+ // 같은 화면의 모든 managerRow 버튼 스타일 갱신 (전체 리렌더 없이 가볍게)
+ document.querySelectorAll('[onclick^="quickSetStaff"]').forEach(b=>{
+  const isActive=b.textContent===name;
+  b.style.opacity=isActive?'1':'.6';
+  b.style.borderColor=isActive?'var(--red)':'';
+  b.style.color=isActive?'var(--red)':'';
+ });
+}
 function updateStaffBtn(){
  const b=document.getElementById('staffBtn');
  if(b)b.textContent='🙋 '+(ACTIVE_STAFF||'선택안됨');
@@ -1341,24 +1387,23 @@ async function addHandoff(){
  }catch(e){alert('오류: '+e.message);}
 }
 async function addHandoffForMember(uid){
- const m=MEMBERS[uid]||{};
- const content=prompt(`${m.name||'회원'}님 관련 인수인계 내용을 입력하세요`);
- if(!content)return;
- const when=prompt('언제 알림받을까요? (YYYY-MM-DD HH:MM, 비우면 내일 아침 7시)','');
- let remindAt;
- if(when&&when.trim()){
-  const d=new Date(when.replace(' ','T'));
-  if(isNaN(d.getTime())){alert('형식이 올바르지 않아요.');return;}
-  remindAt=d.toISOString();
- }else{
-  const d=new Date(); d.setDate(d.getDate()+1); d.setHours(7,0,0,0);
-  remindAt=d.toISOString();
- }
+ const contentEl=document.getElementById('f_newcomment');
+ const content=(contentEl?contentEl.value:'').trim();
+ if(!content){alert('위 코멘트 입력칸에 내용을 먼저 적어주세요.');return;}
+ const dateEl=document.getElementById('ho_date_'+uid);
+ const timeEl=document.getElementById('ho_time_'+uid);
+ const dateVal=dateEl?dateEl.value:'';
+ const timeVal=timeEl?timeEl.value:'07:00';
+ if(!dateVal){alert('날짜를 선택하세요.');return;}
+ const remindAt=new Date(dateVal+'T'+timeVal+':00').toISOString();
  const author=COACH||ACTIVE_STAFF||'미지정';
  try{
   const{error}=await sb.from('handoff_notes').insert({glofox_user_id:uid,created_by:author,content,remind_at:remindAt});
   if(error){alert('등록 실패: '+error.message);return;}
-  alert('인수인계 등록됐어요.');
+  // 통합 코멘트 기록에도 남겨서 프로필에서 같이 보이게
+  await sb.from('memo_log').insert({glofox_user_id:uid,coach_name:author,content:'🔔[인수인계] '+content});
+  if(contentEl)contentEl.value='';
+  open_(uid);
  }catch(e){alert('오류: '+e.message);}
 }
 async function pickStaff(){
@@ -1391,6 +1436,7 @@ async function confirmStaffPick(){
   try{
    const{error}=await sb.from('staff_list').insert({name,active:true});
    if(error){alert('추가 실패: '+error.message);return;}
+   await loadStaffList();
    alert(name+' 추가됐어요. 다시 눌러서 선택하세요.');
   }catch(e){alert('오류: '+e.message);}
   return;
@@ -1419,6 +1465,7 @@ async function boot(){
   }
  }
  await loadData();
+ await loadStaffList();
  updateStaffBtn();
  checkBriefing();
  setInterval(()=>{
@@ -1735,11 +1782,17 @@ async function open_(uid){
  <div class="wklab" style="margin-top:14px">부상/주의</div><textarea id="f_injury">${esc(m.injury_note)}</textarea>
  <div class="wklab" style="margin-top:8px">메모</div><textarea id="f_memo">${esc(m.memo)}</textarea>
  ${channelRow('f_memo')}
+ ${managerRow()}
  <div class="wklab" style="margin-top:14px">코치 코멘트 ${(COACH||ACTIVE_STAFF)?`· <span style="color:var(--dim);font-weight:400">${esc(COACH||ACTIVE_STAFF)}(으)로 남겨요</span>`:'<span style="color:#e0954f;font-weight:400"> · 작성자 미선택 (상단 🙋 버튼)</span>'}</div>
  <div id="memoLogList">${(mlog||[]).map(x=>{const d=new Date(x.created_at);const ds=`${String(d.getFullYear()).slice(2)}.${String(d.getMonth()+1).padStart(2,'0')}.${String(d.getDate()).padStart(2,'0')}`;return `<div class="memoLogItem"><b>${ds}</b> <span style="color:#5aa0e0">${esc(x.coach_name||'?')}</span> · ${esc(x.content)}</div>`;}).join('')||'<div class="mini" style="color:var(--dim)">아직 코멘트가 없어요.</div>'}</div>
  <div style="display:flex;gap:6px;margin-top:6px"><input id="f_newcomment" class="memoin" style="margin-top:0" placeholder="코멘트 입력 (예: 통화함·재등록 예정)" onkeydown="if(event.key==='Enter')addComment('${uid}')"><button class="mini" style="white-space:nowrap" onclick="addComment('${uid}')">추가</button></div>
  ${channelRow('f_newcomment')}
- <button class="mini" style="margin-top:6px" onclick="addHandoffForMember('${uid}')">🔔 인수인계로 등록</button>
+ ${managerRow()}
+ <div style="display:flex;gap:5px;margin-top:8px;align-items:center">
+  <input id="ho_date_${uid}" type="date" class="memoin" style="margin-top:0;flex:1;font-size:12px;padding:6px 8px" value="${(()=>{const d=new Date();d.setDate(d.getDate()+1);return d.toISOString().slice(0,10);})()}">
+  <input id="ho_time_${uid}" type="time" class="memoin" style="margin-top:0;flex:0 0 90px;font-size:12px;padding:6px 8px" value="07:00">
+  <button class="mini" style="white-space:nowrap" onclick="addHandoffForMember('${uid}')">🔔 인수인계 등록</button>
+ </div>
  <div class="wklab" style="margin-top:8px">인스타 ID</div><input id="f_insta" value="${esc(m.instagram)}">
  <button class="save" onclick="save('${uid}')">저장</button>
  <div class="hint">저장하면 모든 코치에게 공유돼요.</div>`;
