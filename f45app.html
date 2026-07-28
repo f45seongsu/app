@@ -442,7 +442,8 @@ async function logLeadAttempt(uid,statusText){
 }
 function channelRow(inputId){
  const chans=['통화','대면','문자','카톡','DM'];
- return `<div style="display:flex;gap:5px;margin-top:3px;flex-wrap:wrap">${chans.map(label=>`<button type="button" class="mini" style="padding:1px 7px;font-size:10px;opacity:.7" onclick="insertChannelTag('${inputId}','${label}')">${label}</button>`).join('')}</div>`;
+ const btns=chans.map(label=>'<button type="button" class="mini" style="padding:1px 7px;font-size:10px;opacity:.7" onclick="insertChannelTag(\''+inputId+'\',\''+label+'\')">'+label+'</button>').join('');
+ return '<div style="display:flex;gap:5px;margin-top:3px;flex-wrap:wrap">'+btns+'</div>';
 }
 function insertChannelTag(inputId,label){
  const el=document.getElementById(inputId); if(!el)return;
@@ -1008,7 +1009,7 @@ async function renderTshirt(){
   }else if(mode==='done'){
    actionHtml=`<button class="mini" onclick="markPastGiven('${x.uid}',${x.mile},this)">✅ 지급완료 체크</button>`;
   }else{
-   actionHtml=`<div style="display:flex;gap:3px;flex-wrap:wrap">${SIZES.map(sz=>`<button class="mini" style="padding:2px 6px;font-size:10px" onclick="giveTshirt('${x.uid}',${x.mile},'${sz}')">${sz}</button>`).join('')}</div>`;
+   actionHtml='<div style="display:flex;gap:3px;flex-wrap:wrap">'+SIZES.map(sz=>'<button class="mini" style="padding:2px 6px;font-size:10px" onclick="giveTshirt(\''+x.uid+'\','+x.mile+',\''+sz+'\',this)">'+sz+'</button>').join('')+'</div>';
   }
   return `<div class="carecard" style="border-color:#7a5aa0;padding:8px">
    <div class="srow" style="border:0;padding:0;margin:0 0 5px;background:none">
@@ -1062,14 +1063,15 @@ async function renderTshirt(){
   }).join('') : '');
 
  function sizeTable(title,hint,cellFn,extraRow){
-  return `<div class="listhead" style="margin-top:14px">${title} <span class="smeta">${hint}</span></div>
-   <div class="carecard">
-    <div style="display:grid;grid-template-columns:44px repeat(${SIZES.length},1fr);gap:4px;align-items:center;font-size:11px">
-     <div></div>${SIZES.map(sz=>`<div style="text-align:center;color:var(--dim)">${sz}</div>`).join('')}
-     ${milestones.map(ms=>`<div style="color:var(--dim)">${ms}</div>${SIZES.map(sz=>cellFn(ms,sz)).join('')}`).join('')}
-    </div>
-    ${extraRow||''}
-   </div>`;
+  const header='<div></div>'+SIZES.map(sz=>'<div style="text-align:center;color:var(--dim)">'+sz+'</div>').join('');
+  const rows=milestones.map(ms=>'<div style="color:var(--dim)">'+ms+'</div>'+SIZES.map(sz=>cellFn(ms,sz)).join('')).join('');
+  return '<div class="listhead" style="margin-top:14px">'+title+' <span class="smeta">'+hint+'</span></div>'
+   +'<div class="carecard">'
+   +'<div style="display:grid;grid-template-columns:44px repeat('+SIZES.length+',1fr);gap:4px;align-items:center;font-size:11px">'
+   +header+rows
+   +'</div>'
+   +(extraRow||'')
+   +'</div>';
  }
  const invHTML = sizeTable('📦 <b>사이즈별 재고</b>','(오늘 실제 보유수량을 그대로 입력)',
   (ms,sz)=>`<input type="number" min="0" value="${invMap[ms+'_'+sz]??0}" style="width:100%;background:#0e1a30;border:1px solid var(--line);color:var(--txt);border-radius:5px;padding:3px;text-align:center;font-size:11px" onchange="saveTshirtInv(${ms},'${sz}',this.value)">`,
@@ -1122,27 +1124,25 @@ function openNewOrder(){
  const SIZES2=['S','M','L','XL','2XL','3XL'];
  const tmr=new Date(); tmr.setDate(tmr.getDate()+7);
  const defDate=tmr.toISOString().slice(0,10);
- const grid=SIZES2.map(sz=>`
-  <div style="text-align:center;color:var(--dim);font-size:11px">${sz}</div>
-  <input id="no_qty_${sz.replace('XL','xl').replace('L','l').replace('M','m').replace('S','s').replace('2','2').replace('3','3')}" type="number" min="0" value="0" style="width:100%;background:#0e1a30;border:1px solid var(--line);color:var(--txt);border-radius:5px;padding:6px 4px;text-align:center;font-size:13px">`).join('');
- const SIZES_IDS=['S→s','M→m','L→l','XL→xl','2XL→2xl','3XL→3xl'];
- document.getElementById('sheet').innerHTML=`
-  <span class="close" onclick="close_()">×</span>
-  <div style="font-weight:800;font-size:15px;margin-bottom:12px">📦 새 입고 주문 등록</div>
-  <div class="wklab">마일스톤</div>
-  <input id="no_ms" type="number" placeholder="예: 100" class="memoin">
-  <div class="wklab" style="margin-top:10px">사이즈별 수량</div>
-  <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:6px;margin-bottom:8px">
-   ${SIZES2.map(sz=>`<div style="text-align:center">
-    <div style="color:var(--dim);font-size:10px;margin-bottom:3px">${sz}</div>
-    <input id="no_${sz}" type="number" min="0" value="0" style="width:100%;background:#0e1a30;border:1px solid var(--line);color:var(--txt);border-radius:6px;padding:6px 2px;text-align:center;font-size:14px">
-   </div>`).join('')}
-  </div>
-  <div class="wklab">입고 예정일</div>
-  <input id="no_date" type="date" class="memoin" value="${defDate}">
-  <div class="wklab" style="margin-top:8px">메모 (선택)</div>
-  <input id="no_memo" class="memoin" placeholder="예: OO업체 발주">
-  <button class="save" style="margin-top:14px" onclick="saveNewOrder()">등록</button>`;
+ // 중첩 백틱 금지 — 사전에 HTML 문자열로 조립
+ const sizeGrid=SIZES2.map(sz=>{
+  return '<div style="text-align:center">'
+   +'<div style="color:var(--dim);font-size:10px;margin-bottom:3px">'+sz+'</div>'
+   +'<input id="no_'+sz+'" type="number" min="0" value="0" style="width:100%;background:#0e1a30;border:1px solid var(--line);color:var(--txt);border-radius:6px;padding:6px 2px;text-align:center;font-size:14px">'
+   +'</div>';
+ }).join('');
+ document.getElementById('sheet').innerHTML=''
+  +'<span class="close" onclick="close_()">×</span>'
+  +'<div style="font-weight:800;font-size:15px;margin-bottom:12px">📦 새 입고 주문 등록</div>'
+  +'<div class="wklab">마일스톤 (예: 45, 100, 200...)</div>'
+  +'<input id="no_ms" type="number" placeholder="예: 100" class="memoin">'
+  +'<div class="wklab" style="margin-top:10px">사이즈별 수량</div>'
+  +'<div style="display:grid;grid-template-columns:repeat(6,1fr);gap:6px;margin-bottom:8px">'+sizeGrid+'</div>'
+  +'<div class="wklab">입고 예정일</div>'
+  +'<input id="no_date" type="date" class="memoin" value="'+defDate+'">'
+  +'<div class="wklab" style="margin-top:8px">메모 (선택)</div>'
+  +'<input id="no_memo" class="memoin" placeholder="예: OO업체 발주">'
+  +'<button class="save" style="margin-top:14px" onclick="saveNewOrder()">등록</button>';
  document.getElementById('modal').style.display='flex';
  if(!window._sheetOpen){history.pushState({sheet:1},'');window._sheetOpen=true;}
 }
@@ -1348,7 +1348,11 @@ async function loadStaffList(){
 }
 function managerRow(){
  if(!STAFF_LIST.length)return '';
- return `<div style="display:flex;gap:4px;margin-top:3px;flex-wrap:wrap">${STAFF_LIST.map(n=>`<button type="button" class="mini" style="padding:1px 7px;font-size:10px;opacity:${n===ACTIVE_STAFF?'1':'.6'};${n===ACTIVE_STAFF?'border-color:var(--red);color:var(--red)':''}" onclick="quickSetStaff('${n}',this)">${n}</button>`).join('')}</div>`;
+ const btns=STAFF_LIST.map(function(n){
+  const active=n===ACTIVE_STAFF;
+  return '<button type="button" class="mini" style="padding:1px 7px;font-size:10px;opacity:'+(active?'1':'.6')+';'+(active?'border-color:var(--red);color:var(--red)':'')+'" onclick="quickSetStaff(''+n+'',this)">'+n+'</button>';
+ }).join('');
+ return '<div style="display:flex;gap:4px;margin-top:3px;flex-wrap:wrap">'+btns+'</div>';
 }
 function quickSetStaff(name,btn){
  ACTIVE_STAFF=name;
@@ -1396,7 +1400,7 @@ async function updateBriefingBanner(){
  if(!banner)return;
  if(!bdays.length && !handoffs.length){banner.style.display='none';return;}
  let parts=[];
- if(bdays.length) parts.push(`🎂 오늘 생일: ${bdays.map(m=>`<span style="cursor:pointer;text-decoration:underline" onclick="open_('${m.glofox_user_id}')">${esc(m.name)}</span>`).join(', ')}`);
+ if(bdays.length) parts.push('🎂 오늘 생일: '+bdays.map(function(m){return '<span style="cursor:pointer;text-decoration:underline" onclick="open_(\''+m.glofox_user_id+'\')">' +esc(m.name)+'</span>';}).join(', '));
  if(handoffs.length) parts.push(`📋 인수인계 ${handoffs.length}건 <button class="mini" style="font-size:10px;padding:1px 7px;margin-left:4px" onclick="showHandoffBannerDetail()">보기</button>`);
  banner.style.display='block';
  banner.innerHTML=`<div style="padding:7px 14px;font-size:12px;color:var(--txt);display:flex;align-items:center;gap:10px;flex-wrap:wrap">
