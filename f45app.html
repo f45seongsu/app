@@ -1191,10 +1191,6 @@ async function saveTshirtMemo(uid,milestone,val){
  if(!val||!val.trim())return;
  const author=COACH||ACTIVE_STAFF||'미지정';
  try{ await sb.from('memo_log').insert({glofox_user_id:uid,coach_name:author,content:`[티셔츠 ${milestone}회] ${val}`}); }catch(e){}
-}(uid,milestone,val){
- if(!val||!val.trim())return;
- const author=COACH||ACTIVE_STAFF||'미지정';
- try{ await sb.from('memo_log').insert({glofox_user_id:uid,coach_name:author,content:`[티셔츠 ${milestone}회] ${val}`}); }catch(e){}
 }
 async function markPastGiven(uid,milestone,btn){
  if(btn){btn.disabled=true;btn.textContent='처리중...';}
@@ -1350,7 +1346,7 @@ function managerRow(){
  if(!STAFF_LIST.length)return '';
  const btns=STAFF_LIST.map(function(n){
   const active=n===ACTIVE_STAFF;
-  return '<button type="button" class="mini" style="padding:1px 7px;font-size:10px;opacity:'+(active?'1':'.6')+';'+(active?'border-color:var(--red);color:var(--red)':'')+'" onclick="quickSetStaff(''+n+'',this)">'+n+'</button>';
+  return '<button type="button" class="mini" style="padding:1px 7px;font-size:10px;opacity:'+(active?'1':'.6')+';'+(active?'border-color:var(--red);color:var(--red)':'')+'" onclick="quickSetStaff(&#39;'+n+'&#39;,this)">'+n+'</button>';
  }).join('');
  return '<div style="display:flex;gap:4px;margin-top:3px;flex-wrap:wrap">'+btns+'</div>';
 }
