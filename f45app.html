@@ -996,7 +996,28 @@ async function renderTshirt(){
  const{data:inv}=await sb.from('tshirt_inventory').select('milestone,size,qty').order('milestone');
  const invMap={}; (inv||[]).forEach(r=>{invMap[r.milestone+'_'+r.size]=r.qty;});
  const SIZES=['S','M','L','XL','2XL','3XL'];
- const milestones=[...new Set([...(inv||[]).map(r=>r.milestone), ...achieved.map(a=>a.mile), ...backlog.map(b=>b.mile), ...upcoming.map(u=>u.nm)])].sort((a,b)=>a-b);
+
+ // 예상 사이즈 예측 (다가오는+예상캘린더 대상자가 고른 사이즈)
+ const{data:predRows}=await sb.from('tshirt_size_predictions').select('glofox_user_id,milestone,predicted_size');
+ const predMap={}; (predRows||[]).forEach(p=>{predMap[p.glofox_user_id+'_'+p.milestone]=p.predicted_size;});
+
+ // 미도착 주문 (입고예정) — 사이즈별 합계 + 가장 빠른 도착예정일
+ const{data:pendingOrders}=await sb.from('tshirt_orders_v2').select('*').eq('arrived',false);
+ const incomingBySize={}; // key: milestone_size -> {qty, earliestDate}
+ (pendingOrders||[]).forEach(o=>{
+  const keyMap={qty_s:'S',qty_m:'M',qty_l:'L',qty_xl:'XL',qty_2xl:'2XL',qty_3xl:'3XL'};
+  Object.entries(keyMap).forEach(([col,sz])=>{
+   const qty=o[col]||0; if(qty<=0)return;
+   const k=o.milestone+'_'+sz;
+   if(!incomingBySize[k]) incomingBySize[k]={qty:0,earliestDate:null};
+   incomingBySize[k].qty+=qty;
+   if(o.expected_date && (!incomingBySize[k].earliestDate || o.expected_date<incomingBySize[k].earliestDate)){
+    incomingBySize[k].earliestDate=o.expected_date;
+   }
+  });
+ });
+
+ const milestones=[...new Set([...(inv||[]).map(r=>r.milestone), ...achieved.map(a=>a.mile), ...backlog.map(b=>b.mile), ...upcoming.map(u=>u.nm), ...forecast.map(f=>f.nm)])].sort((a,b)=>a-b);
 
  const achOpen=window._tshirtOpen;
  const bkOpen=window._tshirtBacklogOpen!==false;
@@ -1037,8 +1058,13 @@ async function renderTshirt(){
   const d=new Date(); d.setDate(d.getDate()+days);
   return `예상 <b style="color:#c88ae0">${d.getMonth()+1}/${d.getDate()}</b>경`;
  }
+ function sizeSelectHtml(uid,ms){
+  const cur=predMap[uid+'_'+ms]||'';
+  const opts=['','S','M','L','XL','2XL','3XL'].map(sz=>'<option value="'+sz+'"'+(sz===cur?' selected':'')+'>'+(sz||'사이즈?')+'</option>').join('');
+  return '<select class="memoin" style="margin-top:4px;font-size:11px;padding:4px" onchange="savePrediction(\''+uid+'\','+ms+',this.value)">'+opts+'</select>';
+ }
  const upcomingHTML = !upcoming.length ? '' :
-  `<div class="listhead" style="margin-top:14px">🔜 <b>다가오는 마일스톤 (20회 이내)</b> ${upcoming.length}명</div>` +
+  `<div class="listhead" style="margin-top:14px">🔜 <b>다가오는 마일스톤 (20회 이내)</b> ${upcoming.length}명 · 예상 사이즈 선택해두면 재고 예측에 반영돼요</div>` +
   grid2(upcoming.map(x=>{const m=MEMBERS[x.uid];
    return `<div class="carecard" style="padding:8px">
     <div class="srow" style="border:0;padding:0;margin:0 0 5px;background:none">
@@ -1046,7 +1072,8 @@ async function renderTshirt(){
      <div class="sinfo" onclick="open_('${x.uid}')"><div class="nm" style="font-size:13px">${esc(m.name)}</div>
       <div class="smeta" style="font-size:11px">${x.t}회 · ${x.nm}까지 ${x.rem}회 · ${predDateTxt(x.days)}</div></div>
     </div>
-    <input id="tshmemo_${x.uid}_${x.nm}" class="memoin" style="font-size:11px;padding:4px 7px" value="" placeholder="메모(사이즈 문의 등)" onchange="saveTshirtMemo('${x.uid}',${x.nm},this.value)">
+    ${sizeSelectHtml(x.uid,x.nm)}
+    <input id="tshmemo_${x.uid}_${x.nm}" class="memoin" style="font-size:11px;padding:4px 7px;margin-top:4px" value="" placeholder="메모(사이즈 문의 등)" onchange="saveTshirtMemo('${x.uid}',${x.nm},this.value)">
    </div>`;
   }));
 
@@ -1058,7 +1085,7 @@ async function renderTshirt(){
    const items=weekBuckets[w].sort((a,b)=>a.days-b.days);
    return `<div class="carecard">
      <div class="nm" style="margin-bottom:6px">${wkLabel(w)} · ${items.length}명 필요 예상</div>
-     ${items.map(x=>{const m=MEMBERS[x.uid];return `<div class="smeta" style="cursor:pointer" onclick="open_('${x.uid}')">${esc(m.name)} · ${x.nm}회 목표 (현재${x.t}) · ${predDateTxt(x.days)}</div>`;}).join('')}
+     ${items.map(x=>{const m=MEMBERS[x.uid];return '<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px"><span class="smeta" style="cursor:pointer;flex:1" onclick="open_(\''+x.uid+'\')">'+esc(m.name)+' · '+x.nm+'회 목표 (현재'+x.t+') · '+predDateTxt(x.days)+'</span>'+sizeSelectHtml(x.uid,x.nm)+'</div>';}).join('')}
    </div>`;
   }).join('') : '');
 
@@ -1079,6 +1106,50 @@ async function renderTshirt(){
     <input id="newMsInput" type="number" placeholder="새 마일스톤 번호(예:1500)" class="memoin" style="margin-top:0">
     <button class="mini" onclick="addMilestoneRow()">+ 추가</button>
    </div>`);
+
+ // ── 📊 재고 예측: 현재고+입고예정 vs 예상수요(사이즈 선택된 다가오는/예상캘린더 인원) ──
+ const demandBySize={}; // key: milestone_size -> {count, names:[]}
+ function addDemand(uid,ms,daysAway){
+  const sz=predMap[uid+'_'+ms];
+  if(!sz)return; // 사이즈 미선택이면 예측에서 제외
+  const k=ms+'_'+sz;
+  if(!demandBySize[k]) demandBySize[k]={count:0,names:[]};
+  demandBySize[k].count++;
+  const m=MEMBERS[uid];
+  demandBySize[k].names.push((m?m.name:'?')+(daysAway!=null?' ('+daysAway+'일 후)':''));
+ }
+ upcoming.forEach(x=>addDemand(x.uid,x.nm,x.days));
+ forecast.forEach(x=>addDemand(x.uid,x.nm,x.days));
+
+ const demandKeys=new Set([...Object.keys(demandBySize),...Object.keys(incomingBySize)]);
+ const forecastRows=[...demandKeys].map(k=>{
+  const [ms,sz]=k.split('_');
+  const stock=invMap[k]||0;
+  const inc=incomingBySize[k];
+  const incQty=inc?inc.qty:0;
+  const incDateTxt=inc&&inc.earliestDate?new Date(inc.earliestDate).getMonth()+1+'/'+new Date(inc.earliestDate).getDate()+' 도착예정':(incQty>0?'날짜미정':'');
+  const demand=demandBySize[k];
+  const demandCount=demand?demand.count:0;
+  const available=stock+incQty;
+  const balance=available-demandCount;
+  return {ms:+ms,sz,stock,incQty,incDateTxt,demandCount,demandNames:demand?demand.names:[],balance};
+ }).filter(r=>r.demandCount>0||r.incQty>0) // 수요나 입고예정 있는 것만 표시
+  .sort((a,b)=>a.balance-b.balance || a.ms-b.ms);
+
+ const forecastRowsHTML = !forecastRows.length ? '<div class="mini" style="color:var(--dim);padding:8px">사이즈를 선택한 예상 대상자가 아직 없어요. 위 "다가오는 마일스톤"에서 사이즈를 골라주세요.</div>' :
+  forecastRows.map(r=>{
+   const short=r.balance<0;
+   return `<div class="carecard" style="padding:8px;border-color:${short?'#e0563a':(r.balance===0?'#e0954f':'var(--line)')}">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+     <div style="font-weight:700;font-size:13px">${r.ms}회 · ${r.sz}</div>
+     <div style="font-size:13px;font-weight:800;color:${short?'#e0563a':'var(--grn)'}">${short?'⚠ '+(-r.balance)+'개 부족':'충분 (+'+r.balance+')'}</div>
+    </div>
+    <div class="smeta" style="margin-top:3px">현재고 ${r.stock}개 + 입고예정 ${r.incQty}개${r.incDateTxt?' ('+r.incDateTxt+')':''} = 가용 ${r.stock+r.incQty}개 · 예상수요 ${r.demandCount}명</div>
+    ${r.demandNames.length?`<div class="smeta" style="font-size:10px;color:var(--dim);margin-top:2px">${r.demandNames.join(', ')}</div>`:''}
+   </div>`;
+  }).join('');
+
+ const forecastDemandHTML = `<div class="listhead" style="margin-top:14px">📊 <b>재고 예측</b> <span class="smeta">(현재고+입고예정 vs 예상수요 · 위에서 사이즈 선택한 사람만 반영)</span></div>${forecastRowsHTML}`;
 
  // 입고예정 — 주문 건별 카드 방식
  const{data:orders_v2}=await sb.from('tshirt_orders_v2').select('*').eq('arrived',false).order('expected_date');
@@ -1102,7 +1173,7 @@ async function renderTshirt(){
  </div>
  <div id="incoming-cards">${orderCards||'<div class="mini" style="color:var(--dim);padding:6px">등록된 입고예정이 없어요.</div>'}</div>`;
 
- box.innerHTML = achievedHTML + backlogHTML + upcomingHTML + forecastHTML + invHTML + incomingHTML;
+ box.innerHTML = achievedHTML + backlogHTML + upcomingHTML + forecastHTML + invHTML + forecastDemandHTML + incomingHTML;
 
  // 도착 예정일 지난 주문 자동 재고 반영 체크
  autoArriveOverdue(orders_v2||[]);
@@ -1187,6 +1258,16 @@ async function deleteOrder(id){
 async function saveIncoming(){} // deprecated placeholder
 async function addIncomingRow(){} // deprecated placeholder
 async function arriveAggregate(){} // deprecated placeholder
+async function savePrediction(uid,milestone,size){
+ try{
+  if(!size){
+   await sb.from('tshirt_size_predictions').delete().eq('glofox_user_id',uid).eq('milestone',milestone);
+  }else{
+   await sb.from('tshirt_size_predictions').upsert({glofox_user_id:uid,milestone,predicted_size:size,updated_at:new Date().toISOString()});
+  }
+  renderTshirt();
+ }catch(e){console.error('savePrediction error:',e);}
+}
 async function saveTshirtMemo(uid,milestone,val){
  if(!val||!val.trim())return;
  const author=COACH||ACTIVE_STAFF||'미지정';
