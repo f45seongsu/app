@@ -994,10 +994,8 @@ async function renderTshirt(){
  // ── 4) 재고 & 입고예정 ──
  const{data:inv}=await sb.from('tshirt_inventory').select('milestone,size,qty').order('milestone');
  const invMap={}; (inv||[]).forEach(r=>{invMap[r.milestone+'_'+r.size]=r.qty;});
- const{data:incoming}=await sb.from('tshirt_incoming').select('id,milestone,size,qty,expected_date').eq('arrived',false).order('expected_date');
- const SIZES=['S','M','L','XL','2XL'];
- const incAgg={}; (incoming||[]).forEach(o=>{const k=o.milestone+'_'+o.size; incAgg[k]=(incAgg[k]||0)+o.qty;});
- const milestones=[...new Set([...(inv||[]).map(r=>r.milestone), ...achieved.map(a=>a.mile), ...backlog.map(b=>b.mile), ...upcoming.map(u=>u.nm), ...(incoming||[]).map(o=>o.milestone)])].sort((a,b)=>a-b);
+ const SIZES=['S','M','L','XL','2XL','3XL'];
+ const milestones=[...new Set([...(inv||[]).map(r=>r.milestone), ...achieved.map(a=>a.mile), ...backlog.map(b=>b.mile), ...upcoming.map(u=>u.nm)])].sort((a,b)=>a-b);
 
  const achOpen=window._tshirtOpen;
  const bkOpen=window._tshirtBacklogOpen!==false;
@@ -1080,58 +1078,120 @@ async function renderTshirt(){
     <button class="mini" onclick="addMilestoneRow()">+ 추가</button>
    </div>`);
 
- // 입고예정 — 재고표와 동일한 그리드 스타일
- // incAgg: {milestone_size: totalQty} (이미 위에서 계산됨)
- const incomingHTML = `<div class="listhead" style="margin-top:14px">📥 <b>입고 예정</b> <span class="smeta">(수량 입력 후 Enter · 도착하면 "도착" 버튼으로 재고 반영)</span></div>
-  <div class="carecard">
-   <div style="display:grid;grid-template-columns:44px repeat(${SIZES.length},1fr);gap:4px;align-items:center;font-size:11px">
-    <div></div>${SIZES.map(sz=>`<div style="text-align:center;color:var(--dim)">${sz}</div>`).join('')}
-    ${milestones.map(ms=>`<div style="color:var(--dim)">${ms}</div>${SIZES.map(sz=>{
-     const k=ms+'_'+sz; const q=incAgg[k]||0;
-     return `<div style="display:flex;flex-direction:column;gap:2px;align-items:center">
-      <input type="number" min="0" value="${q}" style="width:100%;background:#0e1a30;border:1px solid var(--line);color:var(--txt);border-radius:5px;padding:3px;text-align:center;font-size:11px" onchange="saveIncoming(${ms},'${sz}',this.value)" onkeydown="if(event.key==='Enter')this.blur()">
-      ${q>0?`<button class="mini" style="padding:1px 4px;font-size:9px;width:100%" onclick="arriveAggregate(${ms},'${sz}')">도착</button>`:''}
-     </div>`;}).join('')}`).join('')}
-   </div>
-   <div style="display:flex;gap:6px;margin-top:8px;align-items:center">
-    <input id="incMsNew" type="number" placeholder="새 마일스톤 번호 추가 (예:1500)" class="memoin" style="margin-top:0">
-    <button class="mini" onclick="addIncomingRow()">+ 추가</button>
-   </div>
+ // 입고예정 — 주문 건별 카드 방식
+ const{data:orders_v2}=await sb.from('tshirt_orders_v2').select('*').eq('arrived',false).order('expected_date');
+ const orderCards=(orders_v2||[]).map(o=>{
+  const SIZES2=['S','M','L','XL','2XL','3XL'];
+  const qtys=SIZES2.map(sz=>{const q=o['qty_'+sz.toLowerCase().replace('xl','xl').replace('2xl','2xl').replace('3xl','3xl')]||o['qty_'+({S:'s',M:'m',L:'l',XL:'xl','2XL':'2xl','3XL':'3xl'}[sz])]||0; return q>0?`<span style="color:var(--txt)">${sz}×${q}</span>`:null;}).filter(Boolean);
+  const d=o.expected_date?new Date(o.expected_date):null;
+  const dStr=d?`${d.getMonth()+1}/${d.getDate()}`:'날짜미정';
+  const isOverdue=d&&new Date(o.expected_date)<new Date();
+  return `<div class="carecard" style="border-color:${isOverdue?'#e0563a':'var(--line)'};padding:8px;margin-bottom:6px">
+   <div class="smeta" style="font-size:10px">${dStr} 입고예정 ${o.milestone}회 마일스톤 ${isOverdue?'<span style="color:#e0563a">⚠기한지남</span>':''}</div>
+   <div style="font-size:12px;margin:4px 0;display:flex;gap:6px;flex-wrap:wrap">${qtys.join(' ')}</div>
+   ${o.memo?`<div class="smeta" style="font-size:10px">${esc(o.memo)}</div>`:''}
+   <button class="mini" style="margin-top:4px;font-size:10px" onclick="arriveOrder(${o.id})">✅ 도착 처리</button>
+   <button class="mini" style="margin-top:4px;font-size:10px;opacity:.6" onclick="deleteOrder(${o.id})">삭제</button>
   </div>`;
+ }).join('');
+
+ const incomingHTML = `<div class="listhead" style="margin-top:14px">📥 <b>입고 예정</b>
+  <button class="mini" style="margin-left:8px" onclick="openNewOrder()">+ 새 주문 등록</button>
+ </div>
+ <div id="incoming-cards">${orderCards||'<div class="mini" style="color:var(--dim);padding:6px">등록된 입고예정이 없어요.</div>'}</div>`;
 
  box.innerHTML = achievedHTML + backlogHTML + upcomingHTML + forecastHTML + invHTML + incomingHTML;
+
+ // 도착 예정일 지난 주문 자동 재고 반영 체크
+ autoArriveOverdue(orders_v2||[]);
+
  }catch(e){
   box.innerHTML='<div class="center">오류가 발생했어요:<br>'+esc(e.message)+'<br><span class="mini" style="color:var(--dim)">'+esc((e.stack||'').slice(0,300))+'</span></div>';
   console.error('renderTshirt error:', e);
  }
 }
-async function saveIncoming(ms,size,val){
- const qty=parseInt(val,10);
- if(isNaN(qty)||qty<0)return;
- try{
-  // 해당 마일스톤+사이즈의 미도착 행 모두 삭제 후 새 값으로 upsert
-  await sb.from('tshirt_incoming').delete().eq('milestone',ms).eq('size',size).eq('arrived',false);
-  if(qty>0){
-   await sb.from('tshirt_incoming').insert({milestone:ms,size,qty,arrived:false});
-  }
-  // 재고표처럼 자동 재렌더 없이 셀만 업데이트 (빠르게)
-  // 도착버튼 표시/숨김만 갱신하려면 전체 재렌더 (데이터 작아서 빠름)
-  renderTshirt();
- }catch(e){console.error('saveIncoming error:',e);}
-}
-async function addIncomingRow(){
- const el=document.getElementById('incMsNew');
- const ms=parseInt(el?el.value:'',10);
- if(!ms||ms<=0){alert('마일스톤 번호를 입력하세요.');return;}
- // 해당 마일스톤이 이미 있는지 확인
- const{data}=await sb.from('tshirt_incoming').select('id').eq('milestone',ms).eq('arrived',false).limit(1).maybeSingle();
- if(!data){
-  // 빈 행 하나 넣어서 표에 보이게 (qty=0)
-  await sb.from('tshirt_incoming').insert({milestone:ms,size:'S',qty:0,arrived:false});
+async function autoArriveOverdue(orders){
+ const today_=new Date(); today_.setHours(0,0,0,0);
+ for(const o of orders){
+  if(!o.expected_date) continue;
+  const ed=new Date(o.expected_date); ed.setHours(0,0,0,0);
+  if(ed<=today_) await arriveOrder(o.id, true); // silent=true
  }
- renderTshirt();
 }
+function openNewOrder(){
+ const SIZES2=['S','M','L','XL','2XL','3XL'];
+ const tmr=new Date(); tmr.setDate(tmr.getDate()+7);
+ const defDate=tmr.toISOString().slice(0,10);
+ const grid=SIZES2.map(sz=>`
+  <div style="text-align:center;color:var(--dim);font-size:11px">${sz}</div>
+  <input id="no_qty_${sz.replace('XL','xl').replace('L','l').replace('M','m').replace('S','s').replace('2','2').replace('3','3')}" type="number" min="0" value="0" style="width:100%;background:#0e1a30;border:1px solid var(--line);color:var(--txt);border-radius:5px;padding:6px 4px;text-align:center;font-size:13px">`).join('');
+ const SIZES_IDS=['S→s','M→m','L→l','XL→xl','2XL→2xl','3XL→3xl'];
+ document.getElementById('sheet').innerHTML=`
+  <span class="close" onclick="close_()">×</span>
+  <div style="font-weight:800;font-size:15px;margin-bottom:12px">📦 새 입고 주문 등록</div>
+  <div class="wklab">마일스톤</div>
+  <input id="no_ms" type="number" placeholder="예: 100" class="memoin">
+  <div class="wklab" style="margin-top:10px">사이즈별 수량</div>
+  <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:6px;margin-bottom:8px">
+   ${SIZES2.map(sz=>`<div style="text-align:center">
+    <div style="color:var(--dim);font-size:10px;margin-bottom:3px">${sz}</div>
+    <input id="no_${sz}" type="number" min="0" value="0" style="width:100%;background:#0e1a30;border:1px solid var(--line);color:var(--txt);border-radius:6px;padding:6px 2px;text-align:center;font-size:14px">
+   </div>`).join('')}
+  </div>
+  <div class="wklab">입고 예정일</div>
+  <input id="no_date" type="date" class="memoin" value="${defDate}">
+  <div class="wklab" style="margin-top:8px">메모 (선택)</div>
+  <input id="no_memo" class="memoin" placeholder="예: OO업체 발주">
+  <button class="save" style="margin-top:14px" onclick="saveNewOrder()">등록</button>`;
+ document.getElementById('modal').style.display='flex';
+ if(!window._sheetOpen){history.pushState({sheet:1},'');window._sheetOpen=true;}
+}
+async function saveNewOrder(){
+ const ms=parseInt(document.getElementById('no_ms').value,10);
+ if(!ms||ms<=0){alert('마일스톤 번호를 입력하세요.');return;}
+ const SIZES2=['S','M','L','XL','2XL','3XL'];
+ const keyMap={S:'qty_s',M:'qty_m',L:'qty_l',XL:'qty_xl','2XL':'qty_2xl','3XL':'qty_3xl'};
+ const payload={milestone:ms};
+ SIZES2.forEach(sz=>{payload[keyMap[sz]]=parseInt(document.getElementById('no_'+sz).value||'0',10)||0;});
+ payload.expected_date=document.getElementById('no_date').value||null;
+ payload.memo=document.getElementById('no_memo').value.trim()||null;
+ const total=Object.values(payload).filter((v,i)=>i>0&&typeof v==='number').reduce((a,b)=>a+b,0);
+ if(total<=0){alert('수량을 하나 이상 입력하세요.');return;}
+ try{
+  const{error}=await sb.from('tshirt_orders_v2').insert(payload);
+  if(error){alert('등록 실패: '+error.message);return;}
+  close_(); renderTshirt();
+ }catch(e){alert('오류: '+e.message);}
+}
+async function arriveOrder(id,silent=false){
+ try{
+  const{data:o,error:e0}=await sb.from('tshirt_orders_v2').select('*').eq('id',id).maybeSingle();
+  if(e0||!o)return;
+  const keyMap={qty_s:'S',qty_m:'M',qty_l:'L',qty_xl:'XL',qty_2xl:'2XL',qty_3xl:'3XL'};
+  for(const [col,sz] of Object.entries(keyMap)){
+   const qty=o[col]||0; if(qty<=0)continue;
+   const{data:cur}=await sb.from('tshirt_inventory').select('qty').eq('milestone',o.milestone).eq('size',sz).maybeSingle();
+   const newQty=(cur?.qty??0)+qty;
+   await sb.from('tshirt_inventory').upsert({milestone:o.milestone,size:sz,qty:newQty});
+  }
+  await sb.from('tshirt_orders_v2').update({arrived:true,arrived_at:new Date().toISOString()}).eq('id',id);
+  if(!silent) renderTshirt();
+ }catch(e){if(!silent)console.error(e);}
+}
+async function deleteOrder(id){
+ try{
+  await sb.from('tshirt_orders_v2').delete().eq('id',id);
+  renderTshirt();
+ }catch(e){}
+}
+async function saveIncoming(){} // deprecated placeholder
+async function addIncomingRow(){} // deprecated placeholder
+async function arriveAggregate(){} // deprecated placeholder
 async function saveTshirtMemo(uid,milestone,val){
+ if(!val||!val.trim())return;
+ const author=COACH||ACTIVE_STAFF||'미지정';
+ try{ await sb.from('memo_log').insert({glofox_user_id:uid,coach_name:author,content:`[티셔츠 ${milestone}회] ${val}`}); }catch(e){}
+}(uid,milestone,val){
  if(!val||!val.trim())return;
  const author=COACH||ACTIVE_STAFF||'미지정';
  try{ await sb.from('memo_log').insert({glofox_user_id:uid,coach_name:author,content:`[티셔츠 ${milestone}회] ${val}`}); }catch(e){}
