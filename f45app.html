@@ -1583,10 +1583,26 @@ function handoffCard(h,isDone){
 function filterHandoffMembers(q){
  const res=document.getElementById('ho_member_results');
  if(!q||q.length<1){res.style.display='none';document.getElementById('ho_member_uid').value='';return;}
- const matches=Object.values(MEMBERS).filter(m=>m.name&&m.name.includes(q)&&m.glofox_user_id).slice(0,8);
+ const qDigits=q.replace(/\D/g,'');
+ const matches=Object.values(MEMBERS).filter(m=>{
+  if(!m.glofox_user_id)return false;
+  if(m.name&&m.name.includes(q))return true;
+  if(qDigits.length>=4){
+   const phDigits=(m.phone||'').replace(/\D/g,'');
+   if(phDigits.includes(qDigits))return true; // 뒷4자리 등 부분 검색 포함
+  }
+  return false;
+ }).slice(0,8);
  if(!matches.length){res.style.display='none';return;}
  res.style.display='block';
- res.innerHTML=matches.map(m=>`<div style="padding:7px 10px;cursor:pointer;font-size:13px;border-bottom:1px solid var(--line)" onclick="selectHandoffMember('${m.glofox_user_id}','${esc(m.name)}')">${esc(m.name)}</div>`).join('');
+ res.innerHTML=matches.map(m=>{
+  const ph=m.phone||'번호없음';
+  const birth=m.birth?m.birth.slice(0,10):'생일없음';
+  return '<div style="padding:7px 10px;cursor:pointer;font-size:13px;border-bottom:1px solid var(--line)" onclick="selectHandoffMember(\''+m.glofox_user_id+'\',\''+esc(m.name)+'\')">'
+   +'<div>'+esc(m.name)+'</div>'
+   +'<div style="font-size:10px;color:var(--dim);margin-top:1px">'+esc(ph)+' · '+esc(birth)+'</div>'
+   +'</div>';
+ }).join('');
 }
 function selectHandoffMember(uid,name){
  document.getElementById('ho_member_search').value=name;
