@@ -1080,16 +1080,24 @@ async function renderTshirt(){
     <button class="mini" onclick="addMilestoneRow()">+ 추가</button>
    </div>`);
 
- const incomingHTML = sizeTable('📥 <b>입고 예정</b>','(도착하면 눌러서 재고 반영)',
-  (ms,sz)=>{const k=ms+'_'+sz; const q=incAgg[k];
-   return q?`<button class="mini" style="width:100%;padding:3px;font-size:10px;line-height:1.2" onclick="arriveAggregate(${ms},'${sz}')">${q}개<br>도착</button>`:'<div style="text-align:center;color:var(--line)">-</div>';},
-  `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px">
-    <input id="incMs" type="number" placeholder="마일스톤" class="memoin" style="margin-top:0;flex:1;min-width:70px">
-    <select id="incSize" class="memoin" style="margin-top:0;flex:0 0 70px">${SIZES.map(sz=>`<option value="${sz}">${sz}</option>`).join('')}</select>
-    <input id="incQty" type="number" placeholder="수량" class="memoin" style="margin-top:0;flex:0 0 70px">
-    <input id="incDate" type="date" class="memoin" style="margin-top:0;flex:1;min-width:110px">
+ // 입고예정 — 재고표와 동일한 그리드 스타일
+ // incAgg: {milestone_size: totalQty} (이미 위에서 계산됨)
+ const incomingHTML = `<div class="listhead" style="margin-top:14px">📥 <b>입고 예정</b> <span class="smeta">(수량 입력 후 Enter · 도착하면 "도착" 버튼으로 재고 반영)</span></div>
+  <div class="carecard">
+   <div style="display:grid;grid-template-columns:44px repeat(${SIZES.length},1fr);gap:4px;align-items:center;font-size:11px">
+    <div></div>${SIZES.map(sz=>`<div style="text-align:center;color:var(--dim)">${sz}</div>`).join('')}
+    ${milestones.map(ms=>`<div style="color:var(--dim)">${ms}</div>${SIZES.map(sz=>{
+     const k=ms+'_'+sz; const q=incAgg[k]||0;
+     return `<div style="display:flex;flex-direction:column;gap:2px;align-items:center">
+      <input type="number" min="0" value="${q}" style="width:100%;background:#0e1a30;border:1px solid var(--line);color:var(--txt);border-radius:5px;padding:3px;text-align:center;font-size:11px" onchange="saveIncoming(${ms},'${sz}',this.value)" onkeydown="if(event.key==='Enter')this.blur()">
+      ${q>0?`<button class="mini" style="padding:1px 4px;font-size:9px;width:100%" onclick="arriveAggregate(${ms},'${sz}')">도착</button>`:''}
+     </div>`;}).join('')}`).join('')}
    </div>
-   <button class="mini" style="margin-top:6px" onclick="addIncoming()">입고 예정 등록</button>`);
+   <div style="display:flex;gap:6px;margin-top:8px;align-items:center">
+    <input id="incMsNew" type="number" placeholder="새 마일스톤 번호 추가 (예:1500)" class="memoin" style="margin-top:0">
+    <button class="mini" onclick="addIncomingRow()">+ 추가</button>
+   </div>
+  </div>`;
 
  box.innerHTML = achievedHTML + backlogHTML + upcomingHTML + forecastHTML + invHTML + incomingHTML;
  }catch(e){
@@ -1097,18 +1105,31 @@ async function renderTshirt(){
   console.error('renderTshirt error:', e);
  }
 }
-async function addIncoming(){
- const ms=parseInt(document.getElementById('incMs').value,10);
- const size=document.getElementById('incSize').value;
- const qty=parseInt(document.getElementById('incQty').value,10);
- const expected=document.getElementById('incDate').value||null;
- if(!ms||ms<=0){alert('마일스톤 번호를 입력하세요.');return;}
- if(!qty||qty<=0){alert('수량을 입력하세요.');return;}
+async function saveIncoming(ms,size,val){
+ const qty=parseInt(val,10);
+ if(isNaN(qty)||qty<0)return;
  try{
-  const{error}=await sb.from('tshirt_incoming').insert({milestone:ms,size,qty,expected_date:expected});
-  if(error){alert('등록 실패: '+error.message);return;}
+  // 해당 마일스톤+사이즈의 미도착 행 모두 삭제 후 새 값으로 upsert
+  await sb.from('tshirt_incoming').delete().eq('milestone',ms).eq('size',size).eq('arrived',false);
+  if(qty>0){
+   await sb.from('tshirt_incoming').insert({milestone:ms,size,qty,arrived:false});
+  }
+  // 재고표처럼 자동 재렌더 없이 셀만 업데이트 (빠르게)
+  // 도착버튼 표시/숨김만 갱신하려면 전체 재렌더 (데이터 작아서 빠름)
   renderTshirt();
- }catch(e){alert('오류: '+e.message);}
+ }catch(e){console.error('saveIncoming error:',e);}
+}
+async function addIncomingRow(){
+ const el=document.getElementById('incMsNew');
+ const ms=parseInt(el?el.value:'',10);
+ if(!ms||ms<=0){alert('마일스톤 번호를 입력하세요.');return;}
+ // 해당 마일스톤이 이미 있는지 확인
+ const{data}=await sb.from('tshirt_incoming').select('id').eq('milestone',ms).eq('arrived',false).limit(1).maybeSingle();
+ if(!data){
+  // 빈 행 하나 넣어서 표에 보이게 (qty=0)
+  await sb.from('tshirt_incoming').insert({milestone:ms,size:'S',qty:0,arrived:false});
+ }
+ renderTshirt();
 }
 async function saveTshirtMemo(uid,milestone,val){
  if(!val||!val.trim())return;
