@@ -1,0 +1,28 @@
+name: 구글 연락처 동기화 (하루 1회)
+
+on:
+  schedule:
+    - cron: '0 20 * * *'   # UTC 20:00 = 한국시간 새벽 5:00 (매일)
+  workflow_dispatch:        # 수동 실행 버튼
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: 라이브러리 설치
+        run: pip install supabase google-auth google-auth-oauthlib google-api-python-client
+
+      - name: 인증파일 복원
+        run: |
+          echo '${{ secrets.GOOGLE_CLIENT_SECRET_JSON }}' > client_secret.json
+          echo '${{ secrets.GOOGLE_TOKEN_JSON }}' > token.json
+
+      - name: 연락처 동기화 실행
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: python 구글연락처_동기화_v9.py
