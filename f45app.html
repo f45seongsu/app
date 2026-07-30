@@ -1775,7 +1775,7 @@ async function loadData(manual){
  const since=new Date(today+'T00:00:00');since.setDate(since.getDate()-35);
  let all=[],from=0;
  while(true){
-  const {data,error:e2}=await sb.from('attendance').select('glofox_user_id,event_id,class_name,class_time,attended,status')
+  const {data,error:e2}=await sb.from('attendance').select('glofox_user_id,event_id,class_name,class_time,attended,status,booking_id')
     .gte('class_time',since.toISOString()).order('class_time',{ascending:true}).range(from,from+999);
   if(e2){fail(e2);if(btn){btn.disabled=false;btn.textContent='↻';}return;}
   all=all.concat(data); if(data.length<1000)break; from+=1000;
@@ -1795,13 +1795,13 @@ function buildSessions(rows){
   if(!r.event_id||ds.length<10)return;
   const e=ev[r.event_id]||(ev[r.event_id]={date:ds,time:tm,name:r.class_name||'수업',event_id:r.event_id,att:{}});
   const prev=e.att[r.glofox_user_id]||{};
-  e.att[r.glofox_user_id]={attended:(r.attended||prev.attended||false),status:r.status||prev.status||''};
+  e.att[r.glofox_user_id]={attended:(r.attended||prev.attended||false),status:r.status||prev.status||'',booking_id:r.booking_id||prev.booking_id||null};
   if(r.attended){const m=MEMBERS[r.glofox_user_id];if(m){(m._days=m._days||[]);if(!m._days.includes(ds))m._days.push(ds);(m._att=m._att||[]);m._att.push(ds+' '+tm);}}
  });
  const bySlot={};
  Object.values(ev).forEach(e=>{const cnt=Object.keys(e.att).length;const key=e.date+'|'+e.time+'|'+e.name;if(!bySlot[key]||cnt>bySlot[key]._cnt){e._cnt=cnt;bySlot[key]=e;}});
  SESSIONS={};
- Object.values(bySlot).forEach(e=>{(SESSIONS[e.date]=SESSIONS[e.date]||[]).push({time:e.time,name:e.name,event_id:e.event_id,att:Object.entries(e.att).map(([uid,a])=>({uid,attended:a.attended,status:a.status}))})});
+ Object.values(bySlot).forEach(e=>{(SESSIONS[e.date]=SESSIONS[e.date]||[]).push({time:e.time,name:e.name,event_id:e.event_id,att:Object.entries(e.att).map(([uid,a])=>({uid,attended:a.attended,status:a.status,booking_id:a.booking_id}))})});
  Object.keys(SESSIONS).forEach(d=>SESSIONS[d].sort((a,b)=>a.time<b.time?-1:1));
  DATES=Object.keys(SESSIONS).sort();
  if(!sel || !DATES.includes(sel)){
@@ -1916,7 +1916,7 @@ function renderDay(doScroll){const evs=(SESSIONS[sel]||[]).slice().sort((a,b)=>(
    const click=on?`pick('${a.uid}')`:`open_('${a.uid}')`;
    const drop=on?'':`ondragover="dOverChip(event)" ondragleave="dLeaveChip(event)" ondrop="dropChip(event,'${a.uid}')"`;
    const ig=(m.instagram||'').replace('@','').trim();
-   h+=`<div class="chip s-${a._st} ${pk?'picked':''}" onclick="${click}" ${drop}>${avatar(m,a._st)}<span class="nmwrap"><span class="nm">${esc(m.name)}</span>${(()=>{const igShort=ig.length>8?ig.slice(0,8)+'..':ig;const igt=ig?`@${esc(igShort)}`:'';return igt?`<span class="submini">${igt}</span>`:'';})()}</span>${m.injury_note?'<span class="inj">⚠</span>':''}${isBdayToday(m)?'<span title="오늘 생일">🎂</span>':''}<span class="ck">✓</span></div>`;});
+   h+=`<div class="chip s-${a._st} ${pk?'picked':''}" onclick="${click}" ${drop}>${avatar(m,a._st)}<span class="nmwrap"><span class="nm">${esc(m.name)}</span>${(()=>{const igShort=ig.length>8?ig.slice(0,8)+'..':ig;const igt=ig?`@${esc(igShort)}`:'';return igt?`<span class="submini">${igt}</span>`:'';})()}</span>${m.injury_note?'<span class="inj">⚠</span>':''}${isBdayToday(m)?'<span title="오늘 생일">🎂</span>':''}${a.booking_id?`<span title="예약 취소" style="margin-left:3px;color:#e0563a;font-size:10px" onclick="event.stopPropagation();cancelBooking('${a.uid}','${ev.event_id}','${a.booking_id}',this)">✕</span>`:''}<span class="ck">✓</span></div>`;});
   h+='</div>';
   if(on){h+=`<div class="selbar"><span class="selcnt">${PICK.size}명 선택</span><button onclick="pickAll(${i})">전체</button><button onclick="pickNone()">해제</button><button class="pri" onclick="copyInsta()">@ 인스타복사</button><button class="pri" onclick="copyPhones()">번호복사</button><button onclick="smsOpen()">문자앱</button></div>`;}
   h+='</div>';});
@@ -2155,11 +2155,37 @@ async function confirmBooking(uid,eventId,btn){
    if(btn){btn.disabled=false;btn.textContent='이 수업으로 예약';}
    return;
   }
-  alert('✅ 예약 완료됐어요! 잠시 후 출결 화면에도 반영돼요.');
+  const bookingId=(data.booking&&(data.booking._id||data.booking.id))||null;
+  if(bookingId){
+   try{ await sb.from('attendance').update({booking_id:bookingId}).eq('glofox_user_id',uid).eq('event_id',eventId); }catch(e){}
+  }
+  let msg='✅ 예약 완료됐어요! 잠시 후 출결 화면에도 반영돼요.';
+  if(data.credits){
+   msg+='\n\n💳 현재 잔여 크레딧: '+data.credits.total_available+'회';
+  }
+  alert(msg);
   close_();
  }catch(e){
   alert('오류: '+e.message);
   if(btn){btn.disabled=false;btn.textContent='이 수업으로 예약';}
+ }
+}
+async function cancelBooking(uid,eventId,bookingId,btn){
+ if(!bookingId){alert('이 예약은 취소 정보가 없어요 (우리 앱으로 예약한 게 아니거나, 아직 동기화 전이에요).');return;}
+ if(!confirm('정말 이 예약을 취소할까요?'))return;
+ if(btn){btn.disabled=true;btn.textContent='취소중...';}
+ try{
+  const{data,error}=await sb.functions.invoke('glofox-cancel-booking',{body:{user_id:uid,booking_id:bookingId}});
+  if(error||!data||data.error){
+   alert('취소 실패: '+((data&&data.error)||error?.message||'알 수 없는 오류'));
+   if(btn){btn.disabled=false;btn.textContent='취소';}
+   return;
+  }
+  alert('✅ 예약이 취소됐어요. 잠시 후 화면에 반영돼요.');
+  loadData(true);
+ }catch(e){
+  alert('오류: '+e.message);
+  if(btn){btn.disabled=false;btn.textContent='취소';}
  }
 }
 async function save(uid){
