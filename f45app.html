@@ -1793,7 +1793,7 @@ function buildSessions(rows){
  rows.forEach(r=>{
   const ct=String(r.class_time||''); const ds=ct.slice(0,10); const tm=ct.slice(11,16);
   if(!r.event_id||ds.length<10)return;
-  const e=ev[r.event_id]||(ev[r.event_id]={date:ds,time:tm,name:r.class_name||'수업',att:{}});
+  const e=ev[r.event_id]||(ev[r.event_id]={date:ds,time:tm,name:r.class_name||'수업',event_id:r.event_id,att:{}});
   const prev=e.att[r.glofox_user_id]||{};
   e.att[r.glofox_user_id]={attended:(r.attended||prev.attended||false),status:r.status||prev.status||''};
   if(r.attended){const m=MEMBERS[r.glofox_user_id];if(m){(m._days=m._days||[]);if(!m._days.includes(ds))m._days.push(ds);(m._att=m._att||[]);m._att.push(ds+' '+tm);}}
@@ -1801,7 +1801,7 @@ function buildSessions(rows){
  const bySlot={};
  Object.values(ev).forEach(e=>{const cnt=Object.keys(e.att).length;const key=e.date+'|'+e.time+'|'+e.name;if(!bySlot[key]||cnt>bySlot[key]._cnt){e._cnt=cnt;bySlot[key]=e;}});
  SESSIONS={};
- Object.values(bySlot).forEach(e=>{(SESSIONS[e.date]=SESSIONS[e.date]||[]).push({time:e.time,name:e.name,att:Object.entries(e.att).map(([uid,a])=>({uid,attended:a.attended,status:a.status}))})});
+ Object.values(bySlot).forEach(e=>{(SESSIONS[e.date]=SESSIONS[e.date]||[]).push({time:e.time,name:e.name,event_id:e.event_id,att:Object.entries(e.att).map(([uid,a])=>({uid,attended:a.attended,status:a.status}))})});
  Object.keys(SESSIONS).forEach(d=>SESSIONS[d].sort((a,b)=>a.time<b.time?-1:1));
  DATES=Object.keys(SESSIONS).sort();
  if(!sel || !DATES.includes(sel)){
@@ -1910,7 +1910,7 @@ function renderDay(doScroll){const evs=(SESSIONS[sel]||[]).slice().sort((a,b)=>(
   const cancel=ev.att.filter(a=>a._st==='cancel').length;
   const cntTxt=`${ev.att.length}명 · ${present} 출석`+(noshow?` · <span style="color:#e0563a">${noshow} 노쇼</span>`:'')+(cancel?` · <span style="color:#e0954f">${cancel} 취소</span>`:'');
   const on=selEv===i;
-  h+=`<div class="ev" id="ev_${i}"><div class="evh"><span class="time">${ev.time}</span><span class="enm">${esc(ev.name)}</span><span class="cnt">${cntTxt}</span><button class="selbtn ${on?'on':''}" onclick="toggleSel(${i})">${on?'완료':'선택'}</button></div><div class="grid">`;
+  h+=`<div class="ev" id="ev_${i}"><div class="evh"><span class="time">${ev.time}</span><span class="enm">${esc(ev.name)}</span><span class="cnt">${cntTxt}</span><button class="selbtn" style="background:#2a5a3a" onclick="openBookingForEvent('${ev.event_id}','${sel}','${ev.time}',this)">+예약</button><button class="selbtn ${on?'on':''}" onclick="toggleSel(${i})">${on?'완료':'선택'}</button></div><div class="grid">`;
   ev.att.forEach(a=>{if(a._dropin){h+=`<div class="chip s-${a._st}" style="cursor:default"><span class="ini" style="background:#4a5980">D</span><span class="nmwrap"><span class="nm">Drop in${a._dropin>1?` (${a._dropin}명)`:''}</span></span></div>`;return;}const m=MEMBERS[a.uid]||{name:'(미등록)'};const bd=badgeOf(m);
    const pk=on&&PICK.has(a.uid);
    const click=on?`pick('${a.uid}')`:`open_('${a.uid}')`;
@@ -2058,6 +2058,7 @@ async function open_(uid){
   <button class="mini" style="white-space:nowrap" onclick="addHandoffForMember('${uid}')">🔔 인수인계 등록</button>
  </div>
  <div class="wklab" style="margin-top:8px">인스타 ID</div><input id="f_insta" value="${esc(m.instagram)}">
+ <button class="mini" style="margin-top:10px" onclick="openBookingPicker('${uid}')">📅 예약하기</button>
  <button class="save" onclick="save('${uid}')">저장</button>
  <div class="hint">저장하면 모든 코치에게 공유돼요.</div>`;
  document.getElementById('modal').style.display='flex'; if(!window._sheetOpen){history.pushState({sheet:1},'');window._sheetOpen=true;};
@@ -2072,6 +2073,94 @@ async function addComment(uid){
   if(error){alert('저장 실패: '+error.message);return;}
   el.value=''; open_(uid);
  }catch(e){alert('오류: '+e.message);}
+}
+function openBookingForEvent(eventId,date,time,btn){
+ document.getElementById('sheet').innerHTML=
+  '<span class="close" onclick="close_()">×</span>'
+  +'<div style="font-weight:800;font-size:15px;margin-bottom:10px">📅 '+date+' '+time+' 수업에 예약</div>'
+  +'<div class="wklab">회원 검색</div>'
+  +'<input id="evbk_search" class="memoin" placeholder="🔍 이름 또는 전화번호" oninput="filterEvBookMembers(this.value,\''+eventId+'\')" autocomplete="off">'
+  +'<div id="evbk_results" style="margin-top:6px"></div>';
+ document.getElementById('modal').style.display='flex';
+ if(!window._sheetOpen){history.pushState({sheet:1},'');window._sheetOpen=true;}
+}
+function filterEvBookMembers(q,eventId){
+ const res=document.getElementById('evbk_results');
+ if(!q||q.length<1){res.innerHTML='';return;}
+ const qDigits=q.replace(/\D/g,'');
+ const matches=Object.values(MEMBERS).filter(function(m){
+  if(!m.glofox_user_id)return false;
+  if(m.name&&m.name.includes(q))return true;
+  if(qDigits.length>=4){
+   const phDigits=(m.phone||'').replace(/\D/g,'');
+   if(phDigits.includes(qDigits))return true;
+  }
+  return false;
+ }).slice(0,8);
+ if(!matches.length){res.innerHTML='<div class="mini" style="color:var(--dim)">검색 결과 없음</div>';return;}
+ res.innerHTML=matches.map(function(m){
+  const ph=m.phone||'번호없음';
+  return '<div class="carecard" style="padding:8px;margin-bottom:5px;cursor:pointer" onclick="confirmBooking(\''+m.glofox_user_id+'\',\''+eventId+'\',this)">'
+   +'<b>'+esc(m.name)+'</b> <span class="smeta">'+esc(ph)+'</span>'
+   +'</div>';
+ }).join('');
+}
+function openBookingPicker(uid){
+ const m=MEMBERS[uid]||{};
+ const tmr=new Date(); tmr.setDate(tmr.getDate()+1);
+ const defDate=tmr.toISOString().slice(0,10);
+ document.getElementById('sheet').innerHTML=
+  '<span class="close" onclick="close_()">×</span>'
+  +'<div style="font-weight:800;font-size:15px;margin-bottom:10px">📅 '+esc(m.name||'회원')+'님 예약하기</div>'
+  +'<div class="wklab">날짜 선택</div>'
+  +'<input id="bk_date" type="date" class="memoin" value="'+defDate+'" onchange="loadBookingSlots(\''+uid+'\')">'
+  +'<div id="bk_slots" style="margin-top:10px"></div>';
+ document.getElementById('modal').style.display='flex';
+ if(!window._sheetOpen){history.pushState({sheet:1},'');window._sheetOpen=true;}
+ loadBookingSlots(uid);
+}
+async function loadBookingSlots(uid){
+ const date=document.getElementById('bk_date').value;
+ const box=document.getElementById('bk_slots');
+ box.innerHTML='<div class="mini" style="color:var(--dim)">수업 목록 불러오는 중…</div>';
+ try{
+  const{data,error}=await sb.functions.invoke('glofox-events',{body:{date}});
+  if(error||!data||data.error){
+   box.innerHTML='<div class="mini" style="color:#e0563a">불러오기 실패: '+esc((data&&data.error)||error?.message||'알 수 없는 오류')+'</div>';
+   return;
+  }
+  const events=data.events||[];
+  if(!events.length){box.innerHTML='<div class="mini" style="color:var(--dim)">이 날짜에 수업이 없어요.</div>';return;}
+  box.innerHTML=events.map(function(ev){
+   const full=ev.booked>=ev.size;
+   return '<div class="carecard" style="padding:8px;margin-bottom:6px;'+(full?'opacity:.5':'')+'">'
+    +'<div style="display:flex;justify-content:space-between;align-items:center">'
+    +'<div><b>'+ev.time_start_kst+'</b> · '+esc(ev.name)+'</div>'
+    +'<div class="smeta">'+ev.booked+'/'+ev.size+'</div>'
+    +'</div>'
+    +(full?'<div class="mini" style="color:#e0563a;margin-top:4px">마감됨</div>'
+          :'<button class="mini" style="margin-top:4px" onclick="confirmBooking(\''+uid+'\',\''+ev.id+'\',this)">이 수업으로 예약</button>')
+    +'</div>';
+  }).join('');
+ }catch(e){
+  box.innerHTML='<div class="mini" style="color:#e0563a">오류: '+esc(e.message)+'</div>';
+ }
+}
+async function confirmBooking(uid,eventId,btn){
+ if(btn){btn.disabled=true;btn.textContent='예약 처리중...';}
+ try{
+  const{data,error}=await sb.functions.invoke('glofox-booking',{body:{user_id:uid,event_id:eventId}});
+  if(error||!data||data.error){
+   alert('예약 실패: '+((data&&data.error)||error?.message||'알 수 없는 오류'));
+   if(btn){btn.disabled=false;btn.textContent='이 수업으로 예약';}
+   return;
+  }
+  alert('✅ 예약 완료됐어요! 잠시 후 출결 화면에도 반영돼요.');
+  close_();
+ }catch(e){
+  alert('오류: '+e.message);
+  if(btn){btn.disabled=false;btn.textContent='이 수업으로 예약';}
+ }
 }
 async function save(uid){
  const patch={injury_note:document.getElementById('f_injury').value,instagram:document.getElementById('f_insta').value};
