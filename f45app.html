@@ -2100,8 +2100,15 @@ function filterEvBookMembers(q,eventId){
  if(!matches.length){res.innerHTML='<div class="mini" style="color:var(--dim)">검색 결과 없음</div>';return;}
  res.innerHTML=matches.map(function(m){
   const ph=m.phone||'번호없음';
-  return '<div class="carecard" style="padding:8px;margin-bottom:5px;cursor:pointer" onclick="confirmBooking(\''+m.glofox_user_id+'\',\''+eventId+'\',this)">'
-   +'<b>'+esc(m.name)+'</b> <span class="smeta">'+esc(ph)+'</span>'
+  const memDetail=m.pass_remaining!=null
+   ? '횟수권 잔여'+m.pass_remaining+'회'
+   : (m.membership||'회원권정보없음');
+  return '<div class="carecard" style="padding:6px 8px;margin-bottom:5px;cursor:pointer;display:flex;align-items:center;gap:8px" onclick="confirmBooking(\''+m.glofox_user_id+'\',\''+eventId+'\',this)">'
+   +avatar(m,'bk')
+   +'<span style="flex:1;min-width:0">'
+   +'<div><b>'+esc(m.name)+'</b> <span class="smeta">'+esc(ph)+'</span></div>'
+   +'<div class="smeta" style="font-size:10px;color:var(--dim)">'+esc(memDetail)+'</div>'
+   +'</span>'
    +'</div>';
  }).join('');
 }
@@ -2157,7 +2164,16 @@ async function confirmBooking(uid,eventId,btn){
   }
   const bookingId=(data.booking&&(data.booking._id||data.booking.id))||null;
   if(bookingId){
-   try{ await sb.from('attendance').update({booking_id:bookingId}).eq('glofox_user_id',uid).eq('event_id',eventId); }catch(e){}
+   // 웹훅이 이 예약을 우리 DB에 반영할 때까지 잠깐 기다렸다가 booking_id 저장 (몇 번 재시도)
+   (async()=>{
+    for(let i=0;i<6;i++){
+     await new Promise(r=>setTimeout(r,1500));
+     try{
+      const{data:updated}=await sb.from('attendance').update({booking_id:bookingId}).eq('glofox_user_id',uid).eq('event_id',eventId).select();
+      if(updated&&updated.length){break;}
+     }catch(e){}
+    }
+   })();
   }
   let msg='✅ 예약 완료됐어요! 잠시 후 출결 화면에도 반영돼요.';
   if(data.credits){
