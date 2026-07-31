@@ -404,8 +404,31 @@ async function aiMsg(uid,type,btn){
   if(error||!data?.text){alert('AI 문구 생성 실패: '+(error?.message||'응답을 받지 못했어요'));return;}
   window._lastAiText=data.text; window._lastAiUid=uid;
   navigator.clipboard.writeText(data.text);
-  alert('문구가 복사됐어요! ✅\n\n'+data.text+'\n\n─────────\n옆의 "문자보내기" 버튼을 누르면 이 문구로 바로 문자 앱이 열려요.');
+  showAiResultBox(uid,type,data.text,btn);
  }catch(e){if(btn){btn.disabled=false;btn.textContent='🤖AI문구';} alert('오류: '+e.message);}
+}
+function showAiResultBox(uid,type,text,btn){
+ const boxId='ai_result_'+type+'_'+uid;
+ let box=document.getElementById(boxId);
+ if(!box){
+  box=document.createElement('div');
+  box.id=boxId;
+  box.style.cssText='margin-top:6px;background:#0e1a30;border:1px solid var(--line);border-radius:8px;padding:6px';
+  if(btn&&btn.parentElement) btn.parentElement.insertAdjacentElement('afterend', box);
+ }
+ box.innerHTML=
+  '<textarea id="'+boxId+'_ta" style="width:100%;min-height:60px;background:transparent;border:none;color:var(--txt);font-size:12px;resize:vertical;font-family:inherit" onclick="event.stopPropagation()">'+esc(text)+'</textarea>'
+  +'<div style="display:flex;align-items:center;gap:6px;margin-top:4px">'
+  +'<span class="mini" style="color:var(--dim);flex:1;font-size:10px;background:none;border:none;padding:0">✅ 클립보드에 복사됨 · 수정 후 다시 복사 가능</span>'
+  +'<button class="mini" onclick="event.stopPropagation();copyAiResultBox(\''+boxId+'\',this)">복사</button>'
+  +'<button class="mini" style="opacity:.6" onclick="event.stopPropagation();document.getElementById(\''+boxId+'\').remove()">닫기</button>'
+  +'</div>';
+}
+function copyAiResultBox(boxId,btn){
+ const ta=document.getElementById(boxId+'_ta');
+ if(!ta)return;
+ navigator.clipboard.writeText(ta.value);
+ if(btn){const old=btn.textContent;btn.textContent='복사됨!';setTimeout(()=>{btn.textContent=old;},1200);}
 }
 function sendSms(uid){
  const m=MEMBERS[uid]||{};
