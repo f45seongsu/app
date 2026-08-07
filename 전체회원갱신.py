@@ -7,27 +7,28 @@ Supabase people 의 '글로폭스 정보'만 최신화한다.
   video_url·부상 injury_note 등)은 건드리지 않는다(업서트에 미포함).
 
 [2026.08 수정 1차] 멤버십 오브젝트 없이 크레딧(횟수권)만 "Manually added"로
-독립 구매한 회원의 경우, 기존 로직은 memname이 비어있어서(is_pass가 False)
-credits() 조회 자체를 건너뛰어 pass_remaining/pass_total이 영구히 비어있는
-버그가 있었음 (예: 박상준님).
+독립 구매한 회원은 memname이 비어있어서 credits() 조회 자체를 건너뛰던 버그
+수정함 (예: 박상준님).
 
-[2026.08 수정 2차] 1차 수정만으로는 두 가지 문제가 더 있었음:
-  (a) 성능 문제: memname이 빈 사람 = 대부분 "방문 이력 없는 순수 리드"인데
-      이 사람들까지 전부 credits() API를 추가 호출하게 되면서 글로폭스
-      초당 10건 제한에 걸려 실행시간이 10분+ 로 폭증함.
-      → lead_status가 LEAD/WARM(순수 리드)인 사람은 애초에 크레딧을 살
-        가능성이 극히 낮으므로 이 케이스는 제외하고, 그 외의 경우만
-        (예: TRIAL 상태인데 실제로는 크레딧 구매한 이원용님 케이스) 조회함.
-  (b) stage(회원단계) 문제: 크레딧을 채워넣어도 stage 값 자체는 그대로라
-      "트라이얼 끝난 지 오래됐는데 계속 트라이얼로 표시" 되는 문제가 있었음
-      (이원용님: 실제로는 유효한 횟수권 보유 중인데 stage='트라이얼'로 표시됨).
-      → 유효한(만료 안 된) 크레딧이 발견되면 stage를 "회원"으로 강제 보정함.
+[2026.08 수정 2차] 1차 수정이 만든 두 가지 부작용 수정:
+  (a) stage 보정: 유효한 크레딧이 발견되면 stage를 "회원"으로 보정
+      (예: 이원용님 - 멤버십 객체 없어서 계속 '트라이얼'로 잘못 표시되던 문제)
+  (b) 순수 리드(LEAD/WARM) 제외로 조회 대상 줄임
+
+[2026.08 수정 3차] 2차 수정 이후에도 여전히 15분 이상 걸리는 문제 발견.
+원인: "리드가 아닌 사람 중 멤버십 정보가 빈 사람"이 예상보다 훨씬 많음
+(과거 만료된 회원들도 lead_status가 비어있는 경우가 많아서, 결국 대상이
+수천 명 규모로 남아있었음). 조건을 더 좁히는 대신, 조회 방식 자체를
+"한 명씩 순차 조회"에서 "동시에 5명씩 병렬 조회"로 바꿈 (글로폭스 초당
+10건 제한을 넘지 않는 선에서 병렬처리). 이러면 대상 인원은 그대로 두고도
+실행시간이 대략 5분의 1로 줄어듦.
 
 환경변수: GLOFOX_API_KEY, GLOFOX_API_TOKEN, SUPABASE_URL, SUPABASE_KEY, (선택)ANTHROPIC_API_KEY
 같은 폴더: name_cache.json
 """
 import os, re, json, time, urllib.request
 from datetime import datetime, timezone, timedelta
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from supabase import create_client
 
 BRANCH_ID = "696094f2184b8f3da50206f9"
@@ -42,6 +43,9 @@ H = {
 sb = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_KEY"])
 NC = json.load(open("name_cache.json", encoding="utf-8")) if os.path.exists("name_cache.json") else {}
 SUR = set("김이박최정강조윤장임한오서신권황안송전홍유고문양손배백허남심노하곽성차주우구민류진지엄채원천방공현함변염여추도소석선설마길연위표명기반왕금옥육인맹제탁국어은편용봉빈사")
+
+# 글로폭스 초당 10건 제한 안에서 안전하게 — 동시 5개 정도가 적당함
+CREDIT_WORKERS = 5
 
 
 def api(url, tries=4):
@@ -181,25 +185,41 @@ def credits(uid):
     }
 
 
-def apply_credit_fallback(row, u, memname, uid):
-    """멤버십명이 '횟수권'류면 항상 조회하고, 멤버십 자체가 없는 경우엔
-    '순수 리드(LEAD/WARM)'만 아니면(=혹시 크레딧이 있을 가능성이 있으면) 조회한다.
-    조회해서 실제 유효 크레딧이 있으면 membership/stage까지 정확히 보정한다."""
+def needs_credit_check(u, memname):
     ls = (u.get("lead_status") or "").upper()
-    should_check = is_pass(memname) or (not memname and ls not in ("LEAD", "WARM"))
-    if not should_check:
-        return False
-    c = credits(uid)
-    if c["pass_total"] <= 0:
-        return False
-    row.update(c)
-    if not memname:
-        row["membership"] = "횟수권"
-    # 유효한(만료 안 지난) 크레딧이 있으면, 실제로는 활성회원인데 멤버십 객체가
-    # 없어서 리드/트라이얼로 잘못 분류됐던 stage를 "회원"으로 바로잡음
-    if not c["pass_expiry"] or c["pass_expiry"] >= today:
-        row["stage"] = "회원"
-    return True
+    return is_pass(memname) or (not memname and ls not in ("LEAD", "WARM"))
+
+
+def run_credit_fallback(rows, uid_key="glofox_user_id"):
+    """rows 중 크레딧 조회가 필요한 것들만 골라서, 동시에 여러 명씩 병렬로
+    조회하고, 유효 크레딧이 있으면 membership/stage를 정확히 보정한다."""
+    candidates = [(i, row) for i, row in enumerate(rows) if row.get("_needs_credit")]
+    if not candidates:
+        return 0
+    print(f"  크레딧 조회 대상 {len(candidates)}명, 동시 {CREDIT_WORKERS}개씩 병렬 조회 시작...")
+    passcnt = 0
+    with ThreadPoolExecutor(max_workers=CREDIT_WORKERS) as ex:
+        futs = {ex.submit(credits, row[uid_key]): i for i, row in candidates}
+        done = 0
+        for fut in as_completed(futs):
+            i = futs[fut]
+            try:
+                c = fut.result()
+            except Exception:
+                continue
+            done += 1
+            if done % 200 == 0:
+                print(f"    진행 {done}/{len(candidates)}...")
+            if c["pass_total"] <= 0:
+                continue
+            row = rows[i]
+            row.update(c)
+            if not row.get("membership"):
+                row["membership"] = "횟수권"
+            if not c["pass_expiry"] or c["pass_expiry"] >= today:
+                row["stage"] = "회원"
+            passcnt += 1
+    return passcnt
 
 
 # ── 전체 회원 수집 ──
@@ -228,7 +248,6 @@ for u in users:
     persons[uid] = {"glofox_user_id": uid, "u": u, "email": em, "phone": phone(u.get("phone"))}
 
 rows = []
-passcnt = 0
 for pid, p in persons.items():
     u = p["u"]
     mem = u.get("membership") or {}
@@ -256,11 +275,14 @@ for pid, p in persons.items():
         "birth": str(u.get("birth") or ""),
         "gender": str(u.get("gender") or ""),
         "glofox_photo": u.get("image_url") or "",
+        "_needs_credit": needs_credit_check(u, memname),
     }
-    if apply_credit_fallback(row, u, memname, p["glofox_user_id"]):
-        passcnt += 1
     rows.append(row)
-print(f"정제 {len(rows)}명 · 횟수권 조회 {passcnt}명")
+
+passcnt = run_credit_fallback(rows)
+for row in rows:
+    row.pop("_needs_credit", None)
+print(f"정제 {len(rows)}명 · 횟수권 반영 {passcnt}명")
 
 try:
     ov = {}
@@ -338,9 +360,13 @@ for uid in missing:
         "birth": str(u.get("birth") or ""),
         "gender": str(u.get("gender") or ""),
         "glofox_photo": u.get("image_url") or "",
+        "_needs_credit": needs_credit_check(u, memname),
     }
-    apply_credit_fallback(row, u, memname, uid)
     stub.append(row)
+
+run_credit_fallback(stub)
+for row in stub:
+    row.pop("_needs_credit", None)
 
 if stub:
     for i in range(0, len(stub), 200):
