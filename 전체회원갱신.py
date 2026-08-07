@@ -6,6 +6,12 @@ Supabase people 의 '글로폭스 정보'만 최신화한다.
 ★ 사용자 입력(사진 photo_url·인스타 instagram·메모 care_memo/trial_memo·영상
   video_url·부상 injury_note 등)은 건드리지 않는다(업서트에 미포함).
 
+[2026.08 수정] 멤버십 오브젝트 없이 크레딧(횟수권)만 독립적으로 구매한 회원의
+경우, 기존 로직은 memname이 비어있어서(is_pass가 False) credits() 조회 자체를
+건너뛰어 pass_remaining/pass_total이 영구히 비어있는 버그가 있었음(예: 박상준님).
+→ memname이 비어있는 경우에도 일단 credits()를 조회해보고, 실제 크레딧이
+  있으면(pass_total>0) 채워넣도록 수정함. (본문 갱신부 + 미등록 보충부 둘 다 수정)
+
 환경변수: GLOFOX_API_KEY, GLOFOX_API_TOKEN, SUPABASE_URL, SUPABASE_KEY, (선택)ANTHROPIC_API_KEY
 같은 폴더: name_cache.json
 """
@@ -13,144 +19,243 @@ import os, re, json, time, urllib.request
 from datetime import datetime, timezone, timedelta
 from supabase import create_client
 
-BRANCH_ID="696094f2184b8f3da50206f9"; BASE="https://gf-api.aws.glofox.com/prod"
-KST=timezone(timedelta(hours=9))
-H={"x-glofox-branch-id":BRANCH_ID,"x-api-key":os.environ["GLOFOX_API_KEY"],
-   "x-glofox-api-token":os.environ["GLOFOX_API_TOKEN"],"Accept":"application/json"}
-sb=create_client(os.environ["SUPABASE_URL"],os.environ["SUPABASE_KEY"])
-NC=json.load(open("name_cache.json",encoding="utf-8")) if os.path.exists("name_cache.json") else {}
-SUR=set("김이박최정강조윤장임한오서신권황안송전홍유고문양손배백허남심노하곽성차주우구민류진지엄채원천방공현함변염여추도소석선설마길연위표명기반왕금옥육인맹제탁국어은편용봉빈사")
+BRANCH_ID = "696094f2184b8f3da50206f9"
+BASE = "https://gf-api.aws.glofox.com/prod"
+KST = timezone(timedelta(hours=9))
+H = {
+    "x-glofox-branch-id": BRANCH_ID,
+    "x-api-key": os.environ["GLOFOX_API_KEY"],
+    "x-glofox-api-token": os.environ["GLOFOX_API_TOKEN"],
+    "Accept": "application/json",
+}
+sb = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_KEY"])
+NC = json.load(open("name_cache.json", encoding="utf-8")) if os.path.exists("name_cache.json") else {}
+SUR = set("김이박최정강조윤장임한오서신권황안송전홍유고문양손배백허남심노하곽성차주우구민류진지엄채원천방공현함변염여추도소석선설마길연위표명기반왕금옥육인맹제탁국어은편용봉빈사")
 
-def api(url,tries=4):
+
+def api(url, tries=4):
     for t in range(tries):
         try:
-            with urllib.request.urlopen(urllib.request.Request(url,headers=H),timeout=45) as r:
-                return json.loads(r.read().decode("utf-8","replace"))
-        except Exception as e:
-            if t==tries-1: return None
+            with urllib.request.urlopen(urllib.request.Request(url, headers=H), timeout=45) as r:
+                return json.loads(r.read().decode("utf-8", "replace"))
+        except Exception:
+            if t == tries - 1:
+                return None
             time.sleep(2)
     return None
-def is_h(s): return bool(re.search(r"[가-힣]",str(s)))
-def is_r(s): s=str(s).strip(); return bool(s) and bool(re.fullmatch(r"[A-Za-z .'-]+",s))
+
+
+def is_h(s):
+    return bool(re.search(r"[가-힣]", str(s)))
+
+
+def is_r(s):
+    s = str(s).strip()
+    return bool(s) and bool(re.fullmatch(r"[A-Za-z .'-]+", s))
+
+
 def clean_h(s):
-    t=[x for x in re.split(r"\s+",str(s).strip()) if x]
-    if len(t)==1: res=t[0]
-    elif len(t)==2:
-        a,b=t; both=(len(a)==1 and a in SUR)and(len(b)==1 and b in SUR)
-        if len(a)==1 and a in SUR and not both: res=a+b
-        elif len(b)==1 and b in SUR: res=b+a
-        else: res=a+b
-    else: res="".join(t)
-    if len(res)>=3 and res[0]==res[1] and res[0] in SUR: res=res[1:]
+    t = [x for x in re.split(r"\s+", str(s).strip()) if x]
+    if len(t) == 1:
+        res = t[0]
+    elif len(t) == 2:
+        a, b = t
+        both = (len(a) == 1 and a in SUR) and (len(b) == 1 and b in SUR)
+        if len(a) == 1 and a in SUR and not both:
+            res = a + b
+        elif len(b) == 1 and b in SUR:
+            res = b + a
+        else:
+            res = a + b
+    else:
+        res = "".join(t)
+    if len(res) >= 3 and res[0] == res[1] and res[0] in SUR:
+        res = res[1:]
     return res
+
+
 def phone(p):
-    d=re.sub(r"\D","",str(p or ""))
-    if d.startswith("82"): d=d[2:]
-    if d.startswith("0"): d=d[1:]
-    if len(d)==8: d="10"+d
-    if d.startswith("10") and len(d)==10: d="0"+d
-    return f"{d[0:3]}-{d[3:7]}-{d[7:]}" if(len(d)==11 and d.startswith("010")) else ""
+    d = re.sub(r"\D", "", str(p or ""))
+    if d.startswith("82"):
+        d = d[2:]
+    if d.startswith("0"):
+        d = d[1:]
+    if len(d) == 8:
+        d = "10" + d
+    if d.startswith("10") and len(d) == 10:
+        d = "0" + d
+    return f"{d[0:3]}-{d[3:7]}-{d[7:]}" if (len(d) == 11 and d.startswith("010")) else ""
+
+
 def edate(v):
     try:
-        n=float(v)
-        if n<=0: return ""
-        if n>1e12: n/=1000
-        return datetime.fromtimestamp(n,timezone.utc).astimezone(KST).strftime("%Y-%m-%d")
-    except: return ""
+        n = float(v)
+        if n <= 0:
+            return ""
+        if n > 1e12:
+            n /= 1000
+        return datetime.fromtimestamp(n, timezone.utc).astimezone(KST).strftime("%Y-%m-%d")
+    except Exception:
+        return ""
+
+
 def rawname(u):
-    fn=str(u.get("first_name")or"").strip(); ln=str(u.get("last_name")or"").strip()
-    return (fn+" "+ln).strip() or str(u.get("name")or"").strip()
-def is_trial_mem(mn): mn=str(mn or""); return any(t in mn for t in ["Trial","체험","Legacy"])
-def is_pass(mn): mn=str(mn or""); return ("횟수권" in mn)or("Class Pass" in mn)
+    fn = str(u.get("first_name") or "").strip()
+    ln = str(u.get("last_name") or "").strip()
+    return (fn + " " + ln).strip() or str(u.get("name") or "").strip()
+
+
+def is_trial_mem(mn):
+    mn = str(mn or "")
+    return any(t in mn for t in ["Trial", "체험", "Legacy"])
+
+
+def is_pass(mn):
+    mn = str(mn or "")
+    return ("횟수권" in mn) or ("Class Pass" in mn)
+
 
 # ── 전체 회원 수집 ──
-users,page=[],1
-while page<=80:
-    r=api(f"{BASE}/2.0/members?active=any&page={page}&limit=100")
-    if r is None: time.sleep(2); r=api(f"{BASE}/2.0/members?active=any&page={page}&limit=100")
-    data=(r.get("data") if isinstance(r,dict) else r) if r else None
-    if not data: break
+users, page = [], 1
+while page <= 80:
+    r = api(f"{BASE}/2.0/members?active=any&page={page}&limit=100")
+    if r is None:
+        time.sleep(2)
+        r = api(f"{BASE}/2.0/members?active=any&page={page}&limit=100")
+    data = (r.get("data") if isinstance(r, dict) else r) if r else None
+    if not data:
+        break
     users.extend(data)
-    if isinstance(r,dict) and r.get("has_more") is False: break
-    page+=1
+    if isinstance(r, dict) and r.get("has_more") is False:
+        break
+    page += 1
 print(f"회원 {len(users)}명 수집")
 
 # ── 병합 없음: 글로폭스 _id 마다 1행 (출석 uid와 정확히 매칭 → 미등록 방지) ──
-persons={}
+persons = {}
 for u in users:
-    uid=u.get("_id")
-    if not uid: continue
-    em=str(u.get("email")or"").strip().lower(); em=em if "@" in em else None
-    persons[uid]={"glofox_user_id":uid,"u":u,"email":em,"phone":phone(u.get("phone"))}
+    uid = u.get("_id")
+    if not uid:
+        continue
+    em = str(u.get("email") or "").strip().lower()
+    em = em if "@" in em else None
+    persons[uid] = {"glofox_user_id": uid, "u": u, "email": em, "phone": phone(u.get("phone"))}
 
-today=datetime.now(KST).strftime("%Y-%m-%d")
-def stage_of(u,mem):
-    ls=(u.get("lead_status")or"").upper()
-    mn=(mem.get("membership_name")or mem.get("plan_name")) if mem else None
-    st=(mem.get("status")or"").upper() if mem else ""
+today = datetime.now(KST).strftime("%Y-%m-%d")
+
+
+def stage_of(u, mem):
+    ls = (u.get("lead_status") or "").upper()
+    mn = (mem.get("membership_name") or mem.get("plan_name")) if mem else None
+    st = (mem.get("status") or "").upper() if mem else ""
     # ── 글로폭스가 주는 실제 status를 최우선으로 신뢰 ──
     # ACTIVE/LOCKED/PAUSED = 현재 유효한 멤버십(락/일시정지도 회원 자격 유지)
     # EXPIRED/CANCELLED = 종료됨, FUTURE = 아직 시작 전
-    if st in ("ACTIVE","LOCKED","PAUSED") and mn and not is_trial_mem(mn):
+    if st in ("ACTIVE", "LOCKED", "PAUSED") and mn and not is_trial_mem(mn):
         return "회원"
-    if st in ("EXPIRED","CANCELLED"):
+    if st in ("EXPIRED", "CANCELLED"):
         return "과거회원"
     if st == "FUTURE":
-        return "과거회원"   # 시작 전이라 아직 활성 아님(리포트상 미노출), 예정자는 별도 처리 가능
+        return "과거회원"  # 시작 전이라 아직 활성 아님(리포트상 미노출), 예정자는 별도 처리 가능
     # status 정보가 없는 예외 케이스만 과거 방식으로 보조 판단
-    exp=edate(mem.get("expiry_date")) if mem else ""
-    sub=(mem.get("subscription")or{}).get("auto_renewal") if mem else False
-    active=(exp>=today if exp else False) or bool(sub)
-    if active and mn and not is_trial_mem(mn): return "회원"
-    if ls=="TRIAL": return "트라이얼"
-    if ls in ("LEAD","WARM"): return "리드"
-    if ls=="MEMBER" or (mem and exp): return "과거회원"
+    exp = edate(mem.get("expiry_date")) if mem else ""
+    sub = (mem.get("subscription") or {}).get("auto_renewal") if mem else False
+    active = (exp >= today if exp else False) or bool(sub)
+    if active and mn and not is_trial_mem(mn):
+        return "회원"
+    if ls == "TRIAL":
+        return "트라이얼"
+    if ls in ("LEAD", "WARM"):
+        return "리드"
+    if ls == "MEMBER" or (mem and exp):
+        return "과거회원"
     return "기타"
 
-# ── 횟수권 크레딧 (Class Pass 회원만) ──
+
+# ── 횟수권 크레딧 (Class Pass 회원 + 멤버십 자체가 없는데 크레딧만 독립구매한 회원) ──
 def credits(uid):
-    d=api(f"{BASE}/2.0/credits?user_id={uid}")
-    packs=(d.get("data") if isinstance(d,dict) else d) or []
-    total=avail=0; has=False; ends=[]; starts=[]
+    d = api(f"{BASE}/2.0/credits?user_id={uid}")
+    packs = (d.get("data") if isinstance(d, dict) else d) or []
+    total = avail = 0
+    has = False
+    ends = []
+    starts = []
     for p in packs:
-        if not p.get("active",True): continue
-        total+=int(p.get("num_sessions")or 0)
-        if p.get("available") is not None: has=True; avail+=int(p.get("available")or 0)
-        if p.get("end_date"): ends.append(edate(p["end_date"]))
-        if p.get("start_date"): starts.append(edate(p["start_date"]))
-    remain=avail if has else total
-    return {"pass_total":total,"pass_remaining":remain,"pass_used":max(total-remain,0),
-            "pass_start":min(starts) if starts else "","pass_expiry":max(ends) if ends else ""}
+        if not p.get("active", True):
+            continue
+        total += int(p.get("num_sessions") or 0)
+        if p.get("available") is not None:
+            has = True
+            avail += int(p.get("available") or 0)
+        if p.get("end_date"):
+            ends.append(edate(p["end_date"]))
+        if p.get("start_date"):
+            starts.append(edate(p["start_date"]))
+    remain = avail if has else total
+    return {
+        "pass_total": total,
+        "pass_remaining": remain,
+        "pass_used": max(total - remain, 0),
+        "pass_start": min(starts) if starts else "",
+        "pass_expiry": max(ends) if ends else "",
+    }
+
 
 # ── people 행 만들기 (글로폭스 정보만) ──
-rows=[]; passcnt=0
-for pid,p in persons.items():
-    u=p["u"]; mem=u.get("membership") or {}
-    nm=rawname(u); glo=str(u.get("name") or nm).strip()
-    if is_h(nm): name=clean_h(nm)
-    elif is_r(nm): name=NC.get(nm,nm)   # 캐시 없으면 원문 유지
-    else: name=nm
-    memname=mem.get("membership_name") or mem.get("plan_name") or ""
-    row={"person_id":p["glofox_user_id"],"glofox_user_id":p["glofox_user_id"],"stage":stage_of(u,mem),
-         "name":name,"glofox_name":glo,"phone":p["phone"] or "","email":p["email"] or "",
-         "source":str((u.get("leads")or{}).get("contact_source") or u.get("source") or ""),
-         "membership":memname,"end_date":edate(mem.get("expiry_date")),
-         "join_date":edate(mem.get("start_date")),"birth":str(u.get("birth")or""),
-         "gender":str(u.get("gender")or""),"glofox_photo":u.get("image_url") or ""}
-    if is_pass(memname):
-        row.update(credits(p["glofox_user_id"])); passcnt+=1
+rows = []
+passcnt = 0
+for pid, p in persons.items():
+    u = p["u"]
+    mem = u.get("membership") or {}
+    nm = rawname(u)
+    glo = str(u.get("name") or nm).strip()
+    if is_h(nm):
+        name = clean_h(nm)
+    elif is_r(nm):
+        name = NC.get(nm, nm)  # 캐시 없으면 원문 유지
+    else:
+        name = nm
+    memname = mem.get("membership_name") or mem.get("plan_name") or ""
+    row = {
+        "person_id": p["glofox_user_id"],
+        "glofox_user_id": p["glofox_user_id"],
+        "stage": stage_of(u, mem),
+        "name": name,
+        "glofox_name": glo,
+        "phone": p["phone"] or "",
+        "email": p["email"] or "",
+        "source": str((u.get("leads") or {}).get("contact_source") or u.get("source") or ""),
+        "membership": memname,
+        "end_date": edate(mem.get("expiry_date")),
+        "join_date": edate(mem.get("start_date")),
+        "birth": str(u.get("birth") or ""),
+        "gender": str(u.get("gender") or ""),
+        "glofox_photo": u.get("image_url") or "",
+    }
+    # 멤버십 이름에 "횟수권"이 명시된 경우는 물론이고,
+    # memname 자체가 비어있는 경우(=크레딧만 독립적으로 구매한 회원)도 일단 조회해봄
+    if is_pass(memname) or not memname:
+        c = credits(p["glofox_user_id"])
+        if c["pass_total"] > 0:
+            row.update(c)
+            if not memname:
+                row["membership"] = "횟수권"
+            passcnt += 1
     rows.append(row)
 print(f"정제 {len(rows)}명 · 횟수권 조회 {passcnt}명")
+
 # 수동 수정 이름(name_override) 보존: 있으면 name을 그 값으로 대체
 try:
     ov = {}
     frm = 0
     while True:
-        r = sb.table("people").select("person_id,name_override").range(frm, frm+999).execute()
+        r = sb.table("people").select("person_id,name_override").range(frm, frm + 999).execute()
         d = r.data or []
         for x in d:
-            if x.get("name_override"): ov[x["person_id"]] = x["name_override"]
-        if len(d) < 1000: break
+            if x.get("name_override"):
+                ov[x["person_id"]] = x["name_override"]
+        if len(d) < 1000:
+            break
         frm += 1000
     for row in rows:
         if row["person_id"] in ov:
@@ -160,50 +265,78 @@ except Exception as e:
     print("name_override 조회 실패(무시):", str(e)[:80])
 
 # ── 업서트 (photo_url·instagram·care_memo 등 사용자 입력은 미포함=보존) ──
-ok=0
-for i in range(0,len(rows),200):
+ok = 0
+for i in range(0, len(rows), 200):
     try:
-        sb.table("people").upsert(rows[i:i+200],on_conflict="person_id").execute(); ok+=len(rows[i:i+200])
+        sb.table("people").upsert(rows[i:i + 200], on_conflict="person_id").execute()
+        ok += len(rows[i:i + 200])
     except Exception as e:
-        print("업서트 오류:",str(e)[:100])
+        print("업서트 오류:", str(e)[:100])
 print(f"✅ 전체 회원 갱신 완료: {ok}명 반영 ({datetime.now(KST).strftime('%H:%M')})")
 
 # ── 미등록 보충: 출석엔 있으나 회원목록에 없는 uid 개별 조회 ──
-present=set(persons.keys())
-att_uids=set()
-frm=0
-while frm<=6000:
-    r=sb.table("attendance").select("glofox_user_id").range(frm,frm+999).execute()
-    d=r.data or []
+present = set(persons.keys())
+att_uids = set()
+frm = 0
+while frm <= 6000:
+    r = sb.table("attendance").select("glofox_user_id").range(frm, frm + 999).execute()
+    d = r.data or []
     for a in d:
-        u=a.get("glofox_user_id")
-        if u: att_uids.add(u)
-    if len(d)<1000: break
-    frm+=1000
-missing=[u for u in att_uids if u not in present]
+        u = a.get("glofox_user_id")
+        if u:
+            att_uids.add(u)
+    if len(d) < 1000:
+        break
+    frm += 1000
+missing = [u for u in att_uids if u not in present]
 print(f"출석 있는데 회원목록에 없는 uid: {len(missing)}명 → 개별 보충")
-stub=[]
+
+stub = []
 for uid in missing:
-    u=api(f"{BASE}/2.0/members/{uid}")
-    if isinstance(u,dict) and "data" in u: u=u["data"]
-    if not isinstance(u,dict) or not u.get("_id"):
+    u = api(f"{BASE}/2.0/members/{uid}")
+    if isinstance(u, dict) and "data" in u:
+        u = u["data"]
+    if not isinstance(u, dict) or not u.get("_id"):
         continue
-    mem=u.get("membership") or {}
-    nm=rawname(u); glo=str(u.get("name") or nm).strip()
-    if is_h(nm): name=clean_h(nm)
-    elif is_r(nm): name=NC.get(nm,nm)
-    else: name=nm
-    memname=mem.get("membership_name") or mem.get("plan_name") or ""
-    row={"person_id":uid,"glofox_user_id":uid,"stage":stage_of(u,mem),
-         "name":name or glo,"glofox_name":glo,"phone":phone(u.get("phone")),"email":str(u.get("email")or"").lower(),
-         "source":str((u.get("leads")or{}).get("contact_source") or u.get("source") or ""),
-         "membership":memname,"end_date":edate(mem.get("expiry_date")),
-         "join_date":edate(mem.get("start_date")),"birth":str(u.get("birth")or""),
-         "gender":str(u.get("gender")or""),"glofox_photo":u.get("image_url") or ""}
-    if is_pass(memname): row.update(credits(uid))
+    mem = u.get("membership") or {}
+    nm = rawname(u)
+    glo = str(u.get("name") or nm).strip()
+    if is_h(nm):
+        name = clean_h(nm)
+    elif is_r(nm):
+        name = NC.get(nm, nm)
+    else:
+        name = nm
+    memname = mem.get("membership_name") or mem.get("plan_name") or ""
+    row = {
+        "person_id": uid,
+        "glofox_user_id": uid,
+        "stage": stage_of(u, mem),
+        "name": name or glo,
+        "glofox_name": glo,
+        "phone": phone(u.get("phone")),
+        "email": str(u.get("email") or "").lower(),
+        "source": str((u.get("leads") or {}).get("contact_source") or u.get("source") or ""),
+        "membership": memname,
+        "end_date": edate(mem.get("expiry_date")),
+        "join_date": edate(mem.get("start_date")),
+        "birth": str(u.get("birth") or ""),
+        "gender": str(u.get("gender") or ""),
+        "glofox_photo": u.get("image_url") or "",
+    }
+    # 본문 갱신부와 동일하게, 멤버십 없이 크레딧만 있는 케이스도 놓치지 않도록 처리
+    if is_pass(memname) or not memname:
+        c = credits(uid)
+        if c["pass_total"] > 0:
+            row.update(c)
+            if not memname:
+                row["membership"] = "횟수권"
     stub.append(row)
+
 if stub:
-    for i in range(0,len(stub),200):
-        try: sb.table("people").upsert(stub[i:i+200],on_conflict="person_id").execute()
-        except Exception as e: print("보충 업서트 오류:",str(e)[:80])
+    for i in range(0, len(stub), 200):
+        try:
+            sb.table("people").upsert(stub[i:i + 200], on_conflict="person_id").execute()
+        except Exception as e:
+            print("보충 업서트 오류:", str(e)[:80])
     print(f"✅ 미등록 보충 완료: {len(stub)}명 추가")
