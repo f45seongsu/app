@@ -6,11 +6,22 @@ Supabase people 의 '글로폭스 정보'만 최신화한다.
 ★ 사용자 입력(사진 photo_url·인스타 instagram·메모 care_memo/trial_memo·영상
   video_url·부상 injury_note 등)은 건드리지 않는다(업서트에 미포함).
 
-[2026.08 수정] 멤버십 오브젝트 없이 크레딧(횟수권)만 독립적으로 구매한 회원의
-경우, 기존 로직은 memname이 비어있어서(is_pass가 False) credits() 조회 자체를
-건너뛰어 pass_remaining/pass_total이 영구히 비어있는 버그가 있었음(예: 박상준님).
-→ memname이 비어있는 경우에도 일단 credits()를 조회해보고, 실제 크레딧이
-  있으면(pass_total>0) 채워넣도록 수정함. (본문 갱신부 + 미등록 보충부 둘 다 수정)
+[2026.08 수정 1차] 멤버십 오브젝트 없이 크레딧(횟수권)만 "Manually added"로
+독립 구매한 회원의 경우, 기존 로직은 memname이 비어있어서(is_pass가 False)
+credits() 조회 자체를 건너뛰어 pass_remaining/pass_total이 영구히 비어있는
+버그가 있었음 (예: 박상준님).
+
+[2026.08 수정 2차] 1차 수정만으로는 두 가지 문제가 더 있었음:
+  (a) 성능 문제: memname이 빈 사람 = 대부분 "방문 이력 없는 순수 리드"인데
+      이 사람들까지 전부 credits() API를 추가 호출하게 되면서 글로폭스
+      초당 10건 제한에 걸려 실행시간이 10분+ 로 폭증함.
+      → lead_status가 LEAD/WARM(순수 리드)인 사람은 애초에 크레딧을 살
+        가능성이 극히 낮으므로 이 케이스는 제외하고, 그 외의 경우만
+        (예: TRIAL 상태인데 실제로는 크레딧 구매한 이원용님 케이스) 조회함.
+  (b) stage(회원단계) 문제: 크레딧을 채워넣어도 stage 값 자체는 그대로라
+      "트라이얼 끝난 지 오래됐는데 계속 트라이얼로 표시" 되는 문제가 있었음
+      (이원용님: 실제로는 유효한 횟수권 보유 중인데 stage='트라이얼'로 표시됨).
+      → 유효한(만료 안 된) 크레딧이 발견되면 stage를 "회원"으로 강제 보정함.
 
 환경변수: GLOFOX_API_KEY, GLOFOX_API_TOKEN, SUPABASE_URL, SUPABASE_KEY, (선택)ANTHROPIC_API_KEY
 같은 폴더: name_cache.json
@@ -115,32 +126,6 @@ def is_pass(mn):
     return ("횟수권" in mn) or ("Class Pass" in mn)
 
 
-# ── 전체 회원 수집 ──
-users, page = [], 1
-while page <= 80:
-    r = api(f"{BASE}/2.0/members?active=any&page={page}&limit=100")
-    if r is None:
-        time.sleep(2)
-        r = api(f"{BASE}/2.0/members?active=any&page={page}&limit=100")
-    data = (r.get("data") if isinstance(r, dict) else r) if r else None
-    if not data:
-        break
-    users.extend(data)
-    if isinstance(r, dict) and r.get("has_more") is False:
-        break
-    page += 1
-print(f"회원 {len(users)}명 수집")
-
-# ── 병합 없음: 글로폭스 _id 마다 1행 (출석 uid와 정확히 매칭 → 미등록 방지) ──
-persons = {}
-for u in users:
-    uid = u.get("_id")
-    if not uid:
-        continue
-    em = str(u.get("email") or "").strip().lower()
-    em = em if "@" in em else None
-    persons[uid] = {"glofox_user_id": uid, "u": u, "email": em, "phone": phone(u.get("phone"))}
-
 today = datetime.now(KST).strftime("%Y-%m-%d")
 
 
@@ -148,16 +133,12 @@ def stage_of(u, mem):
     ls = (u.get("lead_status") or "").upper()
     mn = (mem.get("membership_name") or mem.get("plan_name")) if mem else None
     st = (mem.get("status") or "").upper() if mem else ""
-    # ── 글로폭스가 주는 실제 status를 최우선으로 신뢰 ──
-    # ACTIVE/LOCKED/PAUSED = 현재 유효한 멤버십(락/일시정지도 회원 자격 유지)
-    # EXPIRED/CANCELLED = 종료됨, FUTURE = 아직 시작 전
     if st in ("ACTIVE", "LOCKED", "PAUSED") and mn and not is_trial_mem(mn):
         return "회원"
     if st in ("EXPIRED", "CANCELLED"):
         return "과거회원"
     if st == "FUTURE":
-        return "과거회원"  # 시작 전이라 아직 활성 아님(리포트상 미노출), 예정자는 별도 처리 가능
-    # status 정보가 없는 예외 케이스만 과거 방식으로 보조 판단
+        return "과거회원"
     exp = edate(mem.get("expiry_date")) if mem else ""
     sub = (mem.get("subscription") or {}).get("auto_renewal") if mem else False
     active = (exp >= today if exp else False) or bool(sub)
@@ -172,7 +153,6 @@ def stage_of(u, mem):
     return "기타"
 
 
-# ── 횟수권 크레딧 (Class Pass 회원 + 멤버십 자체가 없는데 크레딧만 독립구매한 회원) ──
 def credits(uid):
     d = api(f"{BASE}/2.0/credits?user_id={uid}")
     packs = (d.get("data") if isinstance(d, dict) else d) or []
@@ -201,7 +181,52 @@ def credits(uid):
     }
 
 
-# ── people 행 만들기 (글로폭스 정보만) ──
+def apply_credit_fallback(row, u, memname, uid):
+    """멤버십명이 '횟수권'류면 항상 조회하고, 멤버십 자체가 없는 경우엔
+    '순수 리드(LEAD/WARM)'만 아니면(=혹시 크레딧이 있을 가능성이 있으면) 조회한다.
+    조회해서 실제 유효 크레딧이 있으면 membership/stage까지 정확히 보정한다."""
+    ls = (u.get("lead_status") or "").upper()
+    should_check = is_pass(memname) or (not memname and ls not in ("LEAD", "WARM"))
+    if not should_check:
+        return False
+    c = credits(uid)
+    if c["pass_total"] <= 0:
+        return False
+    row.update(c)
+    if not memname:
+        row["membership"] = "횟수권"
+    # 유효한(만료 안 지난) 크레딧이 있으면, 실제로는 활성회원인데 멤버십 객체가
+    # 없어서 리드/트라이얼로 잘못 분류됐던 stage를 "회원"으로 바로잡음
+    if not c["pass_expiry"] or c["pass_expiry"] >= today:
+        row["stage"] = "회원"
+    return True
+
+
+# ── 전체 회원 수집 ──
+users, page = [], 1
+while page <= 80:
+    r = api(f"{BASE}/2.0/members?active=any&page={page}&limit=100")
+    if r is None:
+        time.sleep(2)
+        r = api(f"{BASE}/2.0/members?active=any&page={page}&limit=100")
+    data = (r.get("data") if isinstance(r, dict) else r) if r else None
+    if not data:
+        break
+    users.extend(data)
+    if isinstance(r, dict) and r.get("has_more") is False:
+        break
+    page += 1
+print(f"회원 {len(users)}명 수집")
+
+persons = {}
+for u in users:
+    uid = u.get("_id")
+    if not uid:
+        continue
+    em = str(u.get("email") or "").strip().lower()
+    em = em if "@" in em else None
+    persons[uid] = {"glofox_user_id": uid, "u": u, "email": em, "phone": phone(u.get("phone"))}
+
 rows = []
 passcnt = 0
 for pid, p in persons.items():
@@ -212,7 +237,7 @@ for pid, p in persons.items():
     if is_h(nm):
         name = clean_h(nm)
     elif is_r(nm):
-        name = NC.get(nm, nm)  # 캐시 없으면 원문 유지
+        name = NC.get(nm, nm)
     else:
         name = nm
     memname = mem.get("membership_name") or mem.get("plan_name") or ""
@@ -232,19 +257,11 @@ for pid, p in persons.items():
         "gender": str(u.get("gender") or ""),
         "glofox_photo": u.get("image_url") or "",
     }
-    # 멤버십 이름에 "횟수권"이 명시된 경우는 물론이고,
-    # memname 자체가 비어있는 경우(=크레딧만 독립적으로 구매한 회원)도 일단 조회해봄
-    if is_pass(memname) or not memname:
-        c = credits(p["glofox_user_id"])
-        if c["pass_total"] > 0:
-            row.update(c)
-            if not memname:
-                row["membership"] = "횟수권"
-            passcnt += 1
+    if apply_credit_fallback(row, u, memname, p["glofox_user_id"]):
+        passcnt += 1
     rows.append(row)
 print(f"정제 {len(rows)}명 · 횟수권 조회 {passcnt}명")
 
-# 수동 수정 이름(name_override) 보존: 있으면 name을 그 값으로 대체
 try:
     ov = {}
     frm = 0
@@ -264,7 +281,6 @@ try:
 except Exception as e:
     print("name_override 조회 실패(무시):", str(e)[:80])
 
-# ── 업서트 (photo_url·instagram·care_memo 등 사용자 입력은 미포함=보존) ──
 ok = 0
 for i in range(0, len(rows), 200):
     try:
@@ -274,7 +290,6 @@ for i in range(0, len(rows), 200):
         print("업서트 오류:", str(e)[:100])
 print(f"✅ 전체 회원 갱신 완료: {ok}명 반영 ({datetime.now(KST).strftime('%H:%M')})")
 
-# ── 미등록 보충: 출석엔 있으나 회원목록에 없는 uid 개별 조회 ──
 present = set(persons.keys())
 att_uids = set()
 frm = 0
@@ -324,13 +339,7 @@ for uid in missing:
         "gender": str(u.get("gender") or ""),
         "glofox_photo": u.get("image_url") or "",
     }
-    # 본문 갱신부와 동일하게, 멤버십 없이 크레딧만 있는 케이스도 놓치지 않도록 처리
-    if is_pass(memname) or not memname:
-        c = credits(uid)
-        if c["pass_total"] > 0:
-            row.update(c)
-            if not memname:
-                row["membership"] = "횟수권"
+    apply_credit_fallback(row, u, memname, uid)
     stub.append(row)
 
 if stub:
