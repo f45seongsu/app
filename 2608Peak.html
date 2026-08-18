@@ -1,0 +1,1001 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>F45 시리즈 3 · 피크 단계 코치 가이드</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  :root{
+    --navy:#152151; --navy2:#211551; --red:#d60010;
+    --gray:#f4f5f8; --line:#e3e5ec; --muted:#8b90a0;
+  }
+  html{ font-size:17px; }
+  body{
+    font-family:'Pretendard','Apple SD Gothic Neo',-apple-system,BlinkMacSystemFont,'Malgun Gothic',sans-serif;
+    line-height:1.75; color:#262a35; background:#eceef3;
+    -webkit-text-size-adjust:100%;
+  }
+  .wrap{ max-width:1100px; margin:0 auto; background:#fff; }
+  .prose{ max-width:68ch; }
+  section > p.prose, .box p.prose{ font-size:1.02rem; }
+
+  header{ background:linear-gradient(135deg,var(--navy) 0%,var(--navy2) 100%); color:#fff; padding:44px 32px; }
+  .kicker{ display:inline-block; background:var(--red); padding:6px 14px; border-radius:3px;
+           font-size:.82rem; font-weight:700; letter-spacing:.08em; margin-bottom:14px; }
+  header h1{ font-size:2.1rem; line-height:1.3; font-weight:800; margin-bottom:6px; }
+  header .sub{ opacity:.85; font-size:1rem; }
+  .hdr-meta{ display:flex; gap:28px; flex-wrap:wrap; margin-top:22px; padding-top:20px; border-top:1px solid rgba(255,255,255,.22); }
+  .hdr-meta div{ font-size:.9rem; }
+  .hdr-meta b{ display:block; font-size:1.15rem; margin-bottom:2px; }
+
+  nav{ background:var(--gray); padding:22px 32px; border-bottom:1px solid var(--line); }
+  nav p{ font-weight:700; color:var(--navy); margin-bottom:10px; font-size:.9rem; }
+  nav ol{ list-style:none; display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:6px 20px; }
+  nav a{ color:#444; text-decoration:none; font-size:.9rem; display:block; padding:3px 0; }
+  nav a:hover{ color:var(--red); }
+  nav .num{ color:var(--red); font-weight:700; margin-right:6px; }
+
+  main{ padding:8px 32px 40px; }
+  section{ padding:38px 0; border-bottom:1px solid var(--line); }
+  section:last-child{ border-bottom:none; }
+
+  h2{ font-size:1.5rem; color:var(--navy); font-weight:800; margin-bottom:6px;
+      padding-left:14px; border-left:5px solid var(--red); }
+  h2 .en{ font-size:.8rem; color:var(--muted); font-weight:600; display:block; letter-spacing:.04em; }
+  h3{ font-size:1.12rem; color:var(--navy2); font-weight:700; margin:28px 0 12px; }
+  h4{ font-size:1rem; color:var(--navy); font-weight:700; margin:18px 0 8px; }
+  p{ margin:11px 0; }
+  ul,ol{ margin:11px 0 11px 22px; }
+  li{ margin:7px 0; }
+
+  .days{ display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:12px; margin:18px 0; }
+  .day{ border:1px solid var(--line); border-radius:8px; overflow:hidden; background:#fff; }
+  .day-top{ padding:10px 14px; color:#fff; display:flex; justify-content:space-between; align-items:center; }
+  .day-top .dow{ font-weight:800; font-size:.95rem; }
+  .day-top .min{ background:rgba(255,255,255,.22); padding:2px 8px; border-radius:20px; font-size:.75rem; font-weight:700; }
+  .day-body{ padding:14px; }
+  .w-name{ font-size:1.15rem; font-weight:800; color:var(--navy); }
+  .w-mean{ font-size:.8rem; color:var(--muted); margin-top:1px; }
+  .w-kr{ font-size:.85rem; color:var(--red); font-weight:600; margin:4px 0 8px; }
+  .w-tag{ display:inline-block; background:var(--gray); color:#555; font-size:.72rem;
+          padding:2px 8px; border-radius:20px; margin:0 4px 4px 0; font-weight:600; }
+  .w-desc{ font-size:.88rem; color:#555; margin-top:8px; line-height:1.6; }
+  .ref-chip{ display:inline-block; background:#dfe2ea; color:#5c6070; font-size:.7rem;
+             font-weight:800; padding:2px 8px; border-radius:20px; margin-left:6px; }
+
+  .c-red{ background:#c8102e; } .c-max{ background:#2c3268; } .c-tri{ background:#1f2a63; }
+  .c-pin{ background:#7aa84a; } .c-dow{ background:#1f7a44; } .c-spa{ background:#151515; }
+  .c-peg{ background:#e2601c; }
+
+  table{ width:100%; border-collapse:collapse; margin:14px 0; font-size:.9rem; }
+  th{ background:var(--navy); color:#fff; padding:11px 10px; text-align:left; font-weight:700; }
+  td{ padding:10px; border-bottom:1px solid var(--line); vertical-align:top; }
+  tbody tr:nth-child(even){ background:#fafbfd; }
+  .tbl-compact td, .tbl-compact th{ padding:8px; font-size:.85rem; }
+  td.hi{ color:var(--red); font-weight:700; }
+  th.ref-col{ background:#6e7285; }
+  td.ref-col{ color:var(--muted); background:#f7f8fa !important; }
+  .tbl-wrap{ overflow-x:auto; }
+
+  .box{ border-radius:8px; padding:18px; margin:16px 0; }
+  .box-tip{ background:#eef4ff; border-left:5px solid #3b6fd4; }
+  .box-warn{ background:#fff6e0; border-left:5px solid #e6a100; }
+  .box-key{ background:#eaf7ee; border-left:5px solid #1f8a4c; }
+  .box-red{ background:#fdecee; border-left:5px solid var(--red); }
+  .box-gray{ background:#f4f5f8; border-left:5px solid #8a8fa3; }
+  .box b{ color:var(--navy); }
+
+  .terms{ display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:10px; }
+  .term{ border:1px solid var(--line); border-radius:8px; padding:14px; background:#fff; }
+  .term .t-en{ font-size:.78rem; color:var(--muted); font-weight:600; }
+  .term .t-kr{ font-size:1.02rem; font-weight:800; color:var(--navy); margin:2px 0 6px; }
+  .term .t-kr span{ color:var(--red); font-size:.85rem; font-weight:600; }
+  .term p{ font-size:.86rem; color:#555; margin:0; line-height:1.6; }
+
+  .lv{ display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:12px; margin:14px 0; }
+  .lv-card{ border:2px solid var(--line); border-radius:8px; padding:16px; }
+  .lv-code{ font-size:1.3rem; font-weight:800; color:var(--red); }
+  .lv-name{ font-weight:700; color:var(--navy); margin-bottom:8px; font-size:.9rem; }
+  .lv-desc{ font-size:.84rem; color:#555; line-height:1.6; }
+
+  .script{ background:var(--gray); border:1px dashed #b9bece; border-radius:8px; padding:18px; margin:14px 0; }
+  .script .label{ font-size:.75rem; font-weight:700; color:var(--red); letter-spacing:.06em; margin-bottom:8px; }
+  .script p{ font-size:.95rem; line-height:1.9; margin:6px 0; }
+  .blank{ color:var(--muted); }
+
+  .du{ display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:14px; margin:16px 0; }
+  .du-card{ border-radius:8px; overflow:hidden; border:1px solid var(--line); }
+  .du-head{ padding:12px 16px; color:#fff; font-weight:800; font-size:1rem; }
+  .du-c{ background:#c8102e; } .du-s{ background:#3a3f8f; }
+  .du-body{ padding:16px; font-size:.9rem; color:#444; }
+  .du-body b{ color:var(--navy); }
+  .rpe-bar{ display:flex; gap:3px; margin:12px 0 6px; }
+  .rpe-bar span{ flex:1; text-align:center; padding:8px 0; border-radius:3px; font-size:.72rem; font-weight:800; color:#fff; }
+  .rpe-w{ background:#c8102e; } .rpe-r{ background:#9aa2d8; }
+
+  .check li{ list-style:none; margin:8px 0; padding-left:26px; position:relative; }
+  .check li:before{ content:"☐"; position:absolute; left:0; color:var(--red); font-size:1.1rem; }
+
+  footer{ background:var(--navy); color:#fff; padding:26px 32px; font-size:.85rem; }
+  footer p{ opacity:.85; }
+  .note{ font-size:.82rem; color:var(--muted); margin-top:6px; }
+
+  @media (max-width:640px){
+    header{ padding:32px 20px; } header h1{ font-size:1.55rem; }
+    nav, main, footer{ padding-left:18px; padding-right:18px; }
+    table{ font-size:.8rem; } th,td{ padding:8px 6px; }
+  }
+  @media print{
+    body{ background:#fff; } nav{ display:none; }
+    section{ page-break-inside:avoid; border-bottom:1px solid #ccc; }
+    header{ -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="kicker">SERIES 3 · PEAK PHASE</div>
+  <h1>시리즈 3 · 피크 단계 코치 가이드</h1>
+  <div class="sub">2026년 8월 17일(월) ~ 9월 13일(일) · 4주 과정</div>
+  <div class="hdr-meta">
+    <div><b>4주</b>피크 단계 기간</div>
+    <div><b>6종</b>운영 워크아웃 (월~토)</div>
+    <div><b>다운언더</b>이번 단계 신규 클래스</div>
+    <div><b>9월 12일</b>PEAK500 최종 측정</div>
+  </div>
+</header>
+
+<nav>
+  <p>목차</p>
+  <ol>
+    <li><a href="#s1"><span class="num">01</span>피크 단계란</a></li>
+    <li><a href="#s2"><span class="num">02</span>요일별 워크아웃</a></li>
+    <li><a href="#s3"><span class="num">03</span>4주 캘린더 · PEAK500</a></li>
+    <li><a href="#s4"><span class="num">04</span>신규 클래스 · 다운언더</a></li>
+    <li><a href="#s5"><span class="num">05</span>워크아웃별 공식 스탯</a></li>
+    <li><a href="#s6"><span class="num">06</span>중량 · 반복수 기준표</a></li>
+    <li><a href="#s7"><span class="num">07</span>유산소 강도 가이드</a></li>
+    <li><a href="#s8"><span class="num">08</span>에르그 머신 기준</a></li>
+    <li><a href="#s9"><span class="num">09</span>동선 방식</a></li>
+    <li><a href="#s10"><span class="num">10</span>요일별 코칭 포인트</a></li>
+    <li><a href="#s11"><span class="num">11</span>회원 안내 멘트</a></li>
+    <li><a href="#s12"><span class="num">12</span>인트로 스크립트</a></li>
+    <li><a href="#s13"><span class="num">13</span>라이언하트</a></li>
+    <li><a href="#s14"><span class="num">14</span>용어 사전</a></li>
+    <li><a href="#s15"><span class="num">15</span>선택 워크아웃 · HYROX</a></li>
+    <li><a href="#s16"><span class="num">16</span>시작 전 체크리스트</a></li>
+  </ol>
+</nav>
+
+<main>
+
+<!-- 01 -->
+<section id="s1">
+  <h2>01. 피크 단계란<span class="en">PEAK PHASE OVERVIEW</span></h2>
+
+  <div class="box box-red">
+    <b style="font-size:1.05rem;">한 줄 요약</b>
+    <p style="margin:8px 0 0;">빌드 단계에서 <b>무게와 속도를 올렸다면</b>, 피크 단계는 그걸 <b>실전에서 터뜨리는 시기</b>입니다. 목표는 오버헤드 프레스 · 런지 · 스프린트 세 가지 측정 항목의 퍼포먼스와 준비도를 최대치로 끌어올리는 것입니다.</p>
+  </div>
+
+  <h3>목표 · 포커스</h3>
+  <table class="tbl-compact">
+    <tbody>
+      <tr><td style="width:16%"><b>목표</b><br><span class="note">Goal</span></td>
+          <td>오버헤드 프레스 · 런지 · 스프린트 측정을 위한 퍼포먼스와 준비도를 최대화한다.</td></tr>
+      <tr><td><b>포커스</b><br><span class="note">Focus</span></td>
+          <td>머리 위에서의 근력 표현 · 빠르고 강한 스프린트 노력 · 경쟁적 페이싱과 실전 준비도.</td></tr>
+      <tr><td><b>훈련 원칙</b></td>
+          <td class="hi">고강도 컨디셔닝 · 폭발적 파워 · 경쟁적 페이싱을 통한 운동 수행 능력 극대화.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>시리즈 3 측정 항목</h3>
+  <table class="tbl-compact">
+    <thead><tr><th style="width:26%">측정 항목</th><th>피크 단계에서 준비하는 것</th></tr></thead>
+    <tbody>
+      <tr><td><b>오버헤드 프레스</b><br><span class="note">Overhead Press</span></td>
+          <td>머리 위로 밀어 올리는 파워를 최고 상태로 끌어올립니다. 피너클의 최대 중량 세트가 직접적인 준비 과정입니다.</td></tr>
+      <tr><td><b>런지</b><br><span class="note">Lunge</span></td>
+          <td>한쪽 다리로 버티는 편측 근력을 실전 수준으로 완성합니다.</td></tr>
+      <tr><td><b>스프린트</b><br><span class="note">Sprint</span></td>
+          <td>깊은 피로 속에서도 속도를 유지하고, 고강도 노력 사이 빠르게 회복하는 능력을 기릅니다.</td></tr>
+    </tbody>
+  </table>
+  <p class="note">회원은 F45 트레이닝 앱(App Store · Google Play)에서 측정 기록을 관리합니다.</p>
+
+  <h3>빌드 → 피크, 무엇이 달라지나</h3>
+  <table class="tbl-compact">
+    <thead><tr><th style="width:20%">구분</th><th style="width:40%">빌드 단계 (지난 4주)</th><th style="width:40%">피크 단계 (이번 4주)</th></tr></thead>
+    <tbody>
+      <tr><td><b>초점</b></td><td>무게 · 속도를 점진적으로 올리기</td><td class="hi">그 능력을 실전에서 표현하기</td></tr>
+      <tr><td><b>페이스</b></td><td>운동·휴식 구성이 점점 빡빡해짐</td><td class="hi">공격적인 운동:휴식 비율, 최고 강도</td></tr>
+      <tr><td><b>휴식</b></td><td>짧아짐</td><td class="hi">더 짧아짐 (레드라인은 대부분 5초)</td></tr>
+      <tr><td><b>키우는 능력</b></td><td>반복 유지력 · 스레숄드 컨디셔닝</td><td class="hi">속도 · 파워 · 고강도 사이 회복력 · 피로 상태 수행력</td></tr>
+      <tr><td><b>코칭 방향</b></td><td>"자세 유지한 채로 한 단계 위로"</td><td class="hi">"쌓아온 것을 자신 있게 꺼내기"</td></tr>
+    </tbody>
+  </table>
+
+  <h3>피크 단계가 기르는 능력 4가지</h3>
+  <p class="prose">피크 단계는 <b>속도(speed) · 파워(power) · 고강도 노력 사이의 회복력(recovery) · 피로 상태에서 수행하는 능력(performing under fatigue)</b> 네 가지를 향상시키도록 설계되어 있습니다. 이 네 가지가 쌓이면 회원은 더 빠르게 움직이고, 더 오래 아웃풋을 유지하며, PEAK500을 자신 있게 맞이하게 됩니다.</p>
+
+  <h3>워크아웃마다 맡은 역할이 다릅니다</h3>
+  <table class="tbl-compact">
+    <thead><tr><th style="width:20%">워크아웃</th><th>이 페이즈에서 맡은 역할</th></tr></thead>
+    <tbody>
+      <tr><td><b>REDLINE</b></td><td>공격적인 운동:휴식 비율과 지속적인 고속 아웃풋으로, <b>깊은 피로 속에서도 효율적으로 움직이는 능력</b>을 기릅니다.</td></tr>
+      <tr><td><b>MAXIMUS</b></td><td>레드라인과 같은 축. 공격적인 운동:휴식 비율과 고속 아웃풋 지속력으로 깊은 피로 상태의 수행력을 훈련합니다.</td></tr>
+      <tr><td><b>TRIPLE THREAT</b></td><td>반복적인 폭발적 노력과 애슬레틱 컨디셔닝에 집중합니다.</td></tr>
+      <tr><td><b>PINNACLE</b></td><td>목표 지향적인 근력 테스트를 도입해, 시리즈 내내 쌓아온 근력을 <b>자신감과 컨트롤을 갖고 표현</b>하게 합니다.</td></tr>
+      <tr><td><b>DOWN UNDER <span class="ref-chip" style="background:#1f7a44;color:#fff;">신규</span></b></td><td>근력과 카디오 중 원하는 방향으로 <b>훈련을 직접 조정할 수 있는 유연성</b>을 주면서도, 고강도 아웃풋과 컨디셔닝 요구는 그대로 유지합니다.</td></tr>
+      <tr><td><b>SPARTAN</b></td><td>압박 속에서의 동작 효율성 · 전환 속도 · 파워 지구력을 정교하게 다듬습니다.</td></tr>
+      <tr><td><b>PEGASUS</b></td><td>맨몸 동작 패턴으로 사전 피로(pre-fatigue)와 높은 심박수를 먼저 만든 뒤에도 <b>반복적인 노력을 계속 유지하는 능력</b>을 기릅니다. (일요일 편성 — 우리 스튜디오는 미운영)</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- 02 -->
+<section id="s2">
+  <h2>02. 요일별 워크아웃 <span class="en">WEEKLY LINEUP — 4주 내내 동일하게 반복</span></h2>
+
+  <div class="box box-tip">
+    <b>4주 동안 요일별 워크아웃은 바뀌지 않습니다.</b>
+    <p style="margin:6px 0 0;">8월 17일부터 9월 13일까지 매주 같은 순서로 반복됩니다. 마지막 주 토요일(9/12)은 스파르탄 대신 <b>PEAK500 측정일</b>입니다.</p>
+  </div>
+
+  <div class="days">
+    <div class="day">
+      <div class="day-top c-red"><span class="dow">월요일</span><span class="min">HYBRID</span></div>
+      <div class="day-body">
+        <div class="w-name">REDLINE</div>
+        <div class="w-mean">redline = 자동차 계기판의 회전한계선</div>
+        <div class="w-kr">레드라인 · 한계까지 밀어붙이기</div>
+        <span class="w-tag">하이브리드</span><span class="w-tag">피라미드 세트</span><span class="w-tag">9스테이션 · 27명</span>
+        <div class="w-desc">공격적인 운동:휴식 비율의 카디오 하이브리드. 20→30→40→50→60초로 세트마다 운동 시간이 늘어나고 휴식은 대부분 5초. 마지막 세트만 20초 휴식으로 회복 후 피크 세트에 도전합니다.</div>
+      </div>
+    </div>
+
+    <div class="day">
+      <div class="day-top c-max"><span class="dow">화요일</span><span class="min">RESISTANCE</span></div>
+      <div class="day-body">
+        <div class="w-name">MAXIMUS</div>
+        <div class="w-mean">maximus = 라틴어로 '가장 큰, 최대의'</div>
+        <div class="w-kr">맥시무스 · 웨이트리프팅 세션</div>
+        <span class="w-tag">저항</span><span class="w-tag">팟 기반</span><span class="w-tag">9스테이션 · 3팟</span>
+        <div class="w-desc">전신 복합 운동으로 구성된 웨이트리프팅 세션. 가동범위를 충분히 확보한 뒤 고중량 오버로드 세트로 전환합니다. 각 팟이 끝날 때마다 45초 수분 보충 휴식이 있고, 맨몸 코어 릴 4종으로 마무리합니다.</div>
+      </div>
+    </div>
+
+    <div class="day">
+      <div class="day-top c-tri"><span class="dow">수요일</span><span class="min">CARDIO</span></div>
+      <div class="day-body">
+        <div class="w-name">TRIPLE THREAT</div>
+        <div class="w-mean">triple threat = 세 방면에서 위협적인 존재</div>
+        <div class="w-kr">트리플 스렛 · 3:1 운동:휴식 비율</div>
+        <span class="w-tag">카디오</span><span class="w-tag">레이스트랙</span><span class="w-tag">12스테이션 · 36명</span>
+        <div class="w-desc">가혹한 3:1 운동:휴식 비율의 고강도 카디오 세션. 20/10초 → 40/20초 → 60/30초로 세트마다 운동 시간이 두 배씩 늘어나며 심폐 회복력을 시험합니다.</div>
+      </div>
+    </div>
+
+    <div class="day">
+      <div class="day-top c-pin"><span class="dow">목요일</span><span class="min">RESISTANCE</span></div>
+      <div class="day-body">
+        <div class="w-name">PINNACLE</div>
+        <div class="w-mean">pinnacle = 산의 정상, 정점</div>
+        <div class="w-kr">피너클 · 최대 중량 도전</div>
+        <span class="w-tag">저항</span><span class="w-tag">레이스트랙</span><span class="w-tag">10스테이션 · 30명</span>
+        <div class="w-desc">상체 또는 하체 중 포커스를 직접 선택하는 피크 단계 저항 세션. 'Series Lift' 스테이션에서 최대 중량 세트에 도전하고, 외곽 스테이션은 저항 운동과 코어·모빌리티를 슈퍼세트로 결합합니다.</div>
+      </div>
+    </div>
+
+    <div class="day">
+      <div class="day-top c-dow"><span class="dow">금요일</span><span class="min">HYBRID</span></div>
+      <div class="day-body">
+        <div class="w-name">DOWN UNDER</div>
+        <div class="w-mean">down under = 호주를 가리키는 애칭</div>
+        <div class="w-kr">다운언더 · 내가 고르는 하이브리드 <b style="color:#1f7a44;">신규</b></div>
+        <span class="w-tag">하이브리드</span><span class="w-tag">레이스트랙</span><span class="w-tag">10스테이션 · 30명</span>
+        <div class="w-desc">매 스테이션마다 컨디셔닝(카디오)과 스트렝스(저항) 중 목표에 맞는 쪽을 직접 고르는 하이브리드. 5번과 10번은 3분 40초 연속 구간으로, TV2가 두 옵션의 페이싱과 목표를 안내합니다.</div>
+      </div>
+    </div>
+
+    <div class="day">
+      <div class="day-top c-spa"><span class="dow">토요일</span><span class="min">HYBRID</span></div>
+      <div class="day-body">
+        <div class="w-name">SPARTAN</div>
+        <div class="w-mean">F45 × Spartan Race 공식 파트너십 워크아웃</div>
+        <div class="w-kr">스파르탄 · 팀 릴레이 레이스</div>
+        <span class="w-tag">하이브리드</span><span class="w-tag">팟+에르그</span><span class="w-tag">15스테이션 · 3팟</span>
+        <div class="w-desc">Spartan Race와 DEKA의 요소를 결합한 레이스 스타일 팀 챌린지. 팟 1·3은 기능성 동작으로 3바퀴 순환하고, 팟 2는 에르그 머신 릴레이(5분씩)로 진행됩니다.</div>
+      </div>
+    </div>
+
+    <div class="day">
+      <div class="day-top c-peg"><span class="dow">일요일</span><span class="min">미운영</span></div>
+      <div class="day-body">
+        <div class="w-name">PEGASUS</div>
+        <div class="w-mean">pegasus = 그리스 신화의 날개 달린 천마</div>
+        <div class="w-kr">페가수스 · 저항 + 맨몸 슈퍼세트</div>
+        <span class="w-tag">저항</span><span class="w-tag">36명</span><span class="w-tag">일요일 편성</span>
+        <div class="w-desc">각 스테이션이 저항 운동 하나와 맨몸 운동 하나로 짝지어진 세션. 맨몸 패턴으로 사전 피로를 만든 뒤 반복 노력을 유지하는 능력을 기릅니다. 우리 스튜디오는 일요일 클래스를 운영하지 않아 실제 편성에서는 제외됩니다.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="box box-gray">
+    <b>스트렝스 플립(Strength Flip) 편성표</b>
+    <p style="margin:6px 0 0;">본사는 같은 워크아웃 구성을 요일만 바꾼 <b>스트렝스 플립 캘린더</b>도 함께 제공합니다. 피크 단계 기준 — 월 맥시무스 / 화 레드라인 / 수 피너클 / 목 트리플 스렛 / 금 페가수스 / 토 스파르탄 / 일 다운언더. 우리 스튜디오는 <b>기본 캘린더</b>를 사용합니다.</p>
+  </div>
+</section>
+
+<!-- 03 -->
+<section id="s3">
+  <h2>03. 4주 캘린더 · PEAK500 <span class="en">PEAK PHASE CALENDAR</span></h2>
+  <div class="tbl-wrap">
+  <table class="tbl-compact">
+    <thead>
+      <tr>
+        <th style="width:12%">주차</th><th>월</th><th>화</th><th>수</th><th>목</th><th>금</th><th>토</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><b>1주차</b></td>
+        <td>8/17<br>REDLINE</td><td>8/18<br>MAXIMUS</td><td>8/19<br>TRIPLE THREAT</td><td>8/20<br>PINNACLE</td>
+        <td>8/21<br>DOWN UNDER</td><td>8/22<br>SPARTAN</td>
+      </tr>
+      <tr>
+        <td><b>2주차</b></td>
+        <td>8/24<br>REDLINE</td><td>8/25<br>MAXIMUS</td><td>8/26<br>TRIPLE THREAT</td><td>8/27<br>PINNACLE</td>
+        <td>8/28<br>DOWN UNDER</td><td>8/29<br>SPARTAN</td>
+      </tr>
+      <tr>
+        <td><b>3주차</b></td>
+        <td>8/31<br>REDLINE</td><td>9/01<br>MAXIMUS</td><td>9/02<br>TRIPLE THREAT</td><td>9/03<br>PINNACLE</td>
+        <td>9/04<br>DOWN UNDER</td><td>9/05<br>SPARTAN</td>
+      </tr>
+      <tr>
+        <td><b>4주차</b></td>
+        <td>9/07<br>REDLINE</td><td>9/08<br>MAXIMUS</td><td>9/09<br>TRIPLE THREAT</td><td>9/10<br>PINNACLE</td>
+        <td>9/11<br>DOWN UNDER</td><td class="hi">9/12<br>PEAK500</td>
+      </tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="box box-warn">
+    <b>시리즈 3 전체 일정</b>
+    <ul style="margin:8px 0 0 18px;">
+      <li><b>베이스 단계</b> — 6/22 ~ 7/19 · 오버헤드 포지션, 런지 안정성, 스프린트 기술 확립</li>
+      <li><b>빌드 단계</b> — 7/20 ~ 8/16 · 프레스 근력, 편측 하체 근력, 스프린트 속도 증가</li>
+      <li><b>피크 단계</b> — 8/17 ~ 9/13 <b style="color:#d60010;">← 현재</b></li>
+      <li><b>PEAK500 측정</b> — <b style="color:#d60010;">9월 12일(토)</b> · 시리즈 3의 최종 벤치마크 이벤트 · 올해 두 번째 PEAK500</li>
+    </ul>
+  </div>
+
+  <h3>PEAK500 · 오픈 카테고리 신설</h3>
+  <p>1회차 PEAK500 이후 참여 문턱을 낮추기 위해 <b>"오픈(Open)" 카테고리</b>가 추가되었습니다. 스테이션 2·4의 중량 선택지를 더 가볍게 조정한 버전이며, 기존 중량 구성은 <b>"클래식(Classic)" 카테고리</b>로 불립니다. 회원은 F45 트레이닝 앱에서 결과를 제출할 때 원하는 카테고리를 선택합니다.</p>
+  <div class="box box-tip">
+    <b>Playbook의 PEAK500 리소스</b>
+    <p style="margin:6px 0 0;">스코어카드 · 툴킷 · 동작 기준(movement standards) · 웨이브 등록 시트 · 클래스 스케줄링 및 예약 방법이 모두 정리되어 있습니다. 이벤트 2주 전까지 웨이브 편성과 예약 오픈을 마쳐 두세요.</p>
+  </div>
+</section>
+
+<!-- 04 -->
+<section id="s4">
+  <h2>04. 신규 클래스 · 다운언더 <span class="en">DOWN UNDER — MEMBER CHOICE HYBRID</span></h2>
+
+  <div class="box box-red">
+    <b>한 줄 정의</b>
+    <p style="margin:8px 0 0;">매 스테이션에서 <b>스트렝스(Strength)와 컨디셔닝(Conditioning) 중 하나를 회원이 직접 고르는</b> 하이브리드. 고중량 리프트 · 근지구력 · 짧은 인터벌 · 액티브 리커버리를 동반한 긴 유산소 노력을 한 클래스에 모두 담았습니다.</p>
+  </div>
+
+  <h3>기본 정보</h3>
+  <table class="tbl-compact">
+    <tbody>
+      <tr><td style="width:26%"><b>타입</b></td><td>하이브리드 (Member choice)</td></tr>
+      <tr><td><b>정원</b></td><td>30명 (스테이션당 3명)</td></tr>
+      <tr><td><b>스테이션</b></td><td>10개 · 1팟</td></tr>
+      <tr><td><b>동선</b></td><td>레이스트랙 — 방을 한 바퀴 도는 원형 동선, 1랩</td></tr>
+      <tr><td><b>표준 타이밍</b></td><td>운동 40초 / 휴식 20초 · 4세트</td></tr>
+      <tr><td><b>스테이션 5 · 10</b></td><td class="hi">운동 3:40 / 휴식 20초 · 1세트 (TV2가 페이싱 안내)</td></tr>
+    </tbody>
+  </table>
+
+  <div class="box box-tip">
+    <b>스테이션당 소요 시간은 모두 동일합니다</b>
+    <p style="margin:8px 0 0;">일반 스테이션 = (40+20)×4 = <b>4분</b>. 5·10번 = 3:40 + 20초 = <b>4분</b>. 같은 시간을 <b>인터벌로 쪼개느냐, 하나의 긴 노력으로 가느냐</b>의 차이입니다. 10스테이션 × 4분 = 총 40분.</p>
+  </div>
+
+  <h3>스테이션 5 · 10 — TV2 가이드</h3>
+  <p>3분 40초 러닝 클록 동안 두 옵션이 각각 다른 방식으로 진행됩니다.</p>
+
+  <div class="du">
+    <div class="du-card">
+      <div class="du-head du-c">CONDITIONING · 컨디셔닝</div>
+      <div class="du-body">
+        <b>RPE 범위 4~8</b>
+        <div class="rpe-bar">
+          <span class="rpe-w">40"</span><span class="rpe-r">20"</span><span class="rpe-w">40"</span><span class="rpe-r">20"</span><span class="rpe-w">40"</span><span class="rpe-r">20"</span><span class="rpe-w">40"</span>
+        </div>
+        <p style="margin:4px 0 0; font-size:.82rem; color:#777;">Start → 3분 40초</p>
+        <ul style="margin:10px 0 0 18px; font-size:.88rem;">
+          <li><b style="color:#c8102e;">40초 · RPE 8</b> — 스레숄드(threshold). 힘들지만 유지 가능한 강도</li>
+          <li><b style="color:#5a63b0;">20초 · RPE 4</b> — 액티브 리커버리. 멈추지 않고 강도만 낮춤</li>
+        </ul>
+        <p style="margin:10px 0 0; font-size:.86rem;">40-20을 4회 반복해 3:40을 채웁니다. <b>완전히 멈추는 구간은 없습니다.</b></p>
+      </div>
+    </div>
+
+    <div class="du-card">
+      <div class="du-head du-s">STRENGTH · 스트렝스</div>
+      <div class="du-body">
+        <b>3세트 × 15~25회 · 근지구력</b>
+        <ul style="margin:10px 0 0 18px; font-size:.88rem;">
+          <li>세트 사이 휴식은 <b>필요한 만큼(rest as needed)</b></li>
+          <li>3분 40초 동안 운동-휴식을 스스로 배분</li>
+          <li>반복수를 채울 수 있는 중량 선택이 핵심</li>
+        </ul>
+        <p style="margin:10px 0 0; font-size:.86rem;">시간 압박이 아니라 <b>반복수 목표</b>가 기준입니다. 무게가 무거워 15회를 못 채우면 중량을 낮추도록 안내하세요.</p>
+      </div>
+    </div>
+  </div>
+
+  <h3>다운언더 코칭 핵심</h3>
+  <ol>
+    <li><b>선택권을 먼저 설명</b> — "매 스테이션마다 컨디셔닝이냐 스트렝스냐, 여러분이 직접 정합니다"</li>
+    <li><b>목표에 맞춰 안내</b> — 심폐를 밀어붙이고 싶으면 컨디셔닝, 근력에 집중하고 싶으면 스트렝스</li>
+    <li><b>세트마다 퍼포먼스 향상</b> — 4세트 동안 같은 스테이션에 머무르므로, 세트를 거듭하며 아웃풋을 끌어올리도록 유도</li>
+    <li><b>5·10번 사전 공지 필수</b> — "이 두 곳은 3분 40초 연속입니다. TV2 화면 보고 페이스 맞추세요"</li>
+    <li><b>중간에 옵션 변경 허용</b> — 스테이션마다 다시 고르는 구조이므로 회원이 상·하체 균형을 스스로 조절할 수 있습니다</li>
+  </ol>
+</section>
+
+<!-- 05 -->
+<section id="s5">
+  <h2>05. 워크아웃별 공식 스탯 <span class="en">FORMAT DATA</span></h2>
+
+  <div class="tbl-wrap">
+  <table>
+    <thead>
+      <tr><th style="width:18%">워크아웃</th><th style="width:14%">정원</th><th style="width:14%">스테이션 · 동선</th><th>타이밍</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><b>REDLINE</b><br><span class="note">레드라인</span></td><td>27명 (3/스테이션)</td><td>9개 · 1팟<br>팔로우 더 리더</td>
+          <td class="hi">20/5초 → 30/5초 → 40/5초 → 50/5초 → 60/20초 (5세트)</td></tr>
+      <tr><td><b>MAXIMUS</b><br><span class="note">맥시무스</span></td><td>27명</td><td>9개 · 3팟<br>팟 기반</td>
+          <td class="hi">팟 완료마다 45초 수분 보충 휴식 · 팟 종료 시 맨몸 코어 릴 4종</td></tr>
+      <tr><td><b>TRIPLE THREAT</b><br><span class="note">트리플 스렛</span></td><td>36명 (3/스테이션)</td><td>12개 · 1팟<br>레이스트랙</td>
+          <td class="hi">20/10초(세트1) → 40/20초(세트2) → 60/30초(세트3) · 1랩</td></tr>
+      <tr><td><b>PINNACLE</b><br><span class="note">피너클</span></td><td>30명 (3/스테이션)</td><td>10개 · 1팟<br>레이스트랙</td>
+          <td class="hi">운동 45초 / 휴식 15초 · 4세트 · 1랩</td></tr>
+      <tr><td><b>DOWN UNDER</b><br><span class="note">다운언더</span></td><td>30명 (3/스테이션)</td><td>10개 · 1팟<br>레이스트랙</td>
+          <td class="hi">운동 40초 / 휴식 20초 · 4세트 · 1랩<br>(5·10번: 3:40 / 20초 · 1세트)</td></tr>
+      <tr><td><b>SPARTAN</b><br><span class="note">스파르탄</span></td><td>36명 (2/스테이션)</td><td>15개 · 3팟<br>팟 기반</td>
+          <td class="hi">운동 40초 / 휴식 15초 · 1세트 · 3랩 (에르그 팟은 각 5분)</td></tr>
+      <tr><td><b>PEGASUS</b><br><span class="note">페가수스</span></td><td>36명</td><td>저항 + 맨몸 짝</td>
+          <td class="hi">스테이션당 30:20 분할 · 3세트 (일요일 편성 · 미운영)</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="box box-gray">
+    <b>27스테이션 워크아웃의 1.5 배치 옵션 (참고)</b>
+    <p style="margin:6px 0 0;">할리우드·웨스트 할리우드 같은 27스테이션 워크아웃은 54명(2/스테이션) 또는 <b>40명(1.5/스테이션)</b>으로 운영할 수 있습니다. 40명 옵션에서는 스테이션마다 장비를 2세트씩 두되, 에르그는 등을 맞댄 두 스테이션에 3대를 배치합니다(첫 스테이션 2대, 두 번째 스테이션 1대). 배정은 짝수 스테이션 2명 · 홀수 스테이션 1명, 썰매 스테이션은 짝을 이룬 회원이 릴레이로 진행합니다.</p>
+  </div>
+</section>
+
+<!-- 06 -->
+<section id="s6">
+  <h2>06. 중량 · 반복수 기준표 <span class="en">LOAD + REP RANGE GUIDE</span></h2>
+  <p>피크 단계 전 워크아웃의 공식 부하·반복수 기준입니다. 회원이 "몇 개 해야 해요?"라고 물으면 이 표가 답입니다.</p>
+
+  <h4>REDLINE — 부하: 카디오/코어 = 가벼움, 근력 = 중간</h4>
+  <div class="tbl-wrap">
+  <table class="tbl-compact">
+    <thead><tr><th style="width:34%">구분</th><th>40~60초 세트 (3·4·5세트)</th><th>20~30초 세트 (1·2세트)</th></tr></thead>
+    <tbody>
+      <tr><td><b>카디오 / 코어</b></td><td class="hi">15~25회</td><td class="hi">6~10회</td></tr>
+      <tr><td><b>근력</b></td><td class="hi">10~15회</td><td class="hi">4~6회</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="note">레드라인은 세트마다 운동 시간이 달라지므로 반복수 목표도 함께 달라집니다. 1·2세트에서 15회를 노리면 3~5세트가 무너집니다.</p>
+
+  <h4>MAXIMUS</h4>
+  <table class="tbl-compact">
+    <tbody>
+      <tr><td style="width:44%">소근육 그룹 = 가벼움 ~ 중간</td><td class="hi">10~15회</td></tr>
+      <tr><td>대근육 그룹 = 중간 ~ 무거움</td><td class="hi">8~12회</td></tr>
+      <tr><td>맨몸 코어 릴</td><td class="hi">10~15회</td></tr>
+    </tbody>
+  </table>
+
+  <h4>TRIPLE THREAT — 부하: 가벼움</h4>
+  <table class="tbl-compact">
+    <thead><tr><th style="width:34%">세트 1 (20/10초)</th><th style="width:33%">세트 2 (40/20초)</th><th>세트 3 (60/30초)</th></tr></thead>
+    <tbody><tr><td class="hi">8~12회</td><td class="hi">12~15회</td><td class="hi">15~25회</td></tr></tbody>
+  </table>
+
+  <h4>PINNACLE</h4>
+  <table class="tbl-compact">
+    <tbody>
+      <tr><td style="width:44%">소근육 그룹 = 가벼움 ~ 중간</td><td class="hi">10~15회</td></tr>
+      <tr><td>대근육 그룹 = 중간 ~ 무거움</td><td class="hi">8~12회</td></tr>
+      <tr><td>코어 운동 = 가벼움</td><td class="hi">10~15회</td></tr>
+    </tbody>
+  </table>
+
+  <h4>DOWN UNDER — 부하: 카디오 = 가벼움, 근력 = 중간</h4>
+  <table class="tbl-compact">
+    <thead><tr><th style="width:34%">카디오</th><th style="width:33%">코어</th><th>근력</th></tr></thead>
+    <tbody><tr><td class="hi">12~15회</td><td class="hi">15~20회</td><td class="hi">12~15회</td></tr></tbody>
+  </table>
+  <p class="note">5·10번 스테이션 스트렝스 옵션만 예외 — 3세트 × 15~25회의 근지구력 기준을 따릅니다.</p>
+
+  <h4>SPARTAN — 부하: 카디오/코어 = 가벼움, 근력 = 중간</h4>
+  <table class="tbl-compact">
+    <thead><tr><th style="width:44%">구분</th><th>팟 1 + 3</th></tr></thead>
+    <tbody>
+      <tr><td><b>카디오 / 코어</b></td><td class="hi">15~25회</td></tr>
+      <tr><td><b>근력</b></td><td class="hi">10~15회</td></tr>
+    </tbody>
+  </table>
+
+  <h4>PEGASUS <span class="ref-chip">일요일 편성</span></h4>
+  <table class="tbl-compact">
+    <tbody>
+      <tr><td style="width:44%">소근육 그룹 = 가벼움</td><td class="hi">12~15회</td></tr>
+      <tr><td>대근육 그룹 = 중간</td><td class="hi">8~12회</td></tr>
+      <tr><td>맨몸 동작 = 맨몸</td><td class="hi">6~8회</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- 07 -->
+<section id="s7">
+  <h2>07. 유산소 강도 가이드 <span class="en">CARDIO APPROACH AND EFFORT GUIDE</span></h2>
+
+  <h3>운동 시간별 목표 강도</h3>
+  <table class="tbl-compact">
+    <thead><tr><th style="width:20%">운동 시간</th><th style="width:20%">목표 강도</th><th>코칭 방향</th></tr></thead>
+    <tbody>
+      <tr><td><b>20초</b></td><td class="hi">90%</td><td>거의 전력. 짧으니 아끼지 말고 터뜨립니다. (레드라인 1세트, 트리플 스렛 1세트)</td></tr>
+      <tr><td><b>30초</b></td><td class="hi">80%</td><td>강하게, 다만 자세가 무너지기 직전에서 멈춥니다. (레드라인 2세트)</td></tr>
+      <tr><td><b>40초</b></td><td class="hi">75%</td><td>중상 강도. 후반부까지 같은 속도를 유지하는 것이 목표. (다운언더 표준 세트)</td></tr>
+      <tr><td><b>60초</b></td><td class="hi">50%</td><td>페이스 배분이 전부. 초반 30초에 다 쓰면 후반이 사라집니다. (레드라인 5세트, 트리플 스렛 3세트)</td></tr>
+      <tr><td><b>3:40 연속</b></td><td class="hi">RPE 4~8</td><td>다운언더 5·10번. 40초 RPE 8 · 20초 RPE 4를 반복하며 스레숄드와 액티브 리커버리를 오갑니다.</td></tr>
+    </tbody>
+  </table>
+  <div class="box box-tip"><b>한 줄 원칙</b> — 운동 시간이 <b>짧을수록 세게</b>, <b>길수록 나눠서</b>.</div>
+
+  <h3>회원 레벨별 접근</h3>
+  <div class="lv">
+    <div class="lv-card">
+      <div class="lv-code">BEG</div><div class="lv-name">비기너</div>
+      <div class="lv-desc">이른 피로를 예상하고, 저강도·저충격 대체 동작을 미리 준비시킵니다.</div>
+    </div>
+    <div class="lv-card">
+      <div class="lv-code">INT</div><div class="lv-name">중급</div>
+      <div class="lv-desc">자세를 유지할 수 있을 때만 강도를 올립니다. 저충격 대체 동작을 준비해 둡니다.</div>
+    </div>
+    <div class="lv-card">
+      <div class="lv-code">ADV</div><div class="lv-name">상급</div>
+      <div class="lv-desc">자세가 유지되는 한 끊김 없는 반복(unbroken reps)을 유도하고 반복수 목표를 제시합니다.</div>
+    </div>
+    <div class="lv-card">
+      <div class="lv-code">ELT</div><div class="lv-name">엘리트</div>
+      <div class="lv-desc">회원의 반응과 빠른 회복 속도를 보고 반복수 목표를 더 올립니다.</div>
+    </div>
+  </div>
+</section>
+
+<!-- 08 -->
+<section id="s8">
+  <h2>08. 에르그 머신 기준 <span class="en">ERG MACHINE BREAKDOWN</span></h2>
+  <p>스파르탄 팟 2를 비롯해 에르그가 등장하는 모든 스테이션의 세팅 기준입니다.</p>
+  <div class="tbl-wrap">
+  <table>
+    <thead><tr><th style="width:16%">항목</th><th>바이크</th><th>로워</th><th>스키어</th></tr></thead>
+    <tbody>
+      <tr><td><b>댐퍼</b></td><td class="hi">6~8</td><td class="hi">5~7</td><td class="hi">5~7</td></tr>
+      <tr><td><b>목표 / 케이던스</b></td>
+          <td>55·60초 → 500m<br>40·45초 → 400m<br>20·30초 → 200m</td>
+          <td>55·60초 → 1:3<br>40·45초 → 1:2<br>20·30초 → 1:1</td>
+          <td>55·60초 → 1:3<br>40·45초 → 1:2<br>20·30초 → 1:1</td></tr>
+      <tr><td><b>멘탈 큐</b></td>
+          <td><b>Hallway</b><br>복도를 지나듯 — 어깨가 벽에 닿지 않게</td>
+          <td><b>Big 3</b><br>다리 → 코어 → 팔 / 팔 → 코어 → 다리</td>
+          <td><b>Pull to Pockets</b><br>주머니까지 당긴다 — 힙 힌지 유지</td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<!-- 09 -->
+<section id="s9">
+  <h2>09. 동선 방식 <span class="en">MOVEMENT SYSTEMS</span></h2>
+  <p>F45 워크아웃의 동선은 세 가지입니다.</p>
+  <table class="tbl-compact">
+    <thead><tr><th style="width:20%">방식</th><th>설명</th><th style="width:26%">피크 단계 해당</th></tr></thead>
+    <tbody>
+      <tr><td><b>POD-BASED</b><br><span class="note">팟 기반</span></td>
+          <td>워크아웃이 여러 구역(팟)으로 나뉘고, 각 팟이 정해진 수의 스테이션을 포함합니다.</td>
+          <td>맥시무스(3팟) · 스파르탄(3팟)</td></tr>
+      <tr><td><b>RACETRACK</b><br><span class="note">레이스트랙</span></td>
+          <td>스테이션이 방을 원형으로 한 바퀴 돌며 이어집니다.</td>
+          <td>트리플 스렛 · 피너클 · 다운언더</td></tr>
+      <tr><td><b>FOLLOW THE LEADER</b><br><span class="note">팔로우 더 리더</span></td>
+          <td>뱀이 지나가듯 지그재그(웨이브)로 흐릅니다.</td>
+          <td>레드라인</td></tr>
+    </tbody>
+  </table>
+
+  <h3>워크아웃별 실제 배치</h3>
+  <div class="tbl-wrap">
+  <table>
+    <thead><tr><th style="width:20%">워크아웃</th><th>스테이션 배치</th></tr></thead>
+    <tbody>
+      <tr><td><b>REDLINE</b></td>
+        <td>3열 지그재그. 오른쪽 열(1→2→3, 아래→위) → 가운데 열(4→5→6, 위→아래) → 왼쪽 열(7→8→9, 아래→위). <b>9번은 1번과 연결되지 않습니다</b>(루프 아님).</td></tr>
+      <tr><td><b>MAXIMUS</b></td>
+        <td>3개 팟이 나란히 배치되고, 팟마다 3스테이션이 아래→위 순서 (팟3 = 7·8·9).</td></tr>
+      <tr><td><b>TRIPLE THREAT</b></td>
+        <td>12스테이션 레이스트랙. 1번이 우측 하단에서 시작해 한 바퀴 돌고 12번에서 마무리.</td></tr>
+      <tr><td><b>PINNACLE</b></td>
+        <td>10스테이션 레이스트랙. 1번이 우측 하단에서 시작.</td></tr>
+      <tr><td><b>DOWN UNDER</b></td>
+        <td>10스테이션 레이스트랙. <b>1번(우측 하단) → 오른쪽 벽을 따라 위로(2·3) → 상단을 왼쪽으로(4·5·6) → 왼쪽 벽을 따라 아래로(7·8) → 하단을 오른쪽으로(9·10) → 1번으로 복귀.</b> 반시계 방향입니다.</td></tr>
+      <tr><td><b>SPARTAN</b></td>
+        <td>5열 구조 — 팟3(2열, 13-14-15 / 12-11-10), 팟2(에르그 3대, E1-E2-E3, 다른 팟과 미연결), 팟1(2열, 6-5-4 / 1-2-3).</td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<!-- 10 -->
+<section id="s10">
+  <h2>10. 요일별 코칭 포인트 <span class="en">COACHING FOCUS</span></h2>
+
+  <h4>월 · REDLINE — "한계 직전까지"</h4>
+  <ul>
+    <li>세트마다 운동 시간이 길어진다는 것을 미리 공지 (20→30→40→50→60초)</li>
+    <li>휴식이 대부분 5초 — 이동 동선을 최대한 단순하게, 장비 위치를 미리 잡아두게 안내</li>
+    <li>반복수 목표가 세트마다 다름: 20~30초 구간은 카디오 6~10 / 근력 4~6, 40~60초 구간은 카디오 15~25 / 근력 10~15</li>
+    <li>마지막 5세트는 유일하게 20초 휴식 후 시작 — 여기서 최고 아웃풋을 내도록 독려</li>
+    <li>"1세트부터 다 쓰면 5세트 못 갑니다"</li>
+  </ul>
+
+  <h4>화 · MAXIMUS — "가동범위 먼저, 무게는 그 다음"</h4>
+  <ul>
+    <li>초반은 가동범위 확보, 이후 고중량 오버로드로 전환</li>
+    <li>소근육 10~15회 / 대근육 8~12회 — 이 범위를 채울 수 있는 중량이 정답</li>
+    <li>팟 완료마다 45초 수분 보충 휴식이 있다는 것을 미리 공지</li>
+    <li>팟 마무리 맨몸 코어 릴 4종(10~15회)은 근력 세트 직후라 지친 상태 — 자세 체크 필수</li>
+  </ul>
+
+  <h4>수 · TRIPLE THREAT — "3:1 비율을 버텨내기"</h4>
+  <ul>
+    <li>세트마다 운동 시간이 정확히 두 배로 늘어남 (20→40→60초), 휴식도 함께 늘지만 비율은 항상 3:1</li>
+    <li>반복수도 함께 올라감: 8~12 → 12~15 → 15~25회. 부하는 세 세트 모두 가벼움 유지</li>
+    <li>강도 배분: 20초 90% · 40초 75% · 60초 50%</li>
+    <li>세트 사이 호흡을 가라앉히는 루틴을 안내 — 심폐 회복력이 이 클래스의 핵심</li>
+  </ul>
+
+  <h4>목 · PINNACLE — "내가 고르는 포커스"</h4>
+  <ul>
+    <li>상체/하체 포커스를 수업 시작 전에 회원이 직접 정하도록 안내</li>
+    <li>'Series Lift' 스테이션은 시리즈 내내 쌓은 근력을 표현하는 자리 — 최대 중량 도전 격려</li>
+    <li>외곽 스테이션은 저항 + 코어·모빌리티 슈퍼세트</li>
+    <li>45초 운동 / 15초 휴식 — 휴식이 짧으니 중량 세팅을 미리 끝내두게 안내</li>
+    <li>이번 시리즈의 측정 항목이 오버헤드 프레스와 런지 — 이 두 패턴에서 특히 자세 피드백을 집중</li>
+  </ul>
+
+  <h4>금 · DOWN UNDER — "선택은 당신의 몫"</h4>
+  <ul>
+    <li>매 스테이션 컨디셔닝/스트렝스 옵션을 회원이 직접 고르도록 명확히 안내</li>
+    <li>5·10번의 3:40 연속 구간 구조를 <b>수업 시작 전에 반드시</b> 공지, TV2 화면을 보게 유도</li>
+    <li>같은 스테이션에서 4세트를 반복하므로 세트마다 아웃풋을 끌어올리도록 독려</li>
+    <li>스트렝스 옵션 선택자에게는 반복수(12~15, 5·10번은 15~25)를 채울 수 있는 중량인지 확인</li>
+  </ul>
+
+  <h4>토 · SPARTAN — "팀으로 완주하기"</h4>
+  <ul>
+    <li>팟 1·3(기능성 동작, 3바퀴)과 팟 2(에르그 릴레이)의 구조 차이를 명확히 설명</li>
+    <li>에르그 릴레이는 5분 단위 — 팀원과 교대 타이밍을 사전에 정하게 안내</li>
+    <li>팟 1·3 반복수: 카디오/코어 15~25회, 근력 10~15회</li>
+    <li>스테이션당 2명 배치 — 짝과 페이스를 맞추는 것이 완주의 핵심</li>
+    <li>Spartan Race · DEKA 공식 파트너십 워크아웃이라는 스토리텔링으로 동기부여</li>
+  </ul>
+
+  <h3>피크 단계 공통 코칭 원칙</h3>
+  <table class="tbl-compact">
+    <thead><tr><th style="width:26%">원칙</th><th>실행 방법</th></tr></thead>
+    <tbody>
+      <tr><td><b>① 쌓아온 것을 표현하기</b></td><td>빌드 단계에서 올려온 무게·속도를 <b>이번엔 자신 있게 꺼내도록</b> 격려합니다.</td></tr>
+      <tr><td><b>② 자세는 여전히 최우선</b></td><td>강도가 최고조인 만큼 자세가 무너지는 순간이 가장 위험합니다.</td></tr>
+      <tr><td><b>③ 페이스 배분 강조</b></td><td>긴 세트(60초)와 연속 구간(다운언더 3:40), 릴레이(스파르탄)에서 특히 중요합니다.</td></tr>
+      <tr><td><b>④ PEAK500 스토리텔링</b></td><td>매 수업이 9월 12일과 연결된다는 걸 자주 언급합니다.</td></tr>
+      <tr><td><b>⑤ 회복 강조</b></td><td>최고 강도 단계 = 수면·영양·리커버리 중요성을 가장 자주 언급할 시기.</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- 11 -->
+<section id="s11">
+  <h2>11. 회원 안내 멘트 <span class="en">MEMBER COMMUNICATION</span></h2>
+
+  <div class="script">
+    <div class="label">피크 단계 첫 주 · 공통 멘트</div>
+    <p>"오늘부터 <b>피크 단계</b>입니다. 지난 4주 동안 무게와 속도를 올리셨다면, 이제부터 4주는 <b>그걸 실전에서 터뜨리는 시간</b>이에요.</p>
+    <p>휴식은 더 짧아지고 강도는 최고조로 올라갑니다. 대신 목표는 단순합니다 — <b>지난 4주 쌓아온 것을 자신 있게 꺼내는 것.</b></p>
+    <p>9월 12일에는 시리즈 3의 최종 측정, <b>PEAK500</b>이 있습니다. 오늘부터 매 수업이 그날을 향한 준비입니다!"</p>
+  </div>
+
+  <div class="script">
+    <div class="label">다운언더 첫 수업 · 필수 멘트</div>
+    <p>"오늘은 새로 나온 <b>다운언더</b>입니다. 호주를 뜻하는 애칭에서 따온 이름이에요.</p>
+    <p>이 클래스의 포인트는 <b>선택권이 여러분께 있다는 것</b> — 매 스테이션마다 <b>컨디셔닝</b>과 <b>스트렝스</b> 중 원하는 쪽을 고르시면 됩니다. 심폐를 밀어붙이고 싶으면 컨디셔닝, 근력에 집중하고 싶으면 스트렝스!</p>
+    <p>한 스테이션에서 40초 운동 / 20초 휴식으로 4세트를 하고 다음으로 넘어갑니다. 세트마다 조금씩 더 좋은 기록을 내는 게 목표예요.</p>
+    <p>단, <b>5번과 10번 스테이션은 다릅니다.</b> 이 두 곳은 <b>3분 40초 연속</b>으로 갑니다. 컨디셔닝은 40초 강하게 / 20초 회복을 반복하고, 스트렝스는 15~25회 3세트를 스스로 배분해서 하시면 됩니다. TV2 화면에 안내가 나옵니다!"</p>
+  </div>
+
+  <div class="script">
+    <div class="label">레드라인 · 필수 멘트</div>
+    <p>"오늘은 <b>레드라인</b>, 자동차 계기판의 한계선이라는 뜻입니다.<br>
+    세트마다 운동 시간이 <b>20초 → 30초 → 40초 → 50초 → 60초</b>로 늘어납니다. 휴식은 <b>5초</b>, 마지막 세트 전에만 20초예요.<br>
+    짧은 세트는 거의 전력으로, 긴 세트는 나눠서 갑니다. 1세트부터 다 쓰면 5세트를 못 채웁니다!"</p>
+  </div>
+
+  <div class="script">
+    <div class="label">스파르탄 · 필수 멘트</div>
+    <p>"오늘은 <b>스파르탄</b>, F45와 Spartan Race의 공식 파트너십 워크아웃입니다.<br>
+    팟 1과 3은 기능성 동작으로 <b>3바퀴</b>를 순환하고, 팟 2는 <b>에르그 머신 릴레이</b>입니다. 팟 2에서는 <b>5분씩 교대</b>하니 미리 순서를 정해두세요.<br>
+    실제 Spartan Race와 DEKA 이벤트의 구간을 재현한 구성입니다. 팀으로 함께 완주해봅시다!"</p>
+  </div>
+
+  <div class="script">
+    <div class="label">동기 부여용 한 줄</div>
+    <p>• "9월 12일 PEAK500까지 D-<span class="blank">__</span>일. 오늘 한 세트가 그날의 기록이 됩니다."<br>
+       • "이번 PEAK500엔 오픈 카테고리가 생겼어요. 중량 부담 없이 도전해보세요."<br>
+       • "지난 4주 올려온 무게, 이번엔 자신 있게 꺼내볼 시간입니다."</p>
+  </div>
+</section>
+
+<!-- 12 -->
+<section id="s12">
+  <h2>12. 인트로 스크립트 <span class="en">WORKOUT INTRO SCRIPTS</span></h2>
+
+  <h3>인트로 5단계</h3>
+  <table class="tbl-compact">
+    <thead><tr><th style="width:8%">순서</th><th style="width:28%">항목</th><th>내용</th></tr></thead>
+    <tbody>
+      <tr><td class="hi"><b>01</b></td><td><b>환영 + 워크아웃 소개</b></td><td>따뜻하게 환영하고 오늘 워크아웃과 플로어 구성 안내 — 타입 / 팟 / 스테이션 / 동선</td></tr>
+      <tr><td class="hi"><b>02</b></td><td><b>신규 회원 소개</b></td><td>신규 회원을 언급해 분위기를 풀고 소속감을 만들어 주기</td></tr>
+      <tr><td class="hi"><b>03</b></td><td><b>타이밍 설명</b></td><td>워크 / 레스트 / 세트 / 랩을 명확하고 간결하게</td></tr>
+      <tr><td class="hi"><b>04</b></td><td><b>부상 · 대체 동작</b></td><td>제약 있는 회원은 <b>웜업 중에</b> 코치에게 알려달라고 안내</td></tr>
+      <tr><td class="hi"><b>05</b></td><td><b>타이밍 재확인</b></td><td>워크-레스트-세트-랩을 압축해서 한 번 더 반복</td></tr>
+    </tbody>
+  </table>
+
+  <h3>공식 템플릿</h3>
+
+  <div class="script">
+    <div class="label">팟 기반 (POD-BASED) <span style="color:#8b90a0;">— 맥시무스</span></div>
+    <p>"안녕하세요 여러분! F45에 오신 걸 환영합니다! 저는 <span class="blank">______</span> 코치입니다.<br>
+    오늘 워크아웃은 <b>맥시무스</b>, <b>저항</b> 워크아웃이고 <b>팟 3개, 팟당 스테이션 3개</b>입니다.<br>
+    신규 회원분들, 환영합니다!<br>
+    가동범위를 충분히 확보한 다음 고중량으로 전환합니다. 팟이 끝날 때마다 <b>45초 수분 보충 휴식</b>이 있고, 팟 마지막엔 맨몸 코어 릴 4종이 있습니다.<br>
+    부상이나 대체 동작이 필요하시면 웜업 중에 알려주세요!<br>
+    다시 정리하면 팟 3개 · 팟당 3스테이션 · 팟마다 45초 휴식입니다."</p>
+  </div>
+
+  <div class="script">
+    <div class="label">레이스트랙 / 팔로우 더 리더 <span style="color:#8b90a0;">— 피너클</span></div>
+    <p>"…오늘 워크아웃은 <b>피너클</b>, <b>저항</b> 워크아웃이고 <b>1팟 10스테이션 레이스트랙</b>입니다.<br>
+    타이밍은 <b>운동 45초 / 휴식 15초, 스테이션당 4세트, 방을 한 바퀴</b>입니다.<br>
+    상체와 하체 중 오늘의 포커스를 직접 고르세요. 시리즈 리프트 스테이션에서는 최대 중량에 도전합니다.<br>
+    부상이나 대체 동작이 필요하시면 웜업 중에 알려주세요!<br>
+    다시 정리하면 45초 운동 · 15초 휴식 · 4세트 · 1랩입니다."</p>
+  </div>
+
+  <div class="script">
+    <div class="label">멀티 랩 (MULTIPLE LAPS) <span style="color:#8b90a0;">— 레드라인 · 트리플 스렛</span></div>
+    <p>"…오늘 워크아웃은 <b>트리플 스렛</b>, <b>카디오</b> 워크아웃이고 <b>1팟 12스테이션</b>입니다.<br>
+    타이밍이 세트마다 달라집니다 —<br>
+    세트 1: <b>20초 운동 / 10초 휴식</b><br>
+    세트 2: <b>40초 운동 / 20초 휴식</b><br>
+    세트 3: <b>60초 운동 / 30초 휴식</b><br>
+    운동:휴식 비율은 계속 3:1입니다.<br>
+    부상이나 대체 동작이 필요하시면 웜업 중에 알려주세요!<br>
+    다시 정리하면 20/10 · 40/20 · 60/30, 스테이션당 3세트입니다."</p>
+  </div>
+
+  <div class="script">
+    <div class="label">특수 구조 (SPECIAL FOCUS) <span style="color:#8b90a0;">— 다운언더</span></div>
+    <p>"…오늘 워크아웃은 <b>다운언더</b>, <b>하이브리드</b> 워크아웃이고 <b>1팟 10스테이션 레이스트랙</b>입니다.<br>
+    타이밍은 <b>운동 40초 / 휴식 20초, 스테이션당 4세트, 1랩</b>입니다.<br>
+    매 스테이션마다 <b>컨디셔닝 또는 스트렝스</b> 중 원하는 쪽을 고르세요.<br>
+    <b>5번과 10번 스테이션만 3분 40초 연속</b>으로 진행하고, TV2에 페이싱 안내가 나옵니다.<br>
+    부상이나 대체 동작이 필요하시면 웜업 중에 알려주세요!<br>
+    다시 정리하면 40초 운동 · 20초 휴식 · 4세트 · 1랩, 5번과 10번은 3분 40초입니다."</p>
+  </div>
+</section>
+
+<!-- 13 -->
+<section id="s13">
+  <h2>13. 라이언하트 <span class="en">LIONHEART</span></h2>
+  <p>회원이 <b>심박수 존</b>을 실시간으로 확인하고 포인트로 동기 부여를 받는 시스템입니다. 가슴 스트랩이나 팔 스트랩을 착용하면 심박수와 워크아웃 포인트가 계산됩니다.</p>
+
+  <h3>리포트 구성</h3>
+  <table class="tbl-compact">
+    <thead><tr><th style="width:26%">항목</th><th>내용</th></tr></thead>
+    <tbody>
+      <tr><td><b>다이나믹 리포트</b></td><td>캔들스틱 1개 = 1분 데이터. 그 1분간의 <b>최저~최고 심박수 범위</b>를 막대로 표시하며, 심박수 존 색으로 칠해집니다.</td></tr>
+      <tr><td><b>심박수 존</b></td><td>존별 BPM 범위 / 존별 머문 시간 / 색상 구분</td></tr>
+      <tr><td><b>세션 요약</b></td><td>라이언하트 포인트 · 최대 심박수 · 평균 심박수 · 예상 소모 칼로리(심박수 존 아래 표시)</td></tr>
+    </tbody>
+  </table>
+  <div class="box box-tip"><b>레드라인 · 다운언더와 궁합이 좋습니다.</b><p style="margin:6px 0 0;">세트마다 강도가 뚜렷이 올라가는 구조(레드라인)나 스레숄드-리커버리를 오가는 구간(다운언더 5·10번)에서, 라이언하트 화면으로 <b>실제 심박수 존이 어떻게 움직이는지</b> 보여주면 회원 이해가 훨씬 빠릅니다.</p></div>
+</section>
+
+<!-- 14 -->
+<section id="s14">
+  <h2>14. 용어 사전 <span class="en">TERMINOLOGY</span></h2>
+
+  <h3>F45 공통 용어</h3>
+  <table class="tbl-compact">
+    <tbody>
+      <tr><td style="width:26%"><b>MEMBERS</b> 멤버</td><td>동시에 운동하는 F45 회원 수</td></tr>
+      <tr><td><b>STATIONS</b> 스테이션</td><td>운동 종목의 개수</td></tr>
+      <tr><td><b>WORK</b> 워크</td><td>운동하는 시간</td></tr>
+      <tr><td><b>REST</b> 레스트</td><td>쉬는 시간</td></tr>
+      <tr><td><b>SET</b> 세트</td><td>한 스테이션에서 수행하는 운동 1회분</td></tr>
+      <tr><td><b>COMBO SET</b> 콤보 세트</td><td>알파벳으로 나뉜 여러 스테이션을 한 세트에 이어서 수행</td></tr>
+      <tr><td><b>LAPS</b> 랩</td><td>팟 또는 전체 동선을 한 바퀴 도는 횟수</td></tr>
+      <tr><td><b>POD</b> 팟</td><td>여러 스테이션을 묶은 워크아웃의 한 구역</td></tr>
+      <tr><td><b>REELS</b> 릴</td><td>TV에 여러 운동이 연속으로 재생되는 형식</td></tr>
+      <tr><td><b>ROUNDS</b> 라운드</td><td>여러 루프를 한 번 순환하는 사이클</td></tr>
+    </tbody>
+  </table>
+
+  <h3>워크아웃 이름 뜻</h3>
+  <table class="tbl-compact">
+    <thead><tr><th style="width:24%">워크아웃</th><th style="width:20%">읽는 법</th><th>이름 뜻</th></tr></thead>
+    <tbody>
+      <tr><td><b>REDLINE</b></td><td>레드라인</td><td><b>계기판의 회전한계선.</b> 엔진이 낼 수 있는 최대치의 경계선</td></tr>
+      <tr><td><b>MAXIMUS</b></td><td>맥시무스</td><td><b>라틴어로 '가장 큰, 최대의'.</b> 로마 검투사·웨이트리프팅 테마</td></tr>
+      <tr><td><b>TRIPLE THREAT</b></td><td>트리플 스렛</td><td><b>세 방면에서 위협적인 존재.</b> 여기선 3:1 운동:휴식 비율</td></tr>
+      <tr><td><b>PINNACLE</b></td><td>피너클</td><td><b>산의 정상, 정점.</b> 쌓아온 근력의 정점을 찍는다는 의미</td></tr>
+      <tr><td><b>DOWN UNDER</b></td><td>다운언더</td><td><b>호주를 가리키는 애칭.</b> 지구 반대편, 남반구라는 뜻에서 유래</td></tr>
+      <tr><td><b>SPARTAN</b></td><td>스파르탄</td><td><b>Spartan Race 공식 파트너십 워크아웃.</b> 장애물 레이스 테마</td></tr>
+      <tr><td><b>PEGASUS</b></td><td>페가수스</td><td><b>그리스 신화의 날개 달린 천마.</b> 저항-맨몸 슈퍼세트 하이브리드</td></tr>
+    </tbody>
+  </table>
+
+  <h3>피크 단계에서 자주 나오는 말</h3>
+  <div class="terms">
+    <div class="term">
+      <div class="t-en">Peak</div>
+      <div class="t-kr">피크 <span>[정점]</span></div>
+      <p>능력이 최고조에 달한 상태. 이번 단계는 그동안 쌓은 것을 실전에서 표현하는 시기입니다.</p>
+    </div>
+    <div class="term">
+      <div class="t-en">Overhead Press</div>
+      <div class="t-kr">오버헤드 프레스</div>
+      <p>머리 위로 중량을 밀어 올리는 동작. 시리즈 3 측정 항목 중 하나.</p>
+    </div>
+    <div class="term">
+      <div class="t-en">Lunge</div>
+      <div class="t-kr">런지</div>
+      <p>한쪽 다리를 앞으로 내딛고 무게중심을 낮추는 동작. 편측(unilateral) 하체 근력을 대표합니다.</p>
+    </div>
+    <div class="term">
+      <div class="t-en">RPE</div>
+      <div class="t-kr">체감 강도 <span>[1~10]</span></div>
+      <p>스스로 느끼는 운동 강도. 다운언더 5·10번 컨디셔닝은 RPE 8(스레숄드)과 RPE 4(액티브 리커버리)를 오갑니다.</p>
+    </div>
+    <div class="term">
+      <div class="t-en">Threshold / Active Recovery</div>
+      <div class="t-kr">스레숄드 / 액티브 리커버리</div>
+      <p>스레숄드는 힘들지만 유지 가능한 강도, 액티브 리커버리는 멈추지 않고 강도만 낮춰 회복하는 구간.</p>
+    </div>
+    <div class="term">
+      <div class="t-en">Series Lift</div>
+      <div class="t-kr">시리즈 리프트 <span>[피너클]</span></div>
+      <p>피너클의 핵심 스테이션. 최대 중량으로 도전하는 메인 리프트 자리.</p>
+    </div>
+    <div class="term">
+      <div class="t-en">Open / Classic Category</div>
+      <div class="t-kr">오픈 / 클래식 카테고리 <span>[PEAK500]</span></div>
+      <p>오픈은 스테이션 2·4의 중량을 가볍게 조정한 참여형 카테고리, 클래식은 기존 중량 구성.</p>
+    </div>
+    <div class="term">
+      <div class="t-en">Erg Pod</div>
+      <div class="t-kr">에르그 팟 <span>[스파르탄]</span></div>
+      <p>바이크·로워·스키어 등 에르그 머신으로만 구성된 팟. 5분 단위로 교대하는 릴레이 형식.</p>
+    </div>
+    <div class="term">
+      <div class="t-en">Damper</div>
+      <div class="t-kr">댐퍼</div>
+      <p>에르그 머신의 공기 저항 조절 레버. 바이크 6~8, 로워·스키어 5~7이 기준.</p>
+    </div>
+    <div class="term">
+      <div class="t-en">DEKA</div>
+      <div class="t-kr">데카</div>
+      <p>Spartan이 소유한 기능성 피트니스 대회 브랜드. F45 × Spartan 파트너십의 또 다른 축.</p>
+    </div>
+  </div>
+</section>
+
+<!-- 15 -->
+<section id="s15">
+  <h2>15. 선택 워크아웃 · HYROX <span class="en">OPTIONAL PROGRAMS</span></h2>
+
+  <h3>선택 워크아웃 (Optional Workouts)</h3>
+  <p>선택 워크아웃은 어느 요일에나 편성할 수 있지만 매주 반복되는 프로그램이 아니므로, <b>페이즈 전체에 걸쳐 정규 워크아웃을 대체하는 용도로 쓰면 안 됩니다.</b> 페이즈 중 대체 클래스나 스튜디오 특별 이벤트용으로 활용하세요.</p>
+  <table class="tbl-compact">
+    <tbody>
+      <tr><td style="width:26%"><b>선택 워크아웃</b></td>
+          <td>Firestorm · Heroes Hollywood · Valor · The Wringer · Quarterbacks · 45 · Duo · Spartan</td></tr>
+      <tr><td><b>피트니스 평가</b></td><td>Benchmark · 3-Peat · Playoffs</td></tr>
+      <tr><td><b>프로그램된 선택</b></td><td>Hollywood (모빌리티 / Hollywood Optional 티어에서 로드)</td></tr>
+      <tr><td><b>스페셜 워크아웃</b></td><td>메모리얼데이·슈퍼볼 같은 특정 날짜용 일회성 워크아웃. 웨비나와 애슬레틱스 이메일로 공지됩니다.</td></tr>
+    </tbody>
+  </table>
+  <div class="box box-gray">
+    <b>F45 TV 앱에서 불러오는 법</b>
+    <p style="margin:6px 0 0;">선택 워크아웃 — 설정 → <b>Change program</b> → <b>Optional Workouts</b> → 워크아웃 선택 → Load to TVs.<br>
+    피트니스 평가 — 설정 → <b>Change program</b> → 해당 평가 선택 → Load to TVs.<br>
+    Hollywood — 트레이닝 티어를 넘겨 <b>mobility / Hollywood Optional</b>이 나오면 해당 요일 선택 → Load to TVs.</p>
+  </div>
+
+  <h3>HYROX 시그니처 시리즈</h3>
+  <p>HYROX 시그니처 클래스가 <b>페이즈당 4종에서 6종으로 확장</b>되었습니다. Foundations 5·6, Skill 5·6, Race 5·6이 추가됩니다.</p>
+  <table class="tbl-compact">
+    <tbody>
+      <tr><td style="width:14%"><b>F5</b></td><td>긴 에르그 세트에 집중, 아웃풋 유지 훈련</td></tr>
+      <tr><td><b>F6</b></td><td>동작 중 서지(surge)와 리커버리를 오가는 능력 숙달</td></tr>
+      <tr><td><b>S5</b></td><td>반복 가능한 개인 아웃풋 + 팀 팟 최대 아웃풋</td></tr>
+      <tr><td><b>S6</b></td><td>2인 1조(더블) + 컴프로마이즈드 러닝</td></tr>
+      <tr><td><b>R5</b></td><td>지속적인 스레숄드 노력 + 짧은 액티브 리커버리</td></tr>
+      <tr><td><b>R6</b></td><td>실전 레이스 페이스 찾기</td></tr>
+    </tbody>
+  </table>
+  <div class="box box-tip">
+    <p style="margin:0;">워크아웃 카탈로그와 소셜 에셋은 Canva의 <b>HYROX Affiliate 폴더</b>에 있습니다. F45 × HYROX 참가자는 F45 트레이닝 앱의 <b>Events → Special Events → HYROX Race Leaderboard</b>에서 공식 레이스 기록을 등록할 수 있습니다.</p>
+  </div>
+</section>
+
+<!-- 16 -->
+<section id="s16">
+  <h2>16. 시작 전 체크리스트 <span class="en">PRE-PHASE CHECKLIST</span></h2>
+  <ul class="check">
+    <li>월~토 6종 워크아웃(레드라인·맥시무스·트리플 스렛·피너클·다운언더·스파르탄) 순서 확정</li>
+    <li>레드라인 피라미드 세트(20→30→40→50→60초, 휴식 5초/마지막 20초) 타이밍 숙지</li>
+    <li>레드라인 세트별 반복수 차이(20~30초 vs 40~60초) 코치 전원 공유</li>
+    <li><b>다운언더 5번·10번 3:40 구조</b> 및 컨디셔닝(40/20 RPE 8·4) / 스트렝스(3세트 15~25회) 옵션 숙지</li>
+    <li>다운언더 TV2 페이싱 화면 사전 확인 · 5·10번 스테이션 위치 표시</li>
+    <li>워크아웃별 중량·반복수 기준표(06번 섹션) 출력해 플로어에 비치</li>
+    <li>에르그 댐퍼 세팅(바이크 6~8, 로워·스키어 5~7) 전 머신 점검</li>
+    <li>스파르탄 에르그 팟(5분 릴레이) 사전 세팅 · 팀 배정 방법 점검</li>
+    <li>PEAK500 <b>오픈/클래식 카테고리</b> 안내 준비</li>
+    <li>4주차 토요일(9/12)은 스파르탄 대신 PEAK500 진행 — 예약·스케줄 사전 공지</li>
+    <li>PEAK500 스코어카드·툴킷·동작 기준·웨이브 등록 시트 Playbook에서 다운로드</li>
+    <li>회원들에게 <b>PEAK500 (9월 12일)</b> 공지 시작</li>
+  </ul>
+</section>
+
+</main>
+
+<footer>
+  <p><b>F45 시리즈 3 · 피크 단계 코치 가이드</b> — 2026년 8월 17일 ~ 9월 13일</p>
+  <p style="margin-top:10px;">모든 수업에서 <b>자세와 안전이 무게보다 우선</b>입니다.</p>
+</footer>
+
+</div>
+</body>
+</html>
