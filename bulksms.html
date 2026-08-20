@@ -144,8 +144,23 @@ async function loadAndMatch(){
     }
     people.forEach(p=>{ if(p.name_override)p.name=p.name_override; });
 
+    // 진단: 데이터 자체가 안 왔는지, 필터에서 걸러지는지 구분
+    if(people.length===0){
+      status.innerHTML=`⚠️ people 테이블에서 데이터가 0건 왔어요. 이건 대부분 <b>?key= 값이 틀렸거나</b>, 접근 권한(RLS) 문제예요.<br>URL의 key 값이 f45app.html?key=... 에서 쓰던 것과 완전히 똑같은지 다시 확인해주세요.`;
+      return;
+    }
+    const withUid = people.filter(m=>m.glofox_user_id).length;
+    const stageCount = {};
+    people.forEach(m=>{ const s=m.stage||'(없음)'; stageCount[s]=(stageCount[s]||0)+1; });
+
     // 활성 회원만 추림
     const active=people.filter(m=>m.glofox_user_id&&eligibleActive(m,today));
+
+    if(active.length===0){
+      const stageTxt=Object.entries(stageCount).map(([k,v])=>`${k}:${v}`).join(', ');
+      status.innerHTML=`⚠️ people 데이터는 ${people.length}건 불러왔는데(그중 glofox_user_id 있는 회원 ${withUid}명), "활성 회원" 조건(stage='회원' + 유료 + 미만료)을 통과한 사람이 0명이에요.<br>stage 값 분포: ${esc(stageTxt)}<br>stage 값이 정확히 '회원'인지 확인이 필요해요.`;
+      return;
+    }
 
     // 최근 35일 출석
     const since=new Date(today+'T00:00:00'); since.setDate(since.getDate()-35);
