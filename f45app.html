@@ -1692,6 +1692,16 @@ function maRenderDash(){
 }
 
 // ── 탭2: 단체문자 ──
+function maClearBulkNames(){
+ if(!confirm('붙여넣은 단톡방 명단을 지울까요?'))return;
+ localStorage.removeItem('ma_bulk_names');
+ const ta=document.getElementById('ma-bulk-names'); if(ta)ta.value='';
+ MA_EXCLUDE=new Set(); MA_AMBIGUOUS=[]; MA_UNMATCHED=[];
+ document.getElementById('ma-bulk-status').textContent='';
+ document.getElementById('ma-bulk-sortcard').style.display='none';
+ maRenderAmb(); maRenderExcl();
+ document.getElementById('ma-bulk-result').innerHTML='';
+}
 function maRunBulk(){
  document.getElementById('ma-bulk-sortcard').style.display='';
  const active=memberAllList();
@@ -1902,12 +1912,13 @@ function renderMemberAll(){
   </div>
   <div id="ma-pane-bulk" style="display:none">
    <div class="carecard">
-    <div class="wklab">단톡방 멤버 명단 붙여넣기 (한 줄에 한 명씩)</div>
+    <div class="wklab">단톡방 멤버 명단 붙여넣기 (한 줄에 한 명씩) · 자동 저장돼요</div>
     <textarea id="ma-bulk-names" style="min-height:160px" placeholder="백승헌
 이기찬
 강문철
-..."></textarea>
+..." oninput="localStorage.setItem('ma_bulk_names',this.value)">${esc(localStorage.getItem('ma_bulk_names')||'')}</textarea>
     <button class="mini" style="margin-top:8px" onclick="maRunBulk()">매칭하기</button>
+    <button class="mini" style="margin-top:8px;opacity:.7" onclick="maClearBulkNames()">명단 지우기</button>
     <div id="ma-bulk-status" class="wklab" style="margin-top:8px"></div>
    </div>
    <div id="ma-amb"></div>
@@ -1926,9 +1937,8 @@ function renderMemberAll(){
    <div class="listhead">🎫 횟수권 보유자 전체 · 만료 임박순 · 페이스=예정 사용속도 대비 실제</div>
    <div id="ma-pass-result"></div>
   </div>`;
- // 매칭 버튼 눌렀을 때만 정렬카드 보이게
- const _orig=maRunBulk;
  maSwitchTab('dash');
+ if((localStorage.getItem('ma_bulk_names')||'').trim()) maRunBulk();
 }
 function renderLeads(){
  const box=document.getElementById('view-leads');
