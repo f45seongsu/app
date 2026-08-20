@@ -67,7 +67,8 @@ input[type=text],input[type=search]{width:100%;background:#0e1a30;border:1px sol
 // ===== 같은 프로젝트의 공개(anon) 키 재사용 =====
 const SUPABASE_URL = "https://mvgbwsbvngdnxdndwimb.supabase.co";
 const PUBLISHABLE_KEY = "sb_publishable_ZRHS4-UR7Q07Fmtc_P-19g_fVlIc85X";
-const sb = supabase.createClient(SUPABASE_URL, PUBLISHABLE_KEY);
+const TOKEN = new URLSearchParams(location.search).get('key') || '';
+const sb = supabase.createClient(SUPABASE_URL, PUBLISHABLE_KEY, {global:{headers:{'x-app-token':TOKEN}}});
 
 function esc(s){return (s||'').toString().replace(/[<>&"]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]))}
 function fmt(d){return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`}
@@ -125,6 +126,10 @@ let ACTIVE=[], EXCLUDE=new Set(), AMBIGUOUS=[], UNMATCHED=[];
 
 async function loadAndMatch(){
   const status=document.getElementById('loadStatus');
+  if(!TOKEN){
+    status.innerHTML='⚠️ URL에 <b>?key=열쇠값</b>이 없어요. f45app.html 열 때 쓰는 것과 같은 key를 이 페이지 주소 끝에 붙여서 열어주세요.<br>예: bulksms.html?key=여기에키값';
+    return;
+  }
   status.textContent='회원 데이터 불러오는 중…';
   try{
     const today=new Date().toLocaleDateString('sv-SE',{timeZone:'Asia/Seoul'});
