@@ -44,6 +44,29 @@ input[type=text],input[type=search]{width:100%;background:#0e1a30;border:1px sol
 .toolbar label{font-size:12px;color:var(--dim);display:flex;align-items:center;gap:5px}
 .count-pill{background:#1c2f4d;border-radius:20px;padding:3px 12px;font-size:12px;color:var(--dim)}
 .count-pill b{color:var(--txt)}
+
+.opt-row{display:flex;align-items:center;gap:8px;margin-top:10px;padding-top:10px;border-top:1px solid var(--line)}
+.switch{position:relative;width:38px;height:22px;flex:none}
+.switch input{opacity:0;width:0;height:0}
+.slider{position:absolute;cursor:pointer;inset:0;background:#1c2f4d;border:1px solid var(--line);border-radius:22px;transition:.2s}
+.slider:before{content:"";position:absolute;width:16px;height:16px;left:2px;top:2px;background:var(--dim);border-radius:50%;transition:.2s}
+.switch input:checked + .slider{background:var(--red);border-color:var(--red)}
+.switch input:checked + .slider:before{transform:translateX(16px);background:#fff}
+.opt-label{font-size:12px;color:var(--txt)}
+.opt-sub{font-size:11px;color:var(--dim);margin-left:4px}
+
+.excl-wrap{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px;max-height:220px;overflow-y:auto}
+.excl-chip{display:inline-flex;align-items:center;gap:6px;background:#0e1a30;border:1px solid var(--line);border-radius:20px;padding:4px 6px 4px 12px;margin:3px;font-size:12px}
+.excl-chip button{background:var(--red);color:#fff;border:none;border-radius:50%;width:18px;height:18px;font-size:11px;cursor:pointer;line-height:1}
+
+#detailModal{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:flex-end;justify-content:center;z-index:100}
+#detailModal.show{display:flex}
+#detailSheet{background:var(--card);border:1px solid var(--line);border-radius:16px 16px 0 0;width:100%;max-width:480px;max-height:80vh;overflow:auto;padding:20px}
+@media(min-width:700px){#detailModal{align-items:center}#detailSheet{border-radius:16px}}
+.d-close{float:right;color:var(--dim);cursor:pointer;font-size:22px;line-height:1}
+.d-row{display:flex;gap:10px;margin:8px 0;font-size:14px}
+.d-k{color:var(--dim);min-width:80px;flex:none}
+.d-name{font-size:18px;font-weight:800;margin-bottom:10px}
 </style></head><body>
 
 <h1>📤 단체문자 대상 정리</h1>
@@ -56,11 +79,21 @@ input[type=text],input[type=search]{width:100%;background:#0e1a30;border:1px sol
 강문철
 ..."></textarea>
   <button class="btn" onclick="loadAndMatch()">불러와서 매칭하기</button>
+  <div class="opt-row">
+    <label class="switch"><input type="checkbox" id="inclPass" onchange="rerun()"><span class="slider"></span></label>
+    <span class="opt-label">횟수권(클래스팩) 회원도 포함</span>
+    <span class="opt-sub">기본은 제외 · 켜면 10회 이상 팩 중 잔여 있는 분만 포함</span>
+  </div>
   <div id="loadStatus" class="wklab" style="margin-top:8px"></div>
 </div>
 
 <div id="ambSection"></div>
+<div id="exclSection"></div>
 <div id="resultSection"></div>
+
+<div id="detailModal" onclick="if(event.target.id==='detailModal')closeDetail()">
+  <div id="detailSheet"></div>
+</div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
@@ -74,17 +107,28 @@ function esc(s){return (s||'').toString().replace(/[<>&"]/g,c=>({'<':'&lt;','>':
 function fmt(d){return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`}
 
 // ===== 회원 "활성" 판정 (기존 f45app.html의 eligibleActive/payMember와 동일 기준) =====
+function isClassPass(m){
+  const t=m.membership||'';
+  return t.includes('횟수권')||t.includes('Class Pass');
+}
 function payMember(m){
   const t=m.membership||'';
   if(t.includes('무료혜택')||t.includes('Complimentary'))return false;
-  if(t.includes('횟수권')||t.includes('Class Pass')){
+  if(isClassPass(m)){
     const total=m.pass_total||0; const remain=(m.pass_remaining!=null)?m.pass_remaining:total;
     return total>=10 && remain>0;
   }
   return true;
 }
 function eligibleActive(m, today){
-  if(m.stage!=='회원'||!payMember(m))return false;
+  if(m.stage!=='회원')return false;
+  const inclPass = document.getElementById('inclPass')?.checked;
+  if(isClassPass(m)){
+    if(!inclPass) return false; // 토글 꺼져있으면 횟수권은 무조건 제외
+    if(!payMember(m)) return false; // 켜져있어도 10회 미만/잔여없음은 제외
+  } else {
+    if(!payMember(m)) return false;
+  }
   const ed=m.end_date&&m.end_date.length>=10?m.end_date.slice(0,10):null;
   if(ed&&ed<today)return false;
   return true;
@@ -123,6 +167,7 @@ function matchOne(groupName, activeMembers){
 }
 
 let ACTIVE=[], EXCLUDE=new Set(), AMBIGUOUS=[], UNMATCHED=[];
+let PEOPLE_CACHE=null, ATT_CACHE=null, TODAY_CACHE=null;
 
 async function loadAndMatch(){
   const status=document.getElementById('loadStatus');
@@ -133,6 +178,7 @@ async function loadAndMatch(){
   status.textContent='회원 데이터 불러오는 중…';
   try{
     const today=new Date().toLocaleDateString('sv-SE',{timeZone:'Asia/Seoul'});
+    TODAY_CACHE=today;
 
     // 회원 전체 로드
     let people=[],pf=0;
@@ -144,25 +190,13 @@ async function loadAndMatch(){
     }
     people.forEach(p=>{ if(p.name_override)p.name=p.name_override; });
 
-    // 진단: 데이터 자체가 안 왔는지, 필터에서 걸러지는지 구분
     if(people.length===0){
       status.innerHTML=`⚠️ people 테이블에서 데이터가 0건 왔어요. 이건 대부분 <b>?key= 값이 틀렸거나</b>, 접근 권한(RLS) 문제예요.<br>URL의 key 값이 f45app.html?key=... 에서 쓰던 것과 완전히 똑같은지 다시 확인해주세요.`;
       return;
     }
-    const withUid = people.filter(m=>m.glofox_user_id).length;
-    const stageCount = {};
-    people.forEach(m=>{ const s=m.stage||'(없음)'; stageCount[s]=(stageCount[s]||0)+1; });
+    PEOPLE_CACHE = people;
 
-    // 활성 회원만 추림
-    const active=people.filter(m=>m.glofox_user_id&&eligibleActive(m,today));
-
-    if(active.length===0){
-      const stageTxt=Object.entries(stageCount).map(([k,v])=>`${k}:${v}`).join(', ');
-      status.innerHTML=`⚠️ people 데이터는 ${people.length}건 불러왔는데(그중 glofox_user_id 있는 회원 ${withUid}명), "활성 회원" 조건(stage='회원' + 유료 + 미만료)을 통과한 사람이 0명이에요.<br>stage 값 분포: ${esc(stageTxt)}<br>stage 값이 정확히 '회원'인지 확인이 필요해요.`;
-      return;
-    }
-
-    // 최근 35일 출석
+    // 최근 35일 출석 (한 번만 불러와서 캐싱)
     const since=new Date(today+'T00:00:00'); since.setDate(since.getDate()-35);
     let att=[],af=0;
     while(true){
@@ -178,30 +212,60 @@ async function loadAndMatch(){
       const ds=String(a.class_time||'').slice(0,10);
       (daysByUid[uid]=daysByUid[uid]||new Set()).add(ds);
     });
-    active.forEach(m=>{ m._days = daysByUid[m.glofox_user_id] || new Set(); });
+    ATT_CACHE = daysByUid;
 
-    ACTIVE = active;
-
-    // 단톡방 명단 매칭
-    const raw=document.getElementById('gcNames').value||'';
-    const names=raw.split('\n').map(s=>s.trim()).filter(Boolean);
-    const seen=new Set();
-    EXCLUDE=new Set(); AMBIGUOUS=[]; UNMATCHED=[];
-
-    names.forEach(gn=>{
-      if(seen.has(gn))return; seen.add(gn);
-      const r=matchOne(gn, active);
-      if(r.tier===1){ EXCLUDE.add(r.member.glofox_user_id); }
-      else if(r.tier===2){ AMBIGUOUS.push({groupName:gn, candidates:r.candidates}); }
-      else { UNMATCHED.push(gn); }
-    });
-
-    status.textContent=`완료: 활성 회원 ${active.length}명 중 확실 매칭 ${EXCLUDE.size}건, 확인 필요 ${AMBIGUOUS.length}건`;
-    renderAmbiguous();
-    renderResults(today);
+    processAndMatch();
   }catch(e){
     status.textContent='오류: '+e.message;
   }
+}
+
+// 캐싱된 원본 데이터로 필터/매칭만 재실행 (횟수권 토글 변경 시 재조회 없이 즉시 반영)
+function rerun(){
+  if(!PEOPLE_CACHE){ return; } // 아직 첫 로드 전이면 무시
+  processAndMatch();
+}
+
+function processAndMatch(){
+  const status=document.getElementById('loadStatus');
+  const today=TODAY_CACHE;
+  const people=PEOPLE_CACHE;
+  const withUid = people.filter(m=>m.glofox_user_id).length;
+  const stageCount = {};
+  people.forEach(m=>{ const s=m.stage||'(없음)'; stageCount[s]=(stageCount[s]||0)+1; });
+
+  const active=people.filter(m=>m.glofox_user_id&&eligibleActive(m,today));
+
+  if(active.length===0){
+    const stageTxt=Object.entries(stageCount).map(([k,v])=>`${k}:${v}`).join(', ');
+    status.innerHTML=`⚠️ people 데이터는 ${people.length}건 불러왔는데(그중 glofox_user_id 있는 회원 ${withUid}명), "활성 회원" 조건을 통과한 사람이 0명이에요.<br>stage 값 분포: ${esc(stageTxt)}`;
+    document.getElementById('ambSection').innerHTML='';
+    document.getElementById('exclSection').innerHTML='';
+    document.getElementById('resultSection').innerHTML='';
+    return;
+  }
+
+  active.forEach(m=>{ m._days = ATT_CACHE[m.glofox_user_id] || new Set(); });
+  ACTIVE = active;
+
+  // 단톡방 명단 매칭
+  const raw=document.getElementById('gcNames').value||'';
+  const names=raw.split('\n').map(s=>s.trim()).filter(Boolean);
+  const seen=new Set();
+  EXCLUDE=new Set(); AMBIGUOUS=[]; UNMATCHED=[];
+
+  names.forEach(gn=>{
+    if(seen.has(gn))return; seen.add(gn);
+    const r=matchOne(gn, active);
+    if(r.tier===1){ EXCLUDE.add(r.member.glofox_user_id); }
+    else if(r.tier===2){ AMBIGUOUS.push({groupName:gn, candidates:r.candidates}); }
+    else { UNMATCHED.push(gn); }
+  });
+
+  status.textContent=`완료: 활성 회원 ${active.length}명 중 확실 매칭 ${EXCLUDE.size}건, 확인 필요 ${AMBIGUOUS.length}건`;
+  renderAmbiguous();
+  renderExcluded();
+  renderResults(today);
 }
 
 function renderAmbiguous(){
@@ -223,7 +287,46 @@ function renderAmbiguous(){
 function toggleAmb(uid){
   if(EXCLUDE.has(uid))EXCLUDE.delete(uid); else EXCLUDE.add(uid);
   renderAmbiguous();
+  renderExcluded();
   renderResults(window._todayCache);
+}
+
+// 현재 제외된 사람 전체를 한눈에 보여주는 목록 (확실매칭+애매확인 다 포함)
+function renderExcluded(){
+  const box=document.getElementById('exclSection');
+  if(!EXCLUDE.size){ box.innerHTML=''; return; }
+  const list=ACTIVE.filter(m=>EXCLUDE.has(m.glofox_user_id));
+  let h=`<div class="listhead">🚫 <b>현재 제외된 회원</b> ${list.length}명 · 단톡방에 있다고 판단된 분들 · 잘못됐으면 × 눌러서 복구</div>`;
+  h+=`<div class="excl-wrap">`+list.map(m=>
+    `<span class="excl-chip">${esc(m.name)}<button onclick="event.stopPropagation();toggleAmb('${m.glofox_user_id}')">×</button></span>`
+  ).join('')+`</div>`;
+  box.innerHTML=h;
+}
+
+// ===== 상세정보 팝업 =====
+function showDetail(uid){
+  const m=ACTIVE.find(x=>x.glofox_user_id===uid);
+  if(!m)return;
+  const passTxt = isClassPass(m) ? `${m.pass_remaining!=null?m.pass_remaining:'-'}회 / 총 ${m.pass_total||'-'}회 (만료 ${esc(m.pass_expiry||'-')})` : '-';
+  const days4w = [...(m._days||[])].sort().reverse();
+  const recent = days4w.slice(0,5).join(', ') || '없음';
+  document.getElementById('detailSheet').innerHTML=`
+    <span class="d-close" onclick="closeDetail()">×</span>
+    <div class="d-name">${esc(m.name)}${m.glofox_name&&m.glofox_name!==m.name?` <span style="font-size:12px;color:var(--dim);font-weight:400">(Glofox: ${esc(m.glofox_name)})</span>`:''}</div>
+    <div class="d-row"><span class="d-k">연락처</span><span>${esc(m.phone||'-')}</span></div>
+    <div class="d-row"><span class="d-k">멤버십</span><span>${esc(m.membership||'-')}</span></div>
+    <div class="d-row"><span class="d-k">횟수권</span><span>${passTxt}</span></div>
+    <div class="d-row"><span class="d-k">가입일</span><span>${esc(m.join_date||'-')}</span></div>
+    <div class="d-row"><span class="d-k">만료일</span><span>${esc(m.end_date||'-')}</span></div>
+    <div class="d-row"><span class="d-k">가입경로</span><span>${esc(m.source||'-')}</span></div>
+    <div class="d-row"><span class="d-k">최근 출석</span><span style="font-size:12px">${esc(recent)}</span></div>
+    <div class="d-row"><span class="d-k">현재 상태</span><span>${EXCLUDE.has(uid)?'🚫 발송 제외됨':'📨 발송 대상'}</span></div>
+    <button class="btn ${EXCLUDE.has(uid)?'sec':''}" style="width:100%" onclick="toggleAmb('${uid}');showDetail('${uid}')">${EXCLUDE.has(uid)?'발송 대상으로 복구':'이 사람 제외하기'}</button>
+  `;
+  document.getElementById('detailModal').classList.add('show');
+}
+function closeDetail(){
+  document.getElementById('detailModal').classList.remove('show');
 }
 
 function weekBlocksHTML(days, today){
@@ -264,14 +367,15 @@ function renderResults(today){
     <div class="trow header"><div class="c-chk"></div><div class="c-name">이름</div><div class="c-phone">전화번호</div><div class="c-att">4주 출석 (월~토, 오래된 주 → 최근 주)</div></div>`;
   h+= included.length ? included.map(m=>{
     const hasPh=!!(m.phone||'').trim();
-    return `<div class="trow">
-      <div class="c-chk"><input type="checkbox" class="rowchk" data-uid="${m.glofox_user_id}" ${hasPh?'checked':'disabled'} onchange="updateSelCount()"></div>
+    return `<div class="trow" style="cursor:pointer" onclick="showDetail('${m.glofox_user_id}')">
+      <div class="c-chk"><input type="checkbox" class="rowchk" data-uid="${m.glofox_user_id}" ${hasPh?'checked':'disabled'} onclick="event.stopPropagation()" onchange="updateSelCount()"></div>
       <div class="c-name">${esc(m.name)}</div>
       <div class="c-phone">${esc(m.phone||'번호없음')}</div>
       <div class="c-att">${weekBlocksHTML(m._days, today)}</div>
     </div>`;
   }).join('') : '<div class="center">발송 대상이 없어요.</div>';
-  h+=`</div>`;
+  h+=`</div>
+  <div class="wklab" style="margin-top:6px">💡 이름·번호·출석 부분을 누르면 상세정보가 떠요</div>`;
 
   box.innerHTML=h;
   updateSelCount();
