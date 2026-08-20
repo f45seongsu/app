@@ -152,14 +152,13 @@ body{padding-bottom:76px}
 <div id="view-pass" class="view" style="display:none"><div class="center">준비중이에요.</div></div>
 <div id="view-coach" class="view" style="display:none"></div>
 <div id="view-photo" class="view" style="display:none"></div>
-<div id="view-member" class="view" style="display:none"></div>
 <div id="view-birthday" class="view" style="display:none"></div>
 <div id="view-tshirt" class="view" style="display:none"></div>
 <div id="view-handoff" class="view" style="display:none"></div>
 <div id="view-leads" class="view" style="display:none"></div>
-<div id="view-videos" class="view" style="display:none"></div>
 <div id="view-aiconfig" class="view" style="display:none"></div>
 <div id="view-report" class="view" style="display:none"></div>
+<div id="view-memberall" class="view" style="display:none"></div>
 
 <nav class="tabbar">
  <button class="tab on" data-v="att" onclick="showView('att')"><span>📋</span>출결</button>
@@ -170,17 +169,20 @@ body{padding-bottom:76px}
 
 <div id="drawer" style="display:none"><div class="drawer-bg" onclick="toggleDrawer()"></div>
  <div class="drawer-panel">
-  <h3>더보기</h3>
+  <button onclick="showView('memberall')" style="background:var(--red);border-color:var(--red);font-weight:800;font-size:15px">👥 회원 전체보기</button>
+
+  <h3 style="margin-top:10px">케어 관리</h3>
   <button onclick="showView('leads')">🎯 리드 관리</button>
-  <button onclick="showView('videos')">🎥 영상 발송함</button>
   <button onclick="showView('trial')">⚡ 트라이얼 현황</button>
-  <button onclick="showView('pass')">🎫 횟수권 관리</button>
+  <button onclick="showView('handoff')">📋 인수인계 관리</button>
+
+  <h3 style="margin-top:10px">사진 · 기록</h3>
   <button onclick="showView('photo')">📸 사진 입력 (수업별)</button>
   <button onclick="showView('birthday')">🎂 생일 예정자</button>
   <button onclick="showView('tshirt')">🎽 마일스톤 티셔츠</button>
-  <button onclick="showView('handoff')">📋 인수인계 관리</button>
+
+  <h3 style="margin-top:10px">관리자</h3>
   <button onclick="if(checkAdminPw())showView('aiconfig')">⚙️ AI 프롬프트 설정</button>
-  <button onclick="showView('member')">📷 회원 사진 채우기</button>
   <button onclick="if(checkAdminPw())showView('report')">📊 리포트</button>
   <button onclick="if(checkAdminPw())showView('coach')">🔑 코치 링크 관리</button>
   <button onclick="if(checkAdminPw())makeCoachLink()">🔗 코치 링크 생성</button>
@@ -218,9 +220,9 @@ function badgeOf(m){if(m.stage==='트라이얼')return '트라이얼';if(m.pass_
 let VIEW='att';
 function toggleDrawer(){const d=document.getElementById('drawer');d.style.display=d.style.display==='none'?'block':'none';}
 function showView(v){window.CURVIEW=v;VIEW=v;
- ['att','risk','expire','search','trial','pass','photo','member','birthday','tshirt','handoff','leads','videos','report','coach','aiconfig'].forEach(x=>{const el=document.getElementById('view-'+x);if(el)el.style.display=(x===v?'':'none');});
+ ['att','risk','expire','search','trial','pass','photo','birthday','tshirt','handoff','leads','report','coach','aiconfig','memberall'].forEach(x=>{const el=document.getElementById('view-'+x);if(el)el.style.display=(x===v?'':'none');});
  document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('on',b.dataset.v===v));
- const T={att:'수업 출결',risk:'이탈 위험군',expire:'만료 임박',search:'회원 검색',trial:'트라이얼 현황',pass:'횟수권 관리',tshirt:'마일스톤 티셔츠',handoff:'인수인계 관리',leads:'리드 관리',videos:'영상 발송함',photo:'사진 입력 (수업별)',member:'회원 사진 채우기',birthday:'생일 예정자',report:'리포트',coach:'코치 링크 관리'};
+ const T={att:'수업 출결',risk:'이탈 위험군',expire:'만료 임박',search:'회원 검색',trial:'트라이얼 현황',pass:'횟수권 관리',tshirt:'마일스톤 티셔츠',handoff:'인수인계 관리',leads:'리드 관리',photo:'사진 입력 (수업별)',birthday:'생일 예정자',report:'리포트',coach:'코치 링크 관리',memberall:'회원 전체보기'};
  document.getElementById('vtitle').textContent=T[v]||'';
  document.getElementById('sub').style.display=(v==='att'?'':'none');
  document.getElementById('drawer').style.display='none';
@@ -229,7 +231,6 @@ function showView(v){window.CURVIEW=v;VIEW=v;
  if(v==='risk')renderRisk();
  if(v==='expire')renderExpire();
  if(v==='trial')renderTrial();
- if(v==='member')renderMember();
  if(v==='pass')renderPass();
  if(v==='coach')renderCoachAdmin();
  if(v==='birthday')renderBirthday();
@@ -237,8 +238,8 @@ function showView(v){window.CURVIEW=v;VIEW=v;
  if(v==='tshirt')renderTshirt();
  if(v==='handoff')renderHandoff();
  if(v==='leads')renderLeads();
- if(v==='videos')renderVideoQueue();
  if(v==='aiconfig')renderAiConfig();
+ if(v==='memberall')renderMemberAll();
 }
 function renderSearch(){
  const q=(document.getElementById('q').value||'').trim().toLowerCase();
@@ -1575,6 +1576,360 @@ async function markHandoffDone(id,btn){
   if(btn){btn.textContent='✅ 완료됨';btn.disabled=true;}
  }catch(e){alert('오류: '+e.message);}
 }
+// ═══════════════════════════════════════════
+// 회원 전체보기 (전체회원 · 단체문자 · 횟수권관리 통합)
+// ═══════════════════════════════════════════
+let MA_EXCLUDE=new Set(), MA_AMBIGUOUS=[], MA_UNMATCHED=[];
+let MA_TAB='dash';
+
+function memberAllList(){ return Object.values(MEMBERS).filter(m=>m.glofox_user_id&&m.stage==='회원'&&payMember(m)); }
+function passHolderList(){ return Object.values(MEMBERS).filter(m=>m.glofox_user_id&&(m.pass_remaining!=null||/횟수권|Class Pass/.test(m.membership||''))); }
+function maDday(dateStr){ if(!dateStr||dateStr.length<10)return null; const e=new Date(dateStr.slice(0,10)+'T00:00:00'); const t=new Date(today+'T00:00:00'); return Math.round((e-t)/86400000); }
+function maExpiryOf(m){ return (m.pass_remaining!=null) ? m.pass_expiry : m.end_date; }
+function maExpiryHTML(m){
+ const ed=maExpiryOf(m); if(!ed||ed.length<10) return '<span style="color:var(--dim)">-</span>';
+ const dd=maDday(ed); const short=ed.slice(2,10).replace(/-/g,'.');
+ if(dd<0) return `<span style="color:#e0563a">만료 ${short}</span>`;
+ if(dd<=14) return `<span style="color:#e0563a">D-${dd}</span>`;
+ if(dd<=30) return `<span style="color:#e0954f">${short}</span>`;
+ return `<span style="color:var(--dim)">${short}</span>`;
+}
+function maAttScore(m){ const d7=ddaysAgo(28); return (m._days||[]).filter(d=>d>d7).length; }
+function maSort(list, mode){
+ const arr=list.slice();
+ if(mode==='plan') arr.sort((a,b)=>(a.membership||'').localeCompare(b.membership||'','ko')||(a.name||'').localeCompare(b.name||'','ko'));
+ else if(mode==='att_desc') arr.sort((a,b)=>maAttScore(b)-maAttScore(a)||(a.name||'').localeCompare(b.name||'','ko'));
+ else if(mode==='att_asc') arr.sort((a,b)=>maAttScore(a)-maAttScore(b)||(a.name||'').localeCompare(b.name||'','ko'));
+ else if(mode==='exp') arr.sort((a,b)=>{const ea=maExpiryOf(a),eb=maExpiryOf(b); if(!ea&&!eb)return 0; if(!ea)return 1; if(!eb)return -1; return ea.localeCompare(eb);});
+ else arr.sort((a,b)=>(a.name||'').localeCompare(b.name||'','ko'));
+ return arr;
+}
+function maPopulatePlanFilter(id, list){
+ const sel=document.getElementById(id); if(!sel)return;
+ const cur=sel.value;
+ const plans=[...new Set(list.map(m=>m.membership||'(없음)'))].sort((a,b)=>a.localeCompare(b,'ko'));
+ sel.innerHTML='<option value="">전체 회원권</option>'+plans.map(p=>`<option value="${esc(p)}">${esc(p)}</option>`).join('');
+ if(plans.includes(cur)) sel.value=cur;
+}
+
+// ── 공용 테이블 ──
+function maTableHTML(list, containerId){
+ let h=`<div style="display:flex;gap:8px;align-items:center;margin:10px 0;flex-wrap:wrap">
+  <label style="font-size:12px;color:var(--dim);display:flex;align-items:center;gap:5px"><input type="checkbox" id="${containerId}-all" onchange="maToggleAll('${containerId}',this.checked)"> 전체 선택</label>
+  <span class="mini" style="background:#1c2f4d;border-radius:20px" id="${containerId}-cnt"><b>0</b>명 선택됨</span>
+  <button class="mini" onclick="maCopy('${containerId}')">번호 복사</button>
+  <button class="mini" onclick="maSmsOpen('${containerId}')">문자앱 열기</button>
+ </div>`;
+ h+=`<div style="background:var(--card);border:1px solid var(--line);border-radius:12px;overflow-x:auto" id="${containerId}">
+  <div style="display:flex;gap:8px;align-items:center;padding:6px 12px;border-bottom:1px solid var(--line);font-size:10px;color:var(--dim);min-width:900px;text-transform:uppercase">
+   <div style="flex:0 0 20px"></div><div style="flex:0 0 34px"></div><div style="flex:0 0 84px">이름</div><div style="flex:0 0 106px">전화번호</div><div style="flex:0 0 140px">회원권</div><div style="flex:0 0 60px">만료일</div><div style="flex:1">4주 출석(월~토)</div><div style="flex:0 0 130px;text-align:right">작업</div>
+  </div>`;
+ h+= list.length ? list.map(m=>{
+  const uid=m.glofox_user_id; const hasPh=!!(m.phone||'').trim();
+  return `<div style="display:flex;gap:8px;align-items:center;padding:5px 12px;border-bottom:1px solid var(--line);font-size:12px;min-width:900px;cursor:pointer" onclick="open_('${uid}')">
+   <div style="flex:0 0 20px"><input type="checkbox" class="ma-chk" data-uid="${uid}" ${hasPh?'':'disabled'} onclick="event.stopPropagation()" onchange="maUpdateCnt('${containerId}')"></div>
+   <div style="flex:0 0 34px">${avatar(m,'bk')}</div>
+   <div style="flex:0 0 84px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(m.name)}</div>
+   <div style="flex:0 0 106px;color:var(--dim);white-space:nowrap">${esc(m.phone||'번호없음')}</div>
+   <div style="flex:0 0 140px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:11px">${esc(m.membership||'-')}</div>
+   <div style="flex:0 0 60px;font-size:11px">${maExpiryHTML(m)}</div>
+   <div style="flex:1;display:flex;gap:2px">${maWeekGrid(m)}</div>
+   <div style="flex:0 0 130px;display:flex;gap:4px;justify-content:flex-end" onclick="event.stopPropagation()">
+    <button class="mini" style="font-size:10px;padding:4px 6px" onclick="maAiMsg('${uid}',this,'general')">🤖AI</button>
+    <button class="mini" style="font-size:10px;padding:4px 6px" onclick="maSingleSms('${uid}')">📱문자</button>
+   </div>
+  </div>`;
+ }).join('') : '<div class="center">대상이 없어요.</div>';
+ h+='</div>';
+ return h;
+}
+function maWeekGrid(m){
+ const set=new Set(m._days||[]); const t=new Date(today+'T00:00:00');
+ const dow=(t.getDay()+6)%7; const mon=new Date(t); mon.setDate(t.getDate()-dow); let out='';
+ for(let w=3;w>=0;w--){
+  let grp='<div style="display:flex;gap:2px">';
+  for(let d=0;d<6;d++){
+   const cur=new Date(mon); cur.setDate(mon.getDate()-w*7+d);
+   const ds=fmt(cur); const has=set.has(ds); const fut=cur>t;
+   grp+=`<span style="width:8px;height:8px;border-radius:2px;background:${has?'var(--grn)':'#1a2942'};opacity:${fut?0.25:1}"></span>`;
+  }
+  out+=grp+'</div>';
+ }
+ return out;
+}
+function maByUid(uid){ return MEMBERS[uid]; }
+function maToggleAll(id,on){ document.querySelectorAll('#'+id+' .ma-chk').forEach(el=>{if(!el.disabled)el.checked=on;}); maUpdateCnt(id); }
+function maUpdateCnt(id){ const c=document.querySelectorAll('#'+id+' .ma-chk:checked').length; const p=document.getElementById(id+'-cnt'); if(p)p.innerHTML=`<b>${c}</b>명 선택됨`; }
+function maSelectedPhones(id){ return [...document.querySelectorAll('#'+id+' .ma-chk:checked')].map(el=>{const m=maByUid(el.dataset.uid); return m?(m.phone||'').replace(/[^0-9]/g,''):'';}).filter(Boolean); }
+function maCopy(id){ const p=maSelectedPhones(id); if(!p.length){alert('선택된 번호가 없어요.');return;} navigator.clipboard.writeText(p.join(', ')); alert(`${p.length}명 번호 복사됨`); }
+function maSmsOpen(id){ const p=maSelectedPhones(id); if(!p.length){alert('선택된 번호가 없어요.');return;} location.href='sms:'+p.join(','); }
+function maSingleSms(uid){ const m=maByUid(uid); const ph=(m.phone||'').replace(/[^0-9]/g,''); if(!ph){alert('번호가 없어요.');return;} location.href='sms:'+ph; }
+
+// ── 탭1: 전체 회원 ──
+function maSwitchTab(t){
+ MA_TAB=t;
+ ['dash','bulk','pass'].forEach(x=>{
+  const p=document.getElementById('ma-pane-'+x), b=document.getElementById('ma-tab-'+x);
+  if(p)p.style.display=(x===t?'':'none');
+  if(b)b.classList.toggle('on',x===t);
+ });
+ if(t==='dash')maRenderDash();
+ if(t==='pass')maRenderPass();
+}
+function maRenderDash(){
+ const box=document.getElementById('ma-dash-result'); if(!box)return;
+ const all=memberAllList();
+ maPopulatePlanFilter('ma-dash-plan', all);
+ const q=(document.getElementById('ma-dash-q').value||'').trim().toLowerCase();
+ const planF=document.getElementById('ma-dash-plan').value;
+ const mode=document.getElementById('ma-dash-sort').value;
+ let list=all;
+ if(q){ const qd=q.replace(/\D/g,''); list=list.filter(m=>(m.name||'').toLowerCase().includes(q)||(qd.length>=3&&(m.phone||'').replace(/\D/g,'').includes(qd))); }
+ if(planF){ list=list.filter(m=>(m.membership||'(없음)')===planF); }
+ list=maSort(list, mode);
+ box.innerHTML=`<div class="listhead">👥 <b>활성 회원</b> ${list.length}명${planF?` · ${esc(planF)}`:''}</div>`+maTableHTML(list,'ma-dash-tbl');
+ maUpdateCnt('ma-dash-tbl');
+}
+
+// ── 탭2: 단체문자 ──
+function maRunBulk(){
+ document.getElementById('ma-bulk-sortcard').style.display='';
+ const active=memberAllList();
+ maPopulatePlanFilter('ma-bulk-plan', active);
+ const raw=document.getElementById('ma-bulk-names').value||'';
+ const names=raw.split('\n').map(s=>s.trim()).filter(Boolean);
+ const seen=new Set(); MA_EXCLUDE=new Set(); MA_AMBIGUOUS=[]; MA_UNMATCHED=[];
+ function norm(s){return (s||'').trim().toLowerCase().replace(/\s+/g,'');}
+ function lev(a,b){const m=a.length,n=b.length;if(!m)return n;if(!n)return m;const dp=Array.from({length:m+1},(_,i)=>[i,...Array(n).fill(0)]);for(let j=0;j<=n;j++)dp[0][j]=j;for(let i=1;i<=m;i++)for(let j=1;j<=n;j++){dp[i][j]=a[i-1]===b[j-1]?dp[i-1][j-1]:1+Math.min(dp[i-1][j],dp[i][j-1],dp[i-1][j-1]);}return dp[m][n];}
+ names.forEach(gn=>{
+  if(seen.has(gn))return; seen.add(gn);
+  const g=norm(gn); if(!g.length)return;
+  let confident=null, ambiguous=[];
+  active.forEach(m=>{
+   const nm=norm(m.name); if(!nm)return;
+   if(nm===g){confident=m;return;}
+   if(g.length<=2)return;
+   if(nm.includes(g)||g.includes(nm)){ambiguous.push(m);return;}
+   if(nm.length>=2&&nm.length<=6&&lev(nm,g)<=1){ambiguous.push(m);return;}
+  });
+  if(confident) MA_EXCLUDE.add(confident.glofox_user_id);
+  else if(ambiguous.length) MA_AMBIGUOUS.push({groupName:gn,candidates:ambiguous});
+  else MA_UNMATCHED.push(gn);
+ });
+ document.getElementById('ma-bulk-status').textContent=`완료: 활성 ${active.length}명 중 확실매칭 ${MA_EXCLUDE.size}건, 확인필요 ${MA_AMBIGUOUS.length}건`;
+ maRenderAmb(); maRenderExcl(); maRenderBulkResult();
+}
+function maRenderAmb(){
+ const box=document.getElementById('ma-amb'); if(!box)return;
+ if(!MA_AMBIGUOUS.length){box.innerHTML='';return;}
+ let h=`<div class="listhead">⚠️ <b>확인 필요</b> ${MA_AMBIGUOUS.length}건</div>`;
+ h+=MA_AMBIGUOUS.map(a=>{
+  const rows=a.candidates.map(m=>{
+   const on=MA_EXCLUDE.has(m.glofox_user_id);
+   return `<div class="srow" style="cursor:pointer" onclick="maToggleExcl('${m.glofox_user_id}')">${avatar(m,'bk')}<div class="sinfo"><div class="nm">${esc(m.name)}</div><div class="smeta">${esc(m.phone||'')}</div></div><span class="mini" style="${on?'background:var(--red);border-color:var(--red)':''}">${on?'제외됨✓':'같은사람'}</span></div>`;
+  }).join('');
+  return `<div class="carecard" style="margin-bottom:8px"><div style="font-size:13px;margin-bottom:6px">"${esc(a.groupName)}"와 비슷</div>${rows}</div>`;
+ }).join('');
+ box.innerHTML=h;
+}
+function maRenderExcl(){
+ const box=document.getElementById('ma-excl'); if(!box)return;
+ if(!MA_EXCLUDE.size){box.innerHTML='';return;}
+ const list=memberAllList().filter(m=>MA_EXCLUDE.has(m.glofox_user_id));
+ box.innerHTML=`<div class="listhead">🚫 <b>제외됨</b> ${list.length}명</div><div class="carecard">`+
+  list.map(m=>`<span class="mini" style="display:inline-flex;align-items:center;gap:5px;margin:2px">${esc(m.name)}<span style="cursor:pointer;color:var(--red)" onclick="maToggleExcl('${m.glofox_user_id}')">×</span></span>`).join('')+'</div>';
+}
+function maToggleExcl(uid){ if(MA_EXCLUDE.has(uid))MA_EXCLUDE.delete(uid);else MA_EXCLUDE.add(uid); maRenderAmb(); maRenderExcl(); maRenderBulkResult(); }
+function maRenderBulkResult(){
+ const box=document.getElementById('ma-bulk-result'); if(!box)return;
+ let included=memberAllList().filter(m=>!MA_EXCLUDE.has(m.glofox_user_id));
+ const planF=document.getElementById('ma-bulk-plan')?.value;
+ if(planF) included=included.filter(m=>(m.membership||'(없음)')===planF);
+ const mode=document.getElementById('ma-bulk-sort')?.value||'name';
+ const sorted=maSort(included, mode);
+ box.innerHTML=`<div class="listhead">📨 <b>발송 대상</b> ${sorted.length}명${MA_UNMATCHED.length?` · 못찾은이름 ${MA_UNMATCHED.length}(정보용)`:''}</div>`+maTableHTML(sorted,'ma-bulk-tbl');
+ maUpdateCnt('ma-bulk-tbl');
+}
+
+// ── 탭3: 횟수권 관리 ──
+function maPassPace(m){
+ const tot=+(m.pass_total||0), rem=+(m.pass_remaining||0);
+ const st=m.pass_start, ex=m.pass_expiry;
+ if(!tot||!st||!ex||st.length<10||ex.length<10) return null;
+ const tnow=new Date(today+'T00:00:00');
+ const s=new Date(st.slice(0,10)+'T00:00:00'), e=new Date(ex.slice(0,10)+'T00:00:00');
+ const totDays=(e-s)/86400000, elapsed=(tnow-s)/86400000;
+ if(totDays<=0) return null;
+ const frac=Math.min(Math.max(elapsed/totDays,0),1);
+ const expRem=tot-tot*frac;
+ return {diff:Math.round(rem-expRem)};
+}
+function maPaceHTML(m){
+ if((m.pass_remaining||0)<=0) return '<span style="color:#e0563a">소진완료</span>';
+ const p=maPassPace(m); if(!p) return '<span style="color:var(--dim)">-</span>';
+ if(p.diff>1.5) return `<span style="color:#e0954f">${p.diff}회 더남음(느림)</span>`;
+ if(p.diff<-1.5) return `<span style="color:#5aa0e0">${-p.diff}회 적게남음(빠름)</span>`;
+ return '<span style="color:var(--grn)">적정페이스</span>';
+}
+function maRenderPass(){
+ const box=document.getElementById('ma-pass-result'); if(!box)return;
+ const list=passHolderList().sort((a,b)=>(a.pass_expiry||'9999').localeCompare(b.pass_expiry||'9999'));
+ if(!list.length){box.innerHTML='<div class="center">횟수권 보유자가 없어요.</div>';return;}
+ let h=`<div style="display:flex;gap:8px;align-items:center;margin:10px 0;flex-wrap:wrap">
+  <label style="font-size:12px;color:var(--dim);display:flex;align-items:center;gap:5px"><input type="checkbox" id="ma-pass-tbl-all" onchange="maToggleAll('ma-pass-tbl',this.checked)"> 전체선택</label>
+  <span class="mini" style="background:#1c2f4d;border-radius:20px" id="ma-pass-tbl-cnt"><b>0</b>명 선택됨</span>
+  <button class="mini" onclick="maCopy('ma-pass-tbl')">번호 복사</button>
+  <button class="mini" onclick="maSmsOpen('ma-pass-tbl')">문자앱 열기</button>
+ </div><div style="background:var(--card);border:1px solid var(--line);border-radius:12px;overflow-x:auto" id="ma-pass-tbl">`;
+ h+=list.map(m=>{
+  const uid=m.glofox_user_id, hasPh=!!(m.phone||'').trim();
+  const dd=maDday(m.pass_expiry);
+  const warn=(dd!=null&&dd>=0&&dd<=14&&(m.pass_remaining||0)>0)?` ⚠<b style="color:#e0563a">D-${dd} ${m.pass_remaining}회남음</b>`:'';
+  return `<div style="display:flex;gap:8px;align-items:center;padding:6px 12px;border-bottom:1px solid var(--line);font-size:12px;min-width:760px;cursor:pointer" onclick="open_('${uid}')">
+   <div style="flex:0 0 20px" onclick="event.stopPropagation()"><input type="checkbox" class="ma-chk" data-uid="${uid}" ${hasPh?'':'disabled'} onclick="event.stopPropagation()" onchange="maUpdateCnt('ma-pass-tbl')"></div>
+   <div style="flex:0 0 34px">${avatar(m,'bk')}</div>
+   <div style="flex:0 0 84px;font-weight:700">${esc(m.name)}</div>
+   <div style="flex:0 0 106px;color:var(--dim)">${esc(m.phone||'번호없음')}</div>
+   <div style="flex:0 0 80px;font-size:11px">${m.pass_remaining!=null?m.pass_remaining:'-'}/${m.pass_total||'-'}회</div>
+   <div style="flex:0 0 60px;font-size:11px">${maExpiryHTML(m)}</div>
+   <div style="flex:1;font-size:11px">${maPaceHTML(m)}${warn}</div>
+   <div style="flex:0 0 130px;display:flex;gap:4px;justify-content:flex-end" onclick="event.stopPropagation()">
+    <button class="mini" style="font-size:10px;padding:4px 6px" onclick="maAiMsg('${uid}',this,'pass')">🤖AI</button>
+    <button class="mini" style="font-size:10px;padding:4px 6px" onclick="maSingleSms('${uid}')">📱문자</button>
+   </div>
+  </div>`;
+ }).join('');
+ h+='</div>';
+ box.innerHTML=h;
+ maUpdateCnt('ma-pass-tbl');
+}
+
+// ── AI 문구 (재시도 + 실패 시 무료 템플릿 대체) ──
+function maSeasonHint(){
+ const mo=+today.slice(5,7);
+ if([12,1,2].includes(mo)) return '한겨울, 추운 날씨';
+ if([3,4,5].includes(mo)) return '봄, 날씨가 풀리는 시기';
+ if([6,7,8].includes(mo)) return '한여름, 더운 날씨';
+ if(mo===9) return '초가을, 선선해지기 시작하는 시기';
+ return '가을·초겨울, 선선하고 쌀쌀해지는 시기';
+}
+function maCountDays(days,n){
+ const t=new Date(today+'T00:00:00'); const lim=new Date(t); lim.setDate(t.getDate()-n);
+ return (days||[]).filter(d=>new Date(d+'T00:00:00')>lim).length;
+}
+function maTemplateFallback(m, r14, situationHint){
+ const nm=m.name||'회원'; const season=maSeasonHint();
+ if(situationHint==='pass'){
+  return `${nm}님, 보유하신 횟수권이 곧 만료돼요! 아직 ${m.pass_remaining||0}회 남았으니 이번 주 편하신 시간에 오셔서 알차게 사용해보세요 💪 -F45 성수`;
+ }
+ if(r14<=1) return `${nm}님, 요즘 ${season.includes('선선')?'날씨도 선선해졌는데':'날씨 어떻든'} 통 못 뵀네요 😊 이번 주에 다시 나오셔서 같이 땀 흘려요! -F45 성수`;
+ if(r14>=6) return `${nm}님, 요즘 정말 꾸준히 나오고 계시네요! 대단해요 💪 그 페이스 계속 이어가봐요 -F45 성수`;
+ return `${nm}님, 오늘 하루 어떠셨어요? 시간 되실 때 F45에서 같이 운동해요 😊 -F45 성수`;
+}
+async function maAiMsg(uid, btn, situationHint){
+ const m=maByUid(uid); if(!m)return;
+ const r7=maCountDays(m._days,7), r14=maCountDays(m._days,14);
+ const season=maSeasonHint();
+ let detail=`오늘 날짜 ${today} (${season}). 최근 7일 출석 ${r7}회, 최근 14일 출석 ${r14}회.`;
+ if(r14<=1) detail+=' 최근 거의 안 나옴 - 부담없이 부드럽게 독려.';
+ else if(r14>=6) detail+=' 꾸준히 잘 나옴 - 칭찬 위주.';
+ else detail+=' 보통 수준 - 가볍게 안부+독려.';
+ let situation='최근 출석 패턴 맞춰 안부/독려. 날씨·계절 변화 자연스럽게 한마디.';
+ if(situationHint==='pass'){
+  const dd=maDday(m.pass_expiry);
+  detail+=` 횟수권 잔여 ${m.pass_remaining}회, 만료까지 ${dd!=null?dd+'일':'-'}.`;
+  situation='횟수권 만료 전 소진 부드럽게 유도. 날씨도 한마디.';
+ }
+ if(btn){btn.disabled=true;btn.textContent='...';}
+ let text=null;
+ for(let i=0;i<2 && !text;i++){
+  try{
+   const {data,error}=await sb.functions.invoke('glofox-ai',{body:{type:'message',name:m.name||'회원',situation,detail}});
+   if(!error && data?.text){ text=data.text; break; }
+  }catch(e){}
+  if(i<1) await new Promise(r=>setTimeout(r,1500));
+ }
+ if(btn){btn.disabled=false;btn.textContent='🤖AI';}
+ let usedFallback=false;
+ if(!text){ text=maTemplateFallback(m, r14, situationHint); usedFallback=true; }
+ maShowAiModal(uid, text, usedFallback);
+}
+function maShowAiModal(uid, text, usedFallback){
+ const m=maByUid(uid);
+ document.getElementById('sheet').innerHTML=`
+  <span class="close" onclick="close_()">×</span>
+  <div style="font-weight:800;font-size:16px;margin-bottom:6px">🤖 ${esc(m.name)}님에게 보낼 문구</div>
+  ${usedFallback?'<div class="mini" style="color:#e0954f;background:none;border:none;padding:0;margin-bottom:6px">⚠️ AI 서버 응답이 늦어져서, 무료 템플릿으로 대신 생성했어요.</div>':''}
+  <textarea id="ma-ai-text" style="min-height:140px">${esc(text)}</textarea>
+  <div style="display:flex;gap:8px;margin-top:10px">
+   <button class="mini" onclick="maCopyAiText()">복사</button>
+   <button class="mini" onclick="maSendAiSms('${uid}')">이 문구로 문자앱 열기</button>
+  </div>`;
+ document.getElementById('modal').style.display='flex';
+ if(!window._sheetOpen){history.pushState({sheet:1},'');window._sheetOpen=true;}
+}
+function maCopyAiText(){ const t=document.getElementById('ma-ai-text').value; navigator.clipboard.writeText(t); alert('복사됨'); }
+function maSendAiSms(uid){
+ const m=maByUid(uid); const t=document.getElementById('ma-ai-text').value;
+ const ph=(m.phone||'').replace(/[^0-9]/g,''); if(!ph){alert('번호가 없어요.');return;}
+ location.href='sms:'+ph+'&body='+encodeURIComponent(t);
+}
+
+// ── 뷰 렌더 진입점 ──
+function renderMemberAll(){
+ const box=document.getElementById('view-memberall');
+ box.innerHTML=`
+  <div class="card" style="background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:12px">
+   <div class="subtabs">
+    <button id="ma-tab-dash" class="on" onclick="maSwitchTab('dash')">👥 전체 회원</button>
+    <button id="ma-tab-bulk" onclick="maSwitchTab('bulk')">📤 단체문자</button>
+    <button id="ma-tab-pass" onclick="maSwitchTab('pass')">🎫 횟수권 관리</button>
+   </div>
+  </div>
+  <div id="ma-pane-dash">
+   <div class="carecard">
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+     <input id="ma-dash-q" placeholder="🔍 이름/번호 검색" style="flex:1;min-width:140px" oninput="maRenderDash()">
+     <select id="ma-dash-plan" class="memoin" style="margin-top:0;width:auto" onchange="maRenderDash()"><option value="">전체 회원권</option></select>
+     <select id="ma-dash-sort" class="memoin" style="margin-top:0;width:auto" onchange="maRenderDash()">
+      <option value="name">이름순</option><option value="plan">회원권별</option>
+      <option value="att_desc">출석많은순</option><option value="att_asc">출석적은순</option>
+      <option value="exp">만료임박순</option>
+     </select>
+    </div>
+   </div>
+   <div id="ma-dash-result"></div>
+  </div>
+  <div id="ma-pane-bulk" style="display:none">
+   <div class="carecard">
+    <div class="wklab">단톡방 멤버 명단 붙여넣기 (한 줄에 한 명씩)</div>
+    <textarea id="ma-bulk-names" style="min-height:160px" placeholder="백승헌
+이기찬
+강문철
+..."></textarea>
+    <button class="mini" style="margin-top:8px" onclick="maRunBulk()">매칭하기</button>
+    <div id="ma-bulk-status" class="wklab" style="margin-top:8px"></div>
+   </div>
+   <div id="ma-amb"></div>
+   <div id="ma-excl"></div>
+   <div class="carecard" id="ma-bulk-sortcard" style="display:none">
+    <select id="ma-bulk-plan" class="memoin" style="margin-top:0;width:auto" onchange="maRenderBulkResult()"><option value="">전체 회원권</option></select>
+    <select id="ma-bulk-sort" class="memoin" style="margin-top:0;width:auto" onchange="maRenderBulkResult()">
+     <option value="name">이름순</option><option value="plan">회원권별</option>
+     <option value="att_desc">출석많은순</option><option value="att_asc">출석적은순</option>
+     <option value="exp">만료임박순</option>
+    </select>
+   </div>
+   <div id="ma-bulk-result"></div>
+  </div>
+  <div id="ma-pane-pass" style="display:none">
+   <div class="listhead">🎫 횟수권 보유자 전체 · 만료 임박순 · 페이스=예정 사용속도 대비 실제</div>
+   <div id="ma-pass-result"></div>
+  </div>`;
+ // 매칭 버튼 눌렀을 때만 정렬카드 보이게
+ const _orig=maRunBulk;
+ maSwitchTab('dash');
+}
 function renderLeads(){
  const box=document.getElementById('view-leads');
  let list=Object.values(MEMBERS).filter(m=>m.glofox_user_id&&m.stage==='리드'&&(!m._days||m._days.length===0));
@@ -2108,8 +2463,10 @@ async function open_(uid){
  const ph=(m.phone||'').replace(/[^0-9]/g,''); const ig=(m.instagram||'').replace('@','');
  const passHTML = m.pass_remaining!=null ? `<div class="pass">횟수권 · 잔여 <b>${m.pass_remaining}회</b> / 총 ${m.pass_total||'-'}회<br><span style="color:var(--dim);font-size:12px">만료 ${esc(m.pass_expiry)||'-'}</span></div>`:'';
  const nameSuggestBtn = isRomanName(m.name) ? ` <span class="mini" style="cursor:pointer;font-weight:400" onclick="aiNameSuggest('${uid}',this)">🤖 AI 이름추천</span>` : '';
+ const glofoxNameHTML = (m.glofox_name && m.glofox_name!==m.name) ? `<div class="mrow"><span class="mk">글로폭스명</span><span style="color:var(--dim)">${esc(m.glofox_name)}</span> <span class="mini" style="background:none;border:none;color:var(--dim);padding:0;font-size:10px">Glofox 원본 등록명</span></div>` : '';
  document.getElementById('sheet').innerHTML=`<span class="close" onclick="close_()">×</span>
  <div class="mhead"><span onclick="bigPhoto('${esc(photoOf(m))}')">${avatar(m,'bk')}</span><div><h2 style="font-size:19px">${esc(m.name)} ${bd?`<span class="badge b-${bd}">${bd}</span>`:''} <span class="mini" style="cursor:pointer;font-weight:400" onclick="editName('${uid}')">✏️ 이름수정</span>${nameSuggestBtn}</h2></div></div>
+ ${glofoxNameHTML}
  <div class="mrow"><span class="mk">연락처</span><span>${esc(m.phone)||'-'}</span>${ph?`<span class="acts"><a class="mini" href="tel:${ph}">통화</a><a class="mini" href="sms:${ph}">문자</a><span class="mini" onclick="copyTxt('${esc(m.phone)}','번호 복사됨 · 카톡에 붙여넣기')">카톡</span></span>`:''}</div>
  <div class="mrow"><span class="mk">인스타</span><span>${ig?'@'+esc(ig):'-'}</span>${ig?`<span class="acts"><span class="mini" onclick="copyTxt('@${esc(ig)}','태그 복사됨')">태그</span></span>`:''}</div>
  <div class="mrow"><span class="mk">멤버십</span>${esc(m.membership)||'-'}</div>
