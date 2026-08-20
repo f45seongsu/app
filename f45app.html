@@ -972,6 +972,26 @@ async function ensureMileData(){
  }
  MILEDATA=cnt;
 }
+// 사진 뱃지에 "정확한 전체 출석 횟수"를 채우기 위해 백그라운드에서 전체기간 출석을 불러옴
+// (MILEDATA를 그대로 재사용 - 마일스톤 탭 열 때 또 조회할 필요 없음)
+async function loadTrueVisitTotals(){
+ try{
+  await ensureMileData();
+  const t2={};
+  Object.values(MEMBERS).forEach(m=>{
+   const uid=m.glofox_user_id; if(!uid)return;
+   const allDays=MILEDATA[uid]||[];
+   if(m.visit_base==null){ t2[uid]=allDays.length||null; }
+   else{ const vbd=m.visit_base_date||'2000-01-01'; const after=allDays.filter(d=>d>vbd).length; t2[uid]=(m.visit_base||0)+after; }
+  });
+  TOTAL_VISITS=t2;
+  // 현재 보이는 화면들 정확한 숫자로 다시 그림
+  if(VIEW==='att') renderDay(false);
+  if(VIEW==='memberall') renderMemberAll();
+  if(VIEW==='dashboard') renderDashboardHome();
+  if(VIEW==='search') renderSearch();
+ }catch(e){ console.error('전체 출석 횟수 로딩 실패:', e.message); }
+}
 window._tshirtOpen=true;
 function toggleTshirtSection(){window._tshirtOpen=!window._tshirtOpen;renderTshirt();}
 async function renderTshirt(){
@@ -1650,7 +1670,7 @@ function maTableHTML(list, containerId, situationHint){
  </div>`;
  h+=`<div style="background:var(--card);border:1px solid var(--line);border-radius:12px;overflow-x:auto" id="${containerId}">
   <div class="ma-row ma-row-head" style="display:flex;gap:8px;align-items:center;padding:6px 12px;border-bottom:1px solid var(--line);font-size:10px;color:var(--dim);min-width:900px;text-transform:uppercase">
-   <div class="ma-c-sms"></div><div class="ma-c-chk"></div><div class="ma-c-name">이름</div><div style="flex:0 0 34px"></div><div style="flex:0 0 106px">전화번호</div><div style="flex:0 0 140px">회원권</div><div style="flex:0 0 60px">만료일</div><div style="flex:1">4주 출석(월~토)</div><div style="flex:0 0 60px;text-align:right">AI</div>
+   <div class="ma-c-sms"></div><div class="ma-c-chk"></div><div class="ma-c-name">이름</div><div style="flex:0 0 36px;overflow:hidden"></div><div style="flex:0 0 106px">전화번호</div><div style="flex:0 0 140px">회원권</div><div style="flex:0 0 60px">만료일</div><div style="flex:1">4주 출석(월~토)</div><div style="flex:0 0 60px;text-align:right">AI</div>
   </div>`;
  h+= list.length ? list.map(m=>{
   const uid=m.glofox_user_id; const hasPh=!!(m.phone||'').trim();
@@ -1658,7 +1678,7 @@ function maTableHTML(list, containerId, situationHint){
    <div class="ma-c-sms" onclick="event.stopPropagation()"><button class="mini" style="font-size:10px;padding:4px 6px" onclick="maSingleSms('${uid}')">📱문자</button></div>
    <div class="ma-c-chk"><input type="checkbox" class="ma-chk" data-uid="${uid}" ${hasPh?'':'disabled'} onclick="event.stopPropagation()" onchange="maUpdateCnt('${containerId}')"></div>
    <div class="ma-c-name" style="font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(m.name)}</div>
-   <div style="flex:0 0 34px">${avatar(m,'bk')}</div>
+   <div style="flex:0 0 36px;overflow:hidden">${avatar(m,'bk')}</div>
    <div style="flex:0 0 106px;color:var(--dim);white-space:nowrap">${esc(m.phone||'번호없음')}</div>
    <div style="flex:0 0 140px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:11px">${esc(m.membership||'-')}</div>
    <div style="flex:0 0 60px;font-size:11px">${maExpiryHTML(m)}</div>
@@ -1866,7 +1886,7 @@ function maRenderPass(){
   <button class="mini" onclick="maBulkExportAI('ma-pass-tbl','pass',this)">🤖AI일괄→엑셀</button>
  </div><div style="background:var(--card);border:1px solid var(--line);border-radius:12px;overflow-x:auto" id="ma-pass-tbl">
   <div class="ma-row ma-row-head" style="display:flex;gap:8px;align-items:center;padding:6px 12px;border-bottom:1px solid var(--line);font-size:10px;color:var(--dim);min-width:760px;text-transform:uppercase">
-   <div class="ma-c-sms"></div><div class="ma-c-chk"></div><div class="ma-c-name">이름</div><div style="flex:0 0 34px"></div><div style="flex:0 0 106px">전화번호</div><div style="flex:0 0 80px">잔여/총</div><div style="flex:0 0 60px">만료일</div><div style="flex:1">페이스</div><div style="flex:0 0 60px;text-align:right">AI</div>
+   <div class="ma-c-sms"></div><div class="ma-c-chk"></div><div class="ma-c-name">이름</div><div style="flex:0 0 36px;overflow:hidden"></div><div style="flex:0 0 106px">전화번호</div><div style="flex:0 0 80px">잔여/총</div><div style="flex:0 0 60px">만료일</div><div style="flex:1">페이스</div><div style="flex:0 0 60px;text-align:right">AI</div>
   </div>`;
  h+=list.map(m=>{
   const uid=m.glofox_user_id, hasPh=!!(m.phone||'').trim();
@@ -1876,7 +1896,7 @@ function maRenderPass(){
    <div class="ma-c-sms" onclick="event.stopPropagation()"><button class="mini" style="font-size:10px;padding:4px 6px" onclick="maSingleSms('${uid}')">📱문자</button></div>
    <div class="ma-c-chk" onclick="event.stopPropagation()"><input type="checkbox" class="ma-chk" data-uid="${uid}" ${hasPh?'':'disabled'} onclick="event.stopPropagation()" onchange="maUpdateCnt('ma-pass-tbl')"></div>
    <div class="ma-c-name" style="font-weight:700">${esc(m.name)}</div>
-   <div style="flex:0 0 34px">${avatar(m,'bk')}</div>
+   <div style="flex:0 0 36px;overflow:hidden">${avatar(m,'bk')}</div>
    <div style="flex:0 0 106px;color:var(--dim)">${esc(m.phone||'번호없음')}</div>
    <div style="flex:0 0 80px;font-size:11px">${m.pass_remaining!=null?m.pass_remaining:'-'}/${m.pass_total||'-'}회</div>
    <div style="flex:0 0 60px;font-size:11px">${maExpiryHTML(m)}</div>
@@ -2403,6 +2423,7 @@ async function loadData(manual){
  const now=new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Seoul'});
  window._lastUpdate=now;
  if(btn){btn.disabled=false;btn.textContent='↻';}
+ loadTrueVisitTotals(); // 화면은 빠르게 먼저 뜨고, 정확한 전체 출석수는 백그라운드로 이어서 채움
  }catch(e){
   document.getElementById('app').innerHTML=`<div class="center">예상치 못한 오류가 발생했어요.<br><small>${esc(e.message||JSON.stringify(e))}</small><br><br><small style="color:var(--dim)">${esc((e.stack||'').slice(0,400))}</small></div>`;
   if(btn){btn.disabled=false;btn.textContent='↻';}
@@ -2593,7 +2614,12 @@ function freqColor4w(n){
  if(n<=15)return '#e0563a';
  return '#b070e0';
 }
-function visitTotal(m){const days=(m._days||[]);if(m.visit_base==null){return days.length||null;}const vbd=m.visit_base_date||'2000-01-01';const after=days.filter(d=>d>vbd).length;return (m.visit_base||0)+after;}
+let TOTAL_VISITS={};
+function visitTotal(m){
+ const uid=m.glofox_user_id;
+ if(uid && TOTAL_VISITS[uid]!=null) return TOTAL_VISITS[uid];
+ const days=(m._days||[]);if(m.visit_base==null){return days.length||null;}const vbd=m.visit_base_date||'2000-01-01';const after=days.filter(d=>d>vbd).length;return (m.visit_base||0)+after;
+}
 function isBdayToday(m){if(!m.birth||m.birth.length<10)return false;const n=new Date();return (+m.birth.slice(5,7))===n.getMonth()+1&&(+m.birth.slice(8,10))===n.getDate();}
 function daysToBday(m){if(!m.birth||m.birth.length<10)return 999;const n=new Date();const b=new Date(n.getFullYear(),+m.birth.slice(5,7)-1,+m.birth.slice(8,10));const t=new Date(n.getFullYear(),n.getMonth(),n.getDate());let d=Math.round((b-t)/86400000);if(d<0)d+=365;return d;}
 function msgBday(uid){const m=MEMBERS[uid]||{};const nm=m.name||'회원';const k=ageInfo(m.birth);return `${nm}님, 생일 진심으로 축하드려요! 🎉 F45 성수에서 올 한 해도 건강하고 활기차게 보내세요 💪 생일 기념 방문하시면 작은 선물 준비해뒀어요 😊`;}
