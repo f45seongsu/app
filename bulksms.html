@@ -37,7 +37,7 @@ select{background:#0e1a30;border:1px solid var(--line);color:var(--txt);border-r
 .amb-btn.on{background:var(--red);border-color:var(--red);color:#fff}
 
 .tbl-wrap{background:var(--card);border:1px solid var(--line);border-radius:12px;overflow-x:auto;overflow-y:hidden}
-.trow{display:flex;align-items:center;gap:9px;padding:6px 12px;border-bottom:1px solid var(--line);font-size:12px;min-width:780px}
+.trow{display:flex;align-items:center;gap:9px;padding:6px 12px;border-bottom:1px solid var(--line);font-size:12px;min-width:940px}
 .trow:last-child{border-bottom:none}
 .trow:hover{background:#0e1a30}
 .trow.header{color:var(--dim);font-size:10px;letter-spacing:.03em;text-transform:uppercase;background:#0a1220}
@@ -52,6 +52,8 @@ select{background:#0e1a30;border:1px solid var(--line);color:var(--txt);border-r
 .c-att{flex:1;display:flex;align-items:center;gap:7px}
 .c-pass{flex:0 0 96px;white-space:nowrap;font-size:11px}
 .c-pace{flex:1;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.c-actions{flex:0 0 130px;display:flex;gap:4px;justify-content:flex-end}
+.c-actions button{flex:1;padding:4px 5px;font-size:10px;margin:0;white-space:nowrap}
 
 .toolbar{display:flex;gap:8px;align-items:center;margin:10px 0;flex-wrap:wrap}
 .toolbar label{font-size:12px;color:var(--dim);display:flex;align-items:center;gap:5px}
@@ -110,6 +112,7 @@ select{background:#0e1a30;border:1px solid var(--line);color:var(--txt);border-r
   <div class="card">
     <div class="filterrow">
       <input id="dashSearch" type="text" placeholder="🔍 이름 또는 번호로 찾기" oninput="renderDashboard()">
+      <select id="dashPlanFilter" onchange="renderDashboard()"><option value="">전체 회원권</option></select>
       <select id="dashSort" onchange="renderDashboard()">
         <option value="name">이름순</option>
         <option value="plan">회원권별</option>
@@ -137,6 +140,7 @@ select{background:#0e1a30;border:1px solid var(--line);color:var(--txt);border-r
   <div id="exclSection"></div>
   <div class="card" id="bulkSortCard" style="display:none">
     <div class="filterrow">
+      <select id="bulkPlanFilter" onchange="renderBulkResult()"><option value="">전체 회원권</option></select>
       <select id="bulkSort" onchange="renderBulkResult()">
         <option value="name">이름순</option>
         <option value="plan">회원권별</option>
@@ -301,11 +305,22 @@ async function boot(){
 
     computeActive();
     computePassList();
+    populatePlanFilter('dashPlanFilter', ACTIVE);
+    populatePlanFilter('bulkPlanFilter', ACTIVE);
     status.textContent=`✅ 불러오기 완료 · 활성 회원 ${ACTIVE.length}명 · 횟수권 보유자 ${PASS_LIST.length}명`;
     renderDashboard();
   }catch(e){
     status.textContent='오류: '+e.message;
   }
+}
+
+function populatePlanFilter(selectId, list){
+  const sel=document.getElementById(selectId);
+  if(!sel)return;
+  const plans=[...new Set(list.map(m=>m.membership||'(없음)'))].sort((a,b)=>a.localeCompare(b,'ko'));
+  const cur=sel.value;
+  sel.innerHTML='<option value="">전체 회원권</option>'+plans.map(p=>`<option value="${esc(p)}">${esc(p)}</option>`).join('');
+  if(plans.includes(cur)) sel.value=cur;
 }
 
 function computeActive(){
@@ -321,6 +336,8 @@ function computePassList(){
 function onToggleChange(){
   if(!PEOPLE_CACHE)return;
   computeActive();
+  populatePlanFilter('dashPlanFilter', ACTIVE);
+  populatePlanFilter('bulkPlanFilter', ACTIVE);
   const status=document.getElementById('bootStatus');
   status.textContent=`✅ 활성 회원 ${ACTIVE.length}명 · 횟수권 보유자 ${PASS_LIST.length}명`;
   const cur=['dash','bulk','pass'].find(x=>document.getElementById('tabpane-'+x).classList.contains('on'));
@@ -378,7 +395,7 @@ function memberTableHTML(list, today, containerId){
     <button class="btn sm sec" onclick="tblSms('${containerId}')">문자앱 열기</button>
   </div>`;
   h+=`<div class="tbl-wrap" id="${containerId}">
-    <div class="trow header"><div class="c-chk"></div><div class="c-photo"></div><div class="c-name">이름</div><div class="c-phone">전화번호</div><div class="c-plan">회원권</div><div class="c-exp">만료일</div><div class="c-att">4주 출석 (월~토, 오래된 주 → 최근 주)</div></div>`;
+    <div class="trow header"><div class="c-chk"></div><div class="c-photo"></div><div class="c-name">이름</div><div class="c-phone">전화번호</div><div class="c-plan">회원권</div><div class="c-exp">만료일</div><div class="c-att">4주 출석 (월~토, 오래된 주 → 최근 주)</div><div class="c-actions">작업</div></div>`;
   h+= list.length ? list.map(m=>{
     const hasPh=!!(m.phone||'').trim();
     return `<div class="trow" style="cursor:pointer" onclick="showDetail('${m.glofox_user_id}')">
@@ -389,6 +406,10 @@ function memberTableHTML(list, today, containerId){
       <div class="c-plan">${esc(m.membership||'-')}</div>
       <div class="c-exp">${expiryHTML(m, today)}</div>
       <div class="c-att">${weekBlocksHTML(m._days, today)}</div>
+      <div class="c-actions">
+        <button class="btn sm" onclick="event.stopPropagation();aiMsgFor('${m.glofox_user_id}',this,'general')">🤖AI</button>
+        <button class="btn sm sec" onclick="event.stopPropagation();singleSms('${m.glofox_user_id}')">📱문자</button>
+      </div>
     </div>`;
   }).join('') : '<div class="center">대상이 없어요.</div>';
   h+=`</div>
@@ -438,8 +459,10 @@ function renderDashboard(){
       return false;
     });
   }
+  const planF=document.getElementById('dashPlanFilter').value;
+  if(planF){ list=list.filter(m=>(m.membership||'(없음)')===planF); }
   list=sortMembers(list, mode, TODAY_CACHE);
-  box.innerHTML=`<div class="listhead">👥 <b>활성 회원</b> ${list.length}명${q?` (검색: "${esc(q)}")`:''}</div>`
+  box.innerHTML=`<div class="listhead">👥 <b>활성 회원</b> ${list.length}명${q?` (검색: "${esc(q)}")`:''}${planF?` · 회원권: ${esc(planF)}`:''}</div>`
     + memberTableHTML(list, TODAY_CACHE, 'dashTbl');
   tblUpdateCount('dashTbl');
 }
@@ -501,11 +524,13 @@ function toggleExclude(uid){
 }
 function renderBulkResult(){
   const box=document.getElementById('bulkResult');
-  const included=ACTIVE.filter(m=>!EXCLUDE.has(m.glofox_user_id));
+  let included=ACTIVE.filter(m=>!EXCLUDE.has(m.glofox_user_id));
   const noPhone=included.filter(m=>!(m.phone||'').trim());
+  const planF=document.getElementById('bulkPlanFilter')?.value||'';
+  if(planF){ included=included.filter(m=>(m.membership||'(없음)')===planF); }
   const mode=document.getElementById('bulkSort')?.value||'name';
   const sorted=sortMembers(included, mode, TODAY_CACHE);
-  box.innerHTML=`<div class="listhead">📨 <b>발송 대상 (단톡방 제외)</b> · 활성 ${ACTIVE.length}명 중 ${included.length}명${noPhone.length?` · 번호없음 ${noPhone.length}명`:''}${UNMATCHED.length?` · 명단 중 못 찾은 이름 ${UNMATCHED.length}명(정보용)`:''}</div>`
+  box.innerHTML=`<div class="listhead">📨 <b>발송 대상 (단톡방 제외)</b> · 활성 ${ACTIVE.length}명 중 ${included.length}명${planF?` · 회원권: ${esc(planF)}`:''}${noPhone.length?` · 번호없음 ${noPhone.length}명`:''}${UNMATCHED.length?` · 명단 중 못 찾은 이름 ${UNMATCHED.length}명(정보용)`:''}</div>`
     + memberTableHTML(sorted, TODAY_CACHE, 'bulkTbl');
   tblUpdateCount('bulkTbl');
 }
@@ -549,7 +574,7 @@ function renderPassTab(){
     <button class="btn sm sec" onclick="tblSms('passTbl')">문자앱 열기</button>
   </div>`;
   h+=`<div class="tbl-wrap" id="passTbl">
-    <div class="trow header"><div class="c-chk"></div><div class="c-photo"></div><div class="c-name">이름</div><div class="c-phone">전화번호</div><div class="c-pass">잔여/총</div><div class="c-exp">만료일</div><div class="c-pace">사용 페이스</div></div>`;
+    <div class="trow header"><div class="c-chk"></div><div class="c-photo"></div><div class="c-name">이름</div><div class="c-phone">전화번호</div><div class="c-pass">잔여/총</div><div class="c-exp">만료일</div><div class="c-pace">사용 페이스</div><div class="c-actions">작업</div></div>`;
   h+=list.map(m=>{
     const hasPh=!!(m.phone||'').trim();
     const dd=ddayOf(m.pass_expiry, today);
@@ -562,6 +587,10 @@ function renderPassTab(){
       <div class="c-pass">${m.pass_remaining!=null?m.pass_remaining:'-'} / ${m.pass_total||'-'}</div>
       <div class="c-exp">${expiryHTML(m, today)}</div>
       <div class="c-pace">${paceHTML(m, today)}${warn}</div>
+      <div class="c-actions">
+        <button class="btn sm" onclick="event.stopPropagation();aiMsgFor('${m.glofox_user_id}',this,'pass')">🤖AI</button>
+        <button class="btn sm sec" onclick="event.stopPropagation();singleSms('${m.glofox_user_id}')">📱문자</button>
+      </div>
     </div>`;
   }).join('');
   h+=`</div>
@@ -571,6 +600,89 @@ function renderPassTab(){
 }
 
 // ===== 4주 출석 그리드 =====
+// ===== 최근 N일 출석 횟수 =====
+function countDaysWithin(days, today, n){
+  if(!days)return 0;
+  const t=new Date(today+'T00:00:00');
+  const lim=new Date(t); lim.setDate(t.getDate()-n);
+  let c=0;
+  days.forEach(d=>{ if(new Date(d+'T00:00:00')>lim) c++; });
+  return c;
+}
+function seasonalHint(todayStr){
+  const mo=+todayStr.slice(5,7);
+  if([12,1,2].includes(mo)) return '한겨울, 추운 날씨';
+  if([3,4,5].includes(mo)) return '봄, 날씨가 풀리는 시기';
+  if([6,7,8].includes(mo)) return '한여름, 더운 날씨';
+  if(mo===9) return '초가을, 선선해지기 시작하는 시기';
+  if([10,11].includes(mo)) return '가을, 선선하고 쌀쌀해지는 시기';
+  return '';
+}
+
+// ===== AI 문구 생성 (기존 f45app.html과 같은 glofox-ai Edge Function 재사용) =====
+async function aiMsgFor(uid, btn, situationHint){
+  const m=tblMemberByUid(uid);
+  if(!m)return;
+  const today=TODAY_CACHE;
+  const r7=countDaysWithin(m._days, today, 7);
+  const r14=countDaysWithin(m._days, today, 14);
+  const season=seasonalHint(today);
+
+  let detail=`오늘 날짜 ${today} (${season}). 최근 7일 출석 ${r7}회, 최근 14일 출석 ${r14}회.`;
+  if(r14<=1) detail+=' 최근 거의 안 나오고 있음 - 부담 주지 않고 부드럽게 다시 나오도록 안부 겸 독려.';
+  else if(r14>=6) detail+=' 최근 꾸준히 잘 나오고 있음 - 칭찬과 격려 위주.';
+  else detail+=' 출석이 보통 수준 - 가볍게 안부 겸 독려.';
+
+  let situation='최근 출석 패턴에 맞춰 안부/독려 문자. 날씨·계절 변화를 자연스럽게 한 마디 녹여서 (예: 선선해졌는데 다시 나와보시라는 식) 작성.';
+  if(situationHint==='pass' && isClassPass(m)){
+    const dd=ddayOf(m.pass_expiry, today);
+    detail+=` 횟수권 잔여 ${m.pass_remaining}회, 만료까지 ${dd!=null?dd+'일':'-'} 남음.`;
+    situation='횟수권 만료 전 소진을 부드럽게 유도하는 문자. 날씨·계절 변화도 자연스럽게 한 마디.';
+  }
+
+  if(btn){btn.disabled=true;btn.textContent='...';}
+  try{
+    const {data,error}=await sb.functions.invoke('glofox-ai',{body:{type:'message',name:m.name||'회원',situation,detail}});
+    if(btn){btn.disabled=false;btn.textContent='🤖AI';}
+    if(error||!data?.text){ alert('AI 문구 생성 실패: '+(error?.message||'응답을 받지 못했어요')); return; }
+    showAiModal(uid, data.text);
+  }catch(e){
+    if(btn){btn.disabled=false;btn.textContent='🤖AI';}
+    alert('오류: '+e.message);
+  }
+}
+function showAiModal(uid, text){
+  const m=tblMemberByUid(uid);
+  document.getElementById('detailSheet').innerHTML=`
+    <span class="d-close" onclick="closeDetail()">×</span>
+    <div class="d-name">🤖 ${esc(m.name)}님에게 보낼 문구</div>
+    <div class="wklab">수정 가능해요 · 실제 날씨는 반영 안 됨(계절감만 참고)</div>
+    <textarea id="aiText" style="min-height:150px">${esc(text)}</textarea>
+    <div style="display:flex;gap:8px;margin-top:10px">
+      <button class="btn sm" onclick="copyAiText()">복사</button>
+      <button class="btn sm sec" onclick="sendAiSms('${uid}')">이 문구로 문자앱 열기</button>
+    </div>`;
+  document.getElementById('detailModal').classList.add('show');
+}
+function copyAiText(){
+  const t=document.getElementById('aiText').value;
+  navigator.clipboard.writeText(t);
+  alert('복사됨');
+}
+function sendAiSms(uid){
+  const m=tblMemberByUid(uid);
+  const t=document.getElementById('aiText').value;
+  const ph=(m.phone||'').replace(/[^0-9]/g,'');
+  if(!ph){alert('번호가 없어요.');return;}
+  location.href='sms:'+ph+'&body='+encodeURIComponent(t);
+}
+function singleSms(uid){
+  const m=tblMemberByUid(uid);
+  const ph=(m.phone||'').replace(/[^0-9]/g,'');
+  if(!ph){alert('번호가 없어요.');return;}
+  location.href='sms:'+ph;
+}
+
 function weekBlocksHTML(days, today){
   const t=new Date(today+'T00:00:00');
   const dow=(t.getDay()+6)%7; const mon=new Date(t); mon.setDate(t.getDate()-dow);
