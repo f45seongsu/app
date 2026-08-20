@@ -1666,8 +1666,10 @@ function maTableHTML(list, containerId, situationHint){
   <span class="mini" style="background:#1c2f4d;border-radius:20px" id="${containerId}-cnt"><b>0</b>명 선택됨</span>
   <button class="mini" onclick="maCopy('${containerId}')">번호 복사</button>
   <button class="mini" onclick="maSmsOpen('${containerId}')">문자앱 열기</button>
+  <button class="mini" onclick="maBulkGenerateCards('${containerId}','${situationHint}',this)">🤖AI문자만들기</button>
   <button class="mini" onclick="maBulkExportAI('${containerId}','${situationHint}',this)">🤖AI일괄→엑셀</button>
- </div>`;
+ </div>
+ <div id="${containerId}-aicards" style="display:none;margin-bottom:10px"></div>`;
  h+=`<div style="background:var(--card);border:1px solid var(--line);border-radius:12px;overflow-x:auto" id="${containerId}">
   <div class="ma-row ma-row-head" style="display:flex;gap:8px;align-items:center;padding:6px 12px;border-bottom:1px solid var(--line);font-size:10px;color:var(--dim);min-width:900px;text-transform:uppercase">
    <div class="ma-c-sms"></div><div class="ma-c-chk"></div><div class="ma-c-name">이름</div><div style="flex:0 0 36px;overflow:hidden"></div><div style="flex:0 0 106px">전화번호</div><div style="flex:0 0 140px">회원권</div><div style="flex:0 0 60px">만료일</div><div style="flex:1">4주 출석(월~토)</div><div style="flex:0 0 60px;text-align:right">AI</div>
@@ -1716,7 +1718,7 @@ function maSingleSms(uid){ const m=maByUid(uid); const ph=(m.phone||'').replace(
 // ── 탭1: 전체 회원 ──
 function maSwitchTab(t){
  MA_TAB=t;
- ['dash','bulk','pass','winback'].forEach(x=>{
+ ['dash','bulk','pass','winback','group'].forEach(x=>{
   const p=document.getElementById('ma-pane-'+x), b=document.getElementById('ma-tab-'+x);
   if(p)p.style.display=(x===t?'':'none');
   if(b)b.classList.toggle('on',x===t);
@@ -1724,6 +1726,7 @@ function maSwitchTab(t){
  if(t==='dash')maRenderDash();
  if(t==='pass')maRenderPass();
  if(t==='winback')maRenderWinback();
+ if(t==='group')maLoadGroups();
 }
 function maRenderDash(){
  const box=document.getElementById('ma-dash-result'); if(!box)return;
@@ -1849,6 +1852,119 @@ function maRenderWinback(){
  maUpdateCnt('ma-winback-tbl');
 }
 
+// ── 탭5: 그룹 관리 (하이록스특별반 같은 커스텀 묶음) ──
+let MA_GROUPS=[], MA_ACTIVE_GROUP=null;
+async function maLoadGroups(){
+ const listBox=document.getElementById('ma-group-list'); if(!listBox)return;
+ listBox.innerHTML='<div class="center">불러오는 중…</div>';
+ try{
+  const{data,error}=await sb.from('member_groups').select('*').order('created_at',{ascending:false});
+  if(error){
+   listBox.innerHTML=`<div class="center">그룹 불러오기 실패<br><span class="mini" style="color:var(--dim)">Supabase에 member_groups 테이블(id, name, member_uids jsonb)이 있는지 확인해주세요.<br>${esc(error.message)}</span></div>`;
+   return;
+  }
+  MA_GROUPS=data||[];
+  maRenderGroupList();
+ }catch(e){ listBox.innerHTML='<div class="center">오류: '+esc(e.message)+'</div>'; }
+}
+function maRenderGroupList(){
+ const box=document.getElementById('ma-group-list'); if(!box)return;
+ if(!MA_GROUPS.length){box.innerHTML='<div class="center">아직 그룹이 없어요. 위에서 새로 만들어보세요.</div>';return;}
+ box.innerHTML='<div class="listhead">📋 그룹 목록</div>'+MA_GROUPS.map(g=>{
+  const cnt=(g.member_uids||[]).length;
+  const on=MA_ACTIVE_GROUP===g.id;
+  return `<div class="carecard" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;${on?'border-color:var(--red)':''}" onclick="maOpenGroup(${g.id})">
+   <div><b>${esc(g.name)}</b> <span class="smeta">${cnt}명</span></div>
+   <button class="mini" style="color:#e0563a" onclick="event.stopPropagation();maDeleteGroup(${g.id})">삭제</button>
+  </div>`;
+ }).join('');
+}
+async function maCreateGroup(){
+ const inp=document.getElementById('ma-newgroup-name');
+ const nm=(inp.value||'').trim();
+ if(!nm){alert('그룹 이름을 입력하세요.');return;}
+ try{
+  const{error}=await sb.from('member_groups').insert({name:nm, member_uids:[]});
+  if(error){alert('생성 실패: '+error.message);return;}
+  inp.value='';
+  maLoadGroups();
+ }catch(e){alert('오류: '+e.message);}
+}
+async function maDeleteGroup(id){
+ if(!confirm('이 그룹을 삭제할까요? (그룹만 지워지고 회원 정보는 그대로예요)'))return;
+ try{
+  const{error}=await sb.from('member_groups').delete().eq('id',id);
+  if(error){alert('삭제 실패: '+error.message);return;}
+  if(MA_ACTIVE_GROUP===id){ MA_ACTIVE_GROUP=null; document.getElementById('ma-group-detail').innerHTML=''; }
+  maLoadGroups();
+ }catch(e){alert('오류: '+e.message);}
+}
+function maOpenGroup(id){ MA_ACTIVE_GROUP=id; maRenderGroupDetail(); maRenderGroupList(); }
+function maRenderGroupDetail(){
+ const box=document.getElementById('ma-group-detail'); if(!box)return;
+ const g=MA_GROUPS.find(x=>x.id===MA_ACTIVE_GROUP);
+ if(!g){box.innerHTML='';return;}
+ const uids=g.member_uids||[];
+ const members=uids.map(u=>MEMBERS[u]).filter(Boolean);
+ let h=`<div class="listhead">🏷️ <b>${esc(g.name)}</b> ${members.length}명</div>
+  <div class="carecard">
+   <div class="wklab">회원 추가</div>
+   <input id="ma-group-search" placeholder="🔍 이름 검색" oninput="maGroupSearch(this.value)" autocomplete="off">
+   <div id="ma-group-search-results" style="margin-top:6px"></div>
+  </div>`;
+ if(members.length){
+  h+=`<div style="background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px;margin-bottom:10px">`+
+   members.map(m=>`<span style="display:inline-flex;align-items:center;gap:6px;background:#0e1a30;border:1px solid var(--line);border-radius:20px;padding:4px 6px 4px 12px;margin:3px;font-size:12px">${esc(m.name)}<button onclick="maRemoveFromGroup('${m.glofox_user_id}')" style="background:var(--red);color:#fff;border:none;border-radius:50%;width:18px;height:18px;font-size:11px;cursor:pointer;line-height:1">×</button></span>`).join('')
+   +`</div>`;
+  h+=maTableHTML(members, 'ma-group-tbl', 'general');
+  h+=`<div style="margin-top:8px"><button class="mini" onclick="maCopyInsta('ma-group-tbl')">📸 인스타 태그 복사</button></div>`;
+ } else {
+  h+='<div class="center">아직 회원이 없어요. 위에서 검색해서 추가하세요.</div>';
+ }
+ box.innerHTML=h;
+ if(members.length) maUpdateCnt('ma-group-tbl');
+}
+function maGroupSearch(q){
+ const box=document.getElementById('ma-group-search-results');
+ if(!box)return;
+ if(!q||q.length<1){box.innerHTML='';return;}
+ const g=MA_GROUPS.find(x=>x.id===MA_ACTIVE_GROUP); if(!g)return;
+ const already=new Set(g.member_uids||[]);
+ const matches=Object.values(MEMBERS).filter(m=>m.glofox_user_id&&!already.has(m.glofox_user_id)&&(m.name||'').includes(q)).slice(0,8);
+ box.innerHTML=matches.length?matches.map(m=>`<div class="srow" style="cursor:pointer" onclick="maAddToGroup('${m.glofox_user_id}')">${avatar(m,'bk')}<div class="sinfo"><div class="nm">${esc(m.name)}</div><div class="smeta">${esc(m.phone||'')}</div></div></div>`).join(''):'<div class="mini" style="color:var(--dim)">검색 결과 없음</div>';
+}
+async function maAddToGroup(uid){
+ const g=MA_GROUPS.find(x=>x.id===MA_ACTIVE_GROUP); if(!g)return;
+ const uids=new Set(g.member_uids||[]); uids.add(uid);
+ const newList=[...uids];
+ try{
+  const{error}=await sb.from('member_groups').update({member_uids:newList}).eq('id',g.id);
+  if(error){alert('추가 실패: '+error.message);return;}
+  g.member_uids=newList;
+  document.getElementById('ma-group-search').value='';
+  document.getElementById('ma-group-search-results').innerHTML='';
+  maRenderGroupDetail(); maRenderGroupList();
+ }catch(e){alert('오류: '+e.message);}
+}
+async function maRemoveFromGroup(uid){
+ const g=MA_GROUPS.find(x=>x.id===MA_ACTIVE_GROUP); if(!g)return;
+ const newList=(g.member_uids||[]).filter(u=>u!==uid);
+ try{
+  const{error}=await sb.from('member_groups').update({member_uids:newList}).eq('id',g.id);
+  if(error){alert('제거 실패: '+error.message);return;}
+  g.member_uids=newList;
+  maRenderGroupDetail(); maRenderGroupList();
+ }catch(e){alert('오류: '+e.message);}
+}
+function maCopyInsta(containerId){
+ const uids=[...document.querySelectorAll('#'+containerId+' .ma-chk:checked')].map(el=>el.dataset.uid);
+ if(!uids.length){alert('선택된 회원이 없어요. (체크박스로 먼저 선택하세요)');return;}
+ const ids=uids.map(u=>{const m=maByUid(u); return m?(m.instagram||'').replace('@','').trim():'';}).filter(Boolean).map(x=>'@'+x);
+ if(!ids.length){alert('선택된 회원 중 인스타 ID가 등록된 사람이 없어요.');return;}
+ navigator.clipboard.writeText(ids.join('\n'));
+ alert(`${ids.length}명 인스타 태그 복사됨:\n`+ids.join('\n'));
+}
+
 // ── 탭3: 횟수권 관리 ──
 function maPassPace(m){
  const tot=+(m.pass_total||0), rem=+(m.pass_remaining||0);
@@ -1883,8 +1999,11 @@ function maRenderPass(){
   <span class="mini" style="background:#1c2f4d;border-radius:20px" id="ma-pass-tbl-cnt"><b>0</b>명 선택됨</span>
   <button class="mini" onclick="maCopy('ma-pass-tbl')">번호 복사</button>
   <button class="mini" onclick="maSmsOpen('ma-pass-tbl')">문자앱 열기</button>
+  <button class="mini" onclick="maBulkGenerateCards('ma-pass-tbl','pass',this)">🤖AI문자만들기</button>
   <button class="mini" onclick="maBulkExportAI('ma-pass-tbl','pass',this)">🤖AI일괄→엑셀</button>
- </div><div style="background:var(--card);border:1px solid var(--line);border-radius:12px;overflow-x:auto" id="ma-pass-tbl">
+ </div>
+ <div id="ma-pass-tbl-aicards" style="display:none;margin-bottom:10px"></div>
+ <div style="background:var(--card);border:1px solid var(--line);border-radius:12px;overflow-x:auto" id="ma-pass-tbl">
   <div class="ma-row ma-row-head" style="display:flex;gap:8px;align-items:center;padding:6px 12px;border-bottom:1px solid var(--line);font-size:10px;color:var(--dim);min-width:760px;text-transform:uppercase">
    <div class="ma-c-sms"></div><div class="ma-c-chk"></div><div class="ma-c-name">이름</div><div style="flex:0 0 36px;overflow:hidden"></div><div style="flex:0 0 106px">전화번호</div><div style="flex:0 0 80px">잔여/총</div><div style="flex:0 0 60px">만료일</div><div style="flex:1">페이스</div><div style="flex:0 0 60px;text-align:right">AI</div>
   </div>`;
@@ -1927,7 +2046,8 @@ function maCountDays(days,n){
 function maTemplateFallback(m, r14, situationHint){
  const nm=m.name||'회원'; const season=maSeasonHint();
  if(situationHint==='pass'){
-  return `${nm}님, 보유하신 횟수권이 곧 만료돼요! 아직 ${m.pass_remaining||0}회 남았으니 이번 주 편하신 시간에 오셔서 알차게 사용해보세요 💪 -F45 성수`;
+  const expTxt=m.pass_expiry?m.pass_expiry.slice(0,10):'곧';
+  return `${nm}님, 횟수권이 ${expTxt}에 만료돼요! 아직 ${m.pass_remaining||0}회 남았으니, 이번 주부터 좀 더 자주 나오셔서 알차게 다 쓰고 가세요 💪 -F45 성수`;
  }
  if(situationHint==='winback'){
   return `${nm}님, 오랜만이에요! ${season.includes('선선')?'날씨도 선선해졌는데':'날씨 어떻든'} 예전처럼 다시 F45에서 땀 흘려보시는 거 어때요? 재등록 문의 편하게 주세요 😊 -F45 성수`;
@@ -1944,13 +2064,28 @@ async function maGenerateOneText(uid, situationHint){
  if(r14<=1) detail+=' 최근 거의 안 나옴 - 부담없이 부드럽게 독려.';
  else if(r14>=6) detail+=' 꾸준히 잘 나옴 - 칭찬 위주.';
  else detail+=' 보통 수준 - 가볍게 안부+독려.';
+
+ // 코치 메모/주의사항 반영 (직접 언급하지 않고 톤에만 자연스럽게 참고)
+ const memoCtx=[];
+ if(m.care_memo) memoCtx.push(`케어메모: ${m.care_memo}`);
+ if(m.trial_memo) memoCtx.push(`트라이얼메모: ${m.trial_memo}`);
+ if(m.injury_note) memoCtx.push(`주의사항: ${m.injury_note}`);
+ const recentLogs=(MEMO_BY_UID[uid]||[]).slice(0,2).map(x=>x.content).filter(Boolean);
+ if(recentLogs.length) memoCtx.push(`최근 코치 코멘트: ${recentLogs.join(' / ')}`);
+ if(memoCtx.length) detail+=` [참고사항 - 직접 언급하지 말고 톤과 방향에만 자연스럽게 반영] ${memoCtx.join(' · ')}`;
+
  let situation='최근 출석 패턴 맞춰 안부/독려. 날씨·계절 변화 자연스럽게 한마디.';
  if(situationHint==='pass'){
   const dd=maDday(m.pass_expiry);
-  detail+=` 횟수권 잔여 ${m.pass_remaining}회, 만료까지 ${dd!=null?dd+'일':'-'}.`;
-  situation='횟수권 만료 전 소진 부드럽게 유도. 날씨도 한마디.';
+  const p=maPassPace(m);
+  const usedCount=(m.pass_total||0)-(m.pass_remaining||0);
+  const expDateTxt=m.pass_expiry?m.pass_expiry.slice(0,10):'-';
+  detail+=` 횟수권 정확한 만료일 ${expDateTxt} (D-${dd!=null?dd:'-'}). 총 ${m.pass_total||0}회 중 현재까지 ${usedCount}회 사용, 잔여 ${m.pass_remaining||0}회.`;
+  if(p) detail+=` 만료일까지 정상 페이스라면 지금쯤 약 ${p.expUsed}회 사용했어야 하는데 실제로는 ${usedCount}회 사용함(차이 ${p.diff>=0?'+':''}${p.diff}회).`;
+  situation='횟수권 만료일을 명확한 날짜로 알려주고, 현재 몇 회 사용했는지·잔여가 몇 회인지 구체적 숫자로 알려준 뒤, "이 페이스면 더 자주 나와야 다 쓸 수 있다"는 식으로 자연스럽게 재방문을 권유. 날씨도 한마디.';
  } else if(situationHint==='winback'){
   detail=`오늘 날짜 ${today} (${season}). 만료된 지 오래됐고, 예전엔 총 ${totalVisitsOf(m)}회 방문할 만큼 열심히 다니던 회원.`;
+  if(memoCtx.length) detail+=` [참고사항] ${memoCtx.join(' · ')}`;
   situation='오랫동안 못 본 예전 열심회원에게 재등록을 부담없이 유도하는 문자. 반가움 표현 + 날씨 한마디.';
  }
  let text=null;
@@ -2001,6 +2136,45 @@ async function maBulkExportAI(containerId, situationHint, btn){
   alert('엑셀 생성 실패: '+e.message);
  }
 }
+// 체크한 사람들 AI문구를 화면에 작은 카드로 한꺼번에 생성 (각자 수정+개별발송 가능)
+async function maBulkGenerateCards(containerId, situationHint, btn){
+ const uids=[...document.querySelectorAll('#'+containerId+' .ma-chk:checked')].map(el=>el.dataset.uid);
+ if(!uids.length){alert('선택된 회원이 없어요.');return;}
+ const cardBox=document.getElementById(containerId+'-aicards');
+ if(!cardBox)return;
+ cardBox.style.display='';
+ cardBox.innerHTML=`<div class="wklab">🤖 AI 문구 생성 중… (0/${uids.length})</div>`;
+ const origTxt=btn?btn.textContent:'';
+ let html='';
+ for(let i=0;i<uids.length;i++){
+  const uid=uids[i]; const m=maByUid(uid); if(!m)continue;
+  if(btn) btn.textContent=`생성중 ${i+1}/${uids.length}`;
+  cardBox.querySelector('.wklab') && (cardBox.querySelector('.wklab').textContent=`🤖 AI 문구 생성 중… (${i+1}/${uids.length})`);
+  const {text,usedFallback}=await maGenerateOneText(uid, situationHint);
+  const boxId=`aicard-${containerId}-${uid}`;
+  html+=`<div class="carecard" style="margin-bottom:8px;padding:10px">
+   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
+    <b style="font-size:13px">${esc(m.name)}</b>
+    <span class="smeta" style="font-size:10px">${usedFallback?'템플릿(무료)':'🤖AI'}</span>
+   </div>
+   <textarea id="${boxId}" style="min-height:64px;font-size:12px">${esc(text)}</textarea>
+   <div style="display:flex;gap:6px;margin-top:5px">
+    <button class="mini" onclick="navigator.clipboard.writeText(document.getElementById('${boxId}').value);alert('복사됨')">복사</button>
+    <button class="mini" onclick="maSendCardSms('${uid}','${boxId}')">문자앱 열기</button>
+   </div>
+  </div>`;
+  if(i<uids.length-1) await new Promise(r=>setTimeout(r,300));
+ }
+ if(btn) btn.textContent=origTxt;
+ cardBox.innerHTML=`<div class="listhead">🤖 <b>생성된 문구</b> ${uids.length}건 · 각자 수정 후 개별 발송하세요</div>`+html;
+}
+function maSendCardSms(uid, boxId){
+ const m=maByUid(uid); if(!m)return;
+ const t=document.getElementById(boxId).value;
+ const ph=(m.phone||'').replace(/[^0-9]/g,'');
+ if(!ph){alert('번호가 없어요.');return;}
+ location.href='sms:'+ph+'&body='+encodeURIComponent(t);
+}
 function maShowAiModal(uid, text, usedFallback){
  const m=maByUid(uid);
  document.getElementById('sheet').innerHTML=`
@@ -2032,6 +2206,7 @@ function renderMemberAll(){
     <button id="ma-tab-bulk" onclick="maSwitchTab('bulk')">📤 단체문자</button>
     <button id="ma-tab-pass" onclick="maSwitchTab('pass')">🎫 횟수권 관리</button>
     <button id="ma-tab-winback" onclick="maSwitchTab('winback')">🔄 재등록 유도</button>
+    <button id="ma-tab-group" onclick="maSwitchTab('group')">🏷️ 그룹</button>
    </div>
   </div>
   <div id="ma-pane-dash">
@@ -2078,6 +2253,17 @@ function renderMemberAll(){
   <div id="ma-pane-winback" style="display:none">
    <div class="listhead">🔄 <b>재등록 유도 대상</b> · 만료 60일 이상 지났고 과거 10회 이상 다녔던 휴면 회원 · 방문 많은순</div>
    <div id="ma-winback-result"></div>
+  </div>
+  <div id="ma-pane-group" style="display:none">
+   <div class="carecard">
+    <div class="wklab">새 그룹 만들기 (예: 하이록스 특별반)</div>
+    <div style="display:flex;gap:6px">
+     <input id="ma-newgroup-name" placeholder="그룹 이름" style="flex:1" onkeydown="if(event.key==='Enter')maCreateGroup()">
+     <button class="mini" onclick="maCreateGroup()">만들기</button>
+    </div>
+   </div>
+   <div id="ma-group-list"></div>
+   <div id="ma-group-detail"></div>
   </div>`;
  maSwitchTab('dash');
  if((localStorage.getItem('ma_bulk_names')||'').trim()) maRunBulk();
