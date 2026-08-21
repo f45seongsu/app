@@ -1626,16 +1626,31 @@ let MA_TAB='dash';
 function memberAllList(){ return Object.values(MEMBERS).filter(m=>m.glofox_user_id&&m.stage==='회원'&&payMember(m)); }
 function passHolderList(){ return Object.values(MEMBERS).filter(m=>m.glofox_user_id&&(m.pass_remaining!=null||/횟수권|Class Pass/.test(m.membership||''))); }
 function winbackList(){
- const cut=ddaysAgo(60);
  return Object.values(MEMBERS).filter(m=>{
   if(!m.glofox_user_id) return false;
-  if(m.stage==='트라이얼') return false;
-  if(!m.end_date || m.end_date.length<10) return false;
-  if(m.end_date.slice(0,10) >= cut) return false; // 만료 60일 이상 지난 사람만
+  if(m.stage!=='과거회원') return false; // 회원권 없음(이탈) 상태인 사람만
   return (visitTotal(m)||0)>=10; // 한때 열심히(10회 이상 방문) 다닌 사람만 - 정확한 전체출석수 기준
  });
 }
+// 전체기간 기준 진짜 마지막 방문일 (35일 제한 없이, MILEDATA 필요)
+function maTrueLastVisit(m){
+ const days=MILEDATA[m.glofox_user_id]||[];
+ if(!days.length) return null;
+ return days.slice().sort().slice(-1)[0];
+}
 function maDday(dateStr){ if(!dateStr||dateStr.length<10)return null; const e=new Date(dateStr.slice(0,10)+'T00:00:00'); const t=new Date(today+'T00:00:00'); return Math.round((e-t)/86400000); }
+// 오늘부터 만료일까지, 일요일(휴무) 빼고 최대 몇 번 나올 수 있는지
+function maMaxAttendableDays(todayStr, expiryStr){
+ if(!expiryStr||expiryStr.length<10) return null;
+ const t=new Date(todayStr+'T00:00:00');
+ const e=new Date(expiryStr.slice(0,10)+'T00:00:00');
+ if(e<t) return 0;
+ let cnt=0;
+ for(let d=new Date(t); d<=e; d.setDate(d.getDate()+1)){
+  if(d.getDay()!==0) cnt++; // 0=일요일
+ }
+ return cnt;
+}
 function maExpiryOf(m){ return (m.pass_remaining!=null) ? m.pass_expiry : m.end_date; }
 function maExpiryHTML(m){
  const ed=maExpiryOf(m); if(!ed||ed.length<10) return '<span style="color:var(--dim)">-</span>';
@@ -1884,15 +1899,13 @@ async function maRenderWinback(){
   return;
  }
  // 진단용 단계별 필터링 (0명일 때 어디서 걸러졌는지 바로 보이게)
- const cut=ddaysAgo(60);
  const withUid=Object.values(MEMBERS).filter(m=>m.glofox_user_id);
- const notTrial=withUid.filter(m=>m.stage!=='트라이얼');
- const hasEndDate=notTrial.filter(m=>m.end_date&&m.end_date.length>=10);
- const oldExpired=hasEndDate.filter(m=>m.end_date.slice(0,10)<cut);
- const list=oldExpired.filter(m=>(visitTotal(m)||0)>=10).sort((a,b)=>(visitTotal(b)||0)-(visitTotal(a)||0));
+ const pastMembers=withUid.filter(m=>m.stage==='과거회원');
+ const list=pastMembers.filter(m=>(visitTotal(m)||0)>=10)
+  .sort((a,b)=>{ const la=maTrueLastVisit(a)||'0000-00-00', lb=maTrueLastVisit(b)||'0000-00-00'; return lb.localeCompare(la); });
 
  if(!list.length){
-  box.innerHTML=`<div class="center">해당하는 회원이 없어요.<br><span class="mini" style="color:var(--dim);white-space:normal">전체 ${withUid.length}명 → 트라이얼 제외 ${notTrial.length}명 → 만료일 있음 ${hasEndDate.length}명 → 만료 60일↑ ${oldExpired.length}명 → 방문 10회↑ ${list.length}명</span></div>`;
+  box.innerHTML=`<div class="center">해당하는 회원이 없어요.<br><span class="mini" style="color:var(--dim);white-space:normal">전체 ${withUid.length}명 → stage='과거회원' ${pastMembers.length}명 → 방문 10회↑ ${list.length}명</span></div>`;
   return;
  }
  box.innerHTML=maTableHTML(list,'ma-winback-tbl','winback');
@@ -2094,7 +2107,12 @@ function maTemplateFallback(m, r14, situationHint){
  const nm=m.name||'회원'; const season=maSeasonHint();
  if(situationHint==='pass'){
   const expTxt=m.pass_expiry?m.pass_expiry.slice(0,10):'곧';
-  return `${nm}님, 횟수권이 ${expTxt}에 만료돼요! 아직 ${m.pass_remaining||0}회 남았으니, 이번 주부터 좀 더 자주 나오셔서 알차게 다 쓰고 가세요 💪 -F45 성수`;
+  const maxDays=maMaxAttendableDays(today, m.pass_expiry);
+  const remain=m.pass_remaining||0;
+  if(maxDays!=null && remain>0 && remain>=maxDays){
+   return `${nm}님, 횟수권이 ${expTxt}에 만료되는데 아직 ${remain}회나 남았어요! 남은 기간 동안 최대한 자주 나오셔서 다 쓰고 가세요 💪 -F45 성수`;
+  }
+  return `${nm}님, 횟수권이 ${expTxt}에 만료돼요! 아직 ${remain}회 남았으니, 이번 주부터 좀 더 자주 나오셔서 알차게 다 쓰고 가세요 💪 -F45 성수`;
  }
  if(situationHint==='winback'){
   return `${nm}님, 오랜만이에요! ${season.includes('선선')?'날씨도 선선해졌는데':'날씨 어떻든'} 예전처럼 다시 F45에서 땀 흘려보시는 거 어때요? 재등록 문의 편하게 주세요 😊 -F45 성수`;
@@ -2126,10 +2144,20 @@ async function maGenerateOneText(uid, situationHint){
   const dd=maDday(m.pass_expiry);
   const p=maPassPace(m);
   const usedCount=(m.pass_total||0)-(m.pass_remaining||0);
+  const remain=m.pass_remaining||0;
   const expDateTxt=m.pass_expiry?m.pass_expiry.slice(0,10):'-';
-  detail+=` 횟수권 정확한 만료일 ${expDateTxt} (D-${dd!=null?dd:'-'}). 총 ${m.pass_total||0}회 중 현재까지 ${usedCount}회 사용, 잔여 ${m.pass_remaining||0}회.`;
+  detail+=` 횟수권 정확한 만료일 ${expDateTxt} (D-${dd!=null?dd:'-'}). 총 ${m.pass_total||0}회 중 현재까지 ${usedCount}회 사용, 잔여 ${remain}회.`;
   if(p) detail+=` 만료일까지 정상 페이스라면 지금쯤 약 ${p.expUsed}회 사용했어야 하는데 실제로는 ${usedCount}회 사용함(차이 ${p.diff>=0?'+':''}${p.diff}회).`;
-  situation='횟수권 만료일을 명확한 날짜로 알려주고, 현재 몇 회 사용했는지·잔여가 몇 회인지 구체적 숫자로 알려준 뒤, "이 페이스면 더 자주 나와야 다 쓸 수 있다"는 식으로 자연스럽게 재방문을 권유. 날씨도 한마디.';
+
+  // 남은 기간(일요일 휴무 감안 최대 이용가능일) 대비 잔여횟수가 빠듯한지 확인
+  const maxDays=maMaxAttendableDays(today, m.pass_expiry);
+  const urgent = (maxDays!=null && remain>0 && remain>=maxDays);
+  if(urgent){
+   detail+=` [중요] 만료까지 (일요일 휴무 제외) 최대로 나올 수 있는 날이 ${maxDays}일뿐인데 잔여 ${remain}회 - 지금부터 거의 매번 나와도 다 못 쓸 수도 있는 빠듯한 상황.`;
+   situation='횟수권 만료가 임박했는데 잔여 횟수를 다 쓰기엔 남은 기간이 매우 빠듯함. 정확한 만료일과 잔여횟수를 알려주고, "최대한 자주 나와서 남은 걸 다 써보자"는 식으로 적극적이고 긴급하게 독려. 날씨도 한마디.';
+  } else {
+   situation='횟수권 만료일을 명확한 날짜로 알려주고, 현재 몇 회 사용했는지·잔여가 몇 회인지 구체적 숫자로 알려준 뒤, "이 페이스면 더 자주 나와야 다 쓸 수 있다"는 식으로 자연스럽게 재방문을 권유. 날씨도 한마디.';
+  }
  } else if(situationHint==='winback'){
   detail=`오늘 날짜 ${today} (${season}). 만료된 지 오래됐고, 예전엔 총 ${(visitTotal(m)||0)}회 방문할 만큼 열심히 다니던 회원.`;
   if(memoCtx.length) detail+=` [참고사항] ${memoCtx.join(' · ')}`;
@@ -2267,7 +2295,7 @@ function renderMemberAll(){
    <div id="ma-pass-result"></div>
   </div>
   <div id="ma-pane-winback" style="display:none">
-   <div class="listhead">🔄 <b>재등록 유도 대상</b> · 만료 60일 이상 지났고 과거 10회 이상 다녔던 휴면 회원 · 방문 많은순</div>
+   <div class="listhead">🔄 <b>재등록 유도 대상</b> · 회원권 없음(과거회원) + 과거 10회 이상 방문 · 최근 방문순</div>
    <div id="ma-winback-result"></div>
   </div>
   <div id="ma-pane-group" style="display:none">
