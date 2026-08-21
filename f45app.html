@@ -1667,7 +1667,7 @@ function maPopulatePlanFilter(id, list){
 function maTableHTML(list, containerId, situationHint){
  situationHint=situationHint||'general';
  let h=`<div style="display:flex;gap:8px;align-items:center;margin:10px 0;flex-wrap:wrap">
-  <label style="font-size:12px;color:var(--dim);display:flex;align-items:center;gap:5px"><input type="checkbox" id="${containerId}-all" onchange="maToggleAll('${containerId}',this.checked)"> 전체 선택</label>
+  <label style="font-size:12px;color:var(--dim);display:flex;align-items:center;gap:5px;white-space:nowrap;flex-shrink:0"><input type="checkbox" id="${containerId}-all" onchange="maToggleAll('${containerId}',this.checked)"> 전체 선택</label>
   <span class="mini" style="background:#1c2f4d;border-radius:20px" id="${containerId}-cnt"><b>0</b>명 선택됨</span>
   <button class="mini" onclick="maCopy('${containerId}')">번호 복사</button>
   <button class="mini" onclick="maSmsOpen('${containerId}')">문자앱 열기</button>
@@ -1755,12 +1755,19 @@ let _maExclSaveTimer=null;
 function maSaveExcludeUidsDebounced(){
  const arr=[...MA_EXCLUDE];
  localStorage.setItem('ma_bulk_exclude', JSON.stringify(arr));
+ const st=document.getElementById('ma-exclsavestat'); if(st) st.textContent='저장 중…';
  clearTimeout(_maExclSaveTimer);
  _maExclSaveTimer=setTimeout(async()=>{
   try{
-   await sb.from('ai_config').upsert({id:1, bulk_group_names:JSON.stringify(arr), updated_at:new Date().toISOString()});
+   const{error}=await sb.from('ai_config').upsert({id:1, bulk_group_names:JSON.stringify(arr), updated_at:new Date().toISOString()});
    if(_aiConfigCache) _aiConfigCache.bulk_group_names=JSON.stringify(arr);
-  }catch(e){ console.error('제외명단 저장 실패:', e.message); }
+   const st2=document.getElementById('ma-exclsavestat');
+   if(error){ if(st2) st2.innerHTML='<span style="color:#e0563a">저장 실패: '+esc(error.message)+'</span>'; console.error('제외명단 저장 실패:', error.message); return; }
+   if(st2){ st2.textContent='☁️ 저장됨'; setTimeout(()=>{ if(st2) st2.textContent=''; },1500); }
+  }catch(e){
+   const st2=document.getElementById('ma-exclsavestat'); if(st2) st2.innerHTML='<span style="color:#e0563a">저장 오류: '+esc(e.message)+'</span>';
+   console.error('제외명단 저장 오류:', e.message);
+  }
  }, 800);
 }
 async function maInitExcludeSet(){
@@ -1770,21 +1777,28 @@ async function maInitExcludeSet(){
   if(raw){ const arr=JSON.parse(raw); if(Array.isArray(arr)) MA_EXCLUDE=new Set(arr); }
  }catch(e){}
  maRenderBulkResult();
- // 2) 서버가 더 최신일 수 있으니 비동기로 덮어씀 (예전 텍스트형식이면 무시)
+ const cnt=document.getElementById('ma-exclcount'); if(cnt) cnt.textContent=`· ${MA_EXCLUDE.size}명 제외됨`;
+ // 2) 서버 최신값을 직접 조회 (캐시된 getAiConfig 말고 fresh query - 다른 화면에서 캐시가 오염됐을 수 있어서)
  try{
-  const cfg=await getAiConfig();
-  if(cfg.bulk_group_names){
+  const{data,error}=await sb.from('ai_config').select('bulk_group_names').eq('id',1).maybeSingle();
+  const st=document.getElementById('ma-exclsavestat');
+  if(error){ if(st) st.innerHTML='<span style="color:#e0563a">서버 불러오기 실패: '+esc(error.message)+'</span>'; return; }
+  if(data && data.bulk_group_names){
    try{
-    const arr=JSON.parse(cfg.bulk_group_names);
+    const arr=JSON.parse(data.bulk_group_names);
     if(Array.isArray(arr)){
      MA_EXCLUDE=new Set(arr);
      localStorage.setItem('ma_bulk_exclude', JSON.stringify(arr));
+     if(_aiConfigCache) _aiConfigCache.bulk_group_names=data.bulk_group_names;
      maRenderBulkResult();
+     if(cnt) cnt.textContent=`· ${MA_EXCLUDE.size}명 제외됨`;
      if(document.getElementById('ma-exclpanel') && document.getElementById('ma-exclpanel').style.display!=='none') maRenderExcludePanel();
     }
-   }catch(parseErr){ /* 예전 붙여넣기 텍스트 형식 - 무시하고 새로 시작 */ }
+   }catch(parseErr){ /* 예전 붙여넣기 텍스트 형식이면 무시하고 로컬값 유지 */ }
   }
- }catch(e){}
+ }catch(e){
+  const st=document.getElementById('ma-exclsavestat'); if(st) st.innerHTML='<span style="color:#e0563a">서버 확인 오류: '+esc(e.message)+'</span>';
+ }
 }
 function maToggleExcludePanel(){
  const p=document.getElementById('ma-exclpanel'); const arrow=document.getElementById('ma-exclarrow');
@@ -1802,8 +1816,8 @@ function maRenderExcludePanel(){
  box.innerHTML=list.length? list.map(m=>{
   const uid=m.glofox_user_id; const checked=MA_EXCLUDE.has(uid);
   return `<label class="srow" style="cursor:pointer;${checked?'opacity:.5':''}">
-   <input type="checkbox" ${checked?'checked':''} onchange="maToggleExcludeUid('${uid}',this.checked)" style="margin-right:8px;flex-shrink:0">
-   ${avatar(m,'bk')}
+   <input type="checkbox" ${checked?'checked':''} onchange="maToggleExcludeUid('${uid}',this.checked)" style="margin-right:2px;flex-shrink:0">
+   <span style="flex:0 0 40px;overflow:hidden;border-radius:50%">${avatar(m,'bk')}</span>
    <div class="sinfo"><div class="nm">${esc(m.name)}${checked?' <span style="color:#e0563a;font-size:11px">(제외됨)</span>':''}</div><div class="smeta">${esc(m.phone||'번호없음')}</div></div>
   </label>`;
  }).join('') : '<div class="mini" style="color:var(--dim);padding:8px">검색 결과 없음</div>';
@@ -1850,10 +1864,37 @@ function maRenderBulkResult(){
 }
 
 // ── 탭4: 재등록 유도 (오래된 만료자, 한때 열심회원) ──
-function maRenderWinback(){
+async function maRenderWinback(){
  const box=document.getElementById('ma-winback-result'); if(!box)return;
- const list=winbackList().sort((a,b)=>(visitTotal(b)||0)-(visitTotal(a)||0));
- if(!list.length){box.innerHTML='<div class="center">해당하는 회원이 없어요.</div>';return;}
+ box.innerHTML='<div class="center">정확한 방문 기록 불러오는 중…</div>';
+ try{
+  await ensureMileData();
+  if(!Object.keys(TOTAL_VISITS).length){
+   const t2={};
+   Object.values(MEMBERS).forEach(m=>{
+    const uid=m.glofox_user_id; if(!uid)return;
+    const allDays=MILEDATA[uid]||[];
+    if(m.visit_base==null){ t2[uid]=allDays.length||null; }
+    else{ const vbd=m.visit_base_date||'2000-01-01'; const after=allDays.filter(d=>d>vbd).length; t2[uid]=(m.visit_base||0)+after; }
+   });
+   TOTAL_VISITS=t2;
+  }
+ }catch(e){
+  box.innerHTML='<div class="center">방문 기록을 못 불러왔어요: '+esc(e.message)+'</div>';
+  return;
+ }
+ // 진단용 단계별 필터링 (0명일 때 어디서 걸러졌는지 바로 보이게)
+ const cut=ddaysAgo(60);
+ const withUid=Object.values(MEMBERS).filter(m=>m.glofox_user_id);
+ const notTrial=withUid.filter(m=>m.stage!=='트라이얼');
+ const hasEndDate=notTrial.filter(m=>m.end_date&&m.end_date.length>=10);
+ const oldExpired=hasEndDate.filter(m=>m.end_date.slice(0,10)<cut);
+ const list=oldExpired.filter(m=>(visitTotal(m)||0)>=10).sort((a,b)=>(visitTotal(b)||0)-(visitTotal(a)||0));
+
+ if(!list.length){
+  box.innerHTML=`<div class="center">해당하는 회원이 없어요.<br><span class="mini" style="color:var(--dim);white-space:normal">전체 ${withUid.length}명 → 트라이얼 제외 ${notTrial.length}명 → 만료일 있음 ${hasEndDate.length}명 → 만료 60일↑ ${oldExpired.length}명 → 방문 10회↑ ${list.length}명</span></div>`;
+  return;
+ }
  box.innerHTML=maTableHTML(list,'ma-winback-tbl','winback');
  maUpdateCnt('ma-winback-tbl');
 }
@@ -1997,11 +2038,11 @@ function maRenderPass(){
  const lowOnly=document.getElementById('ma-pass-lowonly')?.checked;
  if(lowOnly){ list=list.filter(m=>{ const p=maPassPace(m); return p && p.diff>1.5; }); }
  let h=`<div style="display:flex;gap:8px;align-items:center;margin:10px 0;flex-wrap:wrap">
-  <label style="font-size:12px;color:var(--dim);display:flex;align-items:center;gap:5px"><input type="checkbox" id="ma-pass-lowonly" onchange="maRenderPass()"> 저조자만 (예정보다 느리게 사용 중)</label>
+  <label style="font-size:12px;color:var(--dim);display:flex;align-items:center;gap:5px;white-space:nowrap;flex-shrink:0"><input type="checkbox" id="ma-pass-lowonly" onchange="maRenderPass()"> 저조자만 (예정보다 느리게 사용 중)</label>
  </div>`;
  if(!list.length){box.innerHTML=h+'<div class="center">해당하는 회원이 없어요.</div>';return;}
  h+=`<div style="display:flex;gap:8px;align-items:center;margin:10px 0;flex-wrap:wrap">
-  <label style="font-size:12px;color:var(--dim);display:flex;align-items:center;gap:5px"><input type="checkbox" id="ma-pass-tbl-all" onchange="maToggleAll('ma-pass-tbl',this.checked)"> 전체선택</label>
+  <label style="font-size:12px;color:var(--dim);display:flex;align-items:center;gap:5px;white-space:nowrap;flex-shrink:0"><input type="checkbox" id="ma-pass-tbl-all" onchange="maToggleAll('ma-pass-tbl',this.checked)"> 전체선택</label>
   <span class="mini" style="background:#1c2f4d;border-radius:20px" id="ma-pass-tbl-cnt"><b>0</b>명 선택됨</span>
   <button class="mini" onclick="maCopy('ma-pass-tbl')">번호 복사</button>
   <button class="mini" onclick="maSmsOpen('ma-pass-tbl')">문자앱 열기</button>
@@ -2203,7 +2244,7 @@ function renderMemberAll(){
   <div id="ma-pane-bulk" style="display:none">
    <div class="carecard">
     <div style="display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="maToggleExcludePanel()">
-     <div class="wklab" style="margin:0">🚫 단톡방 인원 제외하기 <span id="ma-exclcount" style="color:var(--dim)">· ${MA_EXCLUDE.size}명 제외됨</span></div>
+     <div class="wklab" style="margin:0">🚫 단톡방 인원 제외하기 <span id="ma-exclcount" style="color:var(--dim)">· ${MA_EXCLUDE.size}명 제외됨</span> <span id="ma-exclsavestat" style="color:var(--dim);font-size:11px"></span></div>
      <span id="ma-exclarrow" class="mini">▼ 펼치기</span>
     </div>
     <div id="ma-exclpanel" style="display:none;margin-top:10px">
