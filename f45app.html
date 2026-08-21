@@ -1686,6 +1686,7 @@ function maTableHTML(list, containerId, situationHint){
   <span class="mini" style="background:#1c2f4d;border-radius:20px" id="${containerId}-cnt"><b>0</b>명 선택됨</span>
   <button class="mini" onclick="maCopy('${containerId}')">번호 복사</button>
   <button class="mini" onclick="maSmsOpen('${containerId}')">문자앱 열기</button>
+  <button class="mini" onclick="maBulkPlainList('${containerId}')">📨 개별발송 목록</button>
   <button class="mini" onclick="maBulkGenerateCards('${containerId}','${situationHint}',this)">🤖AI문자만들기</button>
  </div>
  <div id="${containerId}-aicards" style="display:none;margin-bottom:10px"></div>`;
@@ -1731,7 +1732,12 @@ function maToggleAll(id,on){ document.querySelectorAll('#'+id+' .ma-chk').forEac
 function maUpdateCnt(id){ const c=document.querySelectorAll('#'+id+' .ma-chk:checked').length; const p=document.getElementById(id+'-cnt'); if(p)p.innerHTML=`<b>${c}</b>명 선택됨`; }
 function maSelectedPhones(id){ return [...document.querySelectorAll('#'+id+' .ma-chk:checked')].map(el=>{const m=maByUid(el.dataset.uid); return m?(m.phone||'').replace(/[^0-9]/g,''):'';}).filter(Boolean); }
 function maCopy(id){ const p=maSelectedPhones(id); if(!p.length){alert('선택된 번호가 없어요.');return;} navigator.clipboard.writeText(p.join(', ')); alert(`${p.length}명 번호 복사됨`); }
-function maSmsOpen(id){ const p=maSelectedPhones(id); if(!p.length){alert('선택된 번호가 없어요.');return;} location.href='sms:'+p.join(','); }
+function maSmsOpen(id){
+ const p=maSelectedPhones(id);
+ if(!p.length){alert('선택된 번호가 없어요.');return;}
+ if(p.length>1 && !confirm(`⚠️ ${p.length}명을 한번에 문자앱에 넣으면, 아이폰에서는 "단체 대화방"으로 묶여요.\n서로 번호가 보이고 답장도 서로에게 다 가요.\n\n1:1로 각자 따로 보내고 싶으면 취소를 누르고 "개별 발송 목록" 버튼을 사용하세요.\n\n그래도 단체로 열까요?`)) return;
+ location.href='sms:'+p.join(',');
+}
 function maSingleSms(uid){ const m=maByUid(uid); const ph=(m.phone||'').replace(/[^0-9]/g,''); if(!ph){alert('번호가 없어요.');return;} location.href='sms:'+ph; }
 
 // ── 탭1: 전체 회원 ──
@@ -2059,6 +2065,7 @@ function maRenderPass(){
   <span class="mini" style="background:#1c2f4d;border-radius:20px" id="ma-pass-tbl-cnt"><b>0</b>명 선택됨</span>
   <button class="mini" onclick="maCopy('ma-pass-tbl')">번호 복사</button>
   <button class="mini" onclick="maSmsOpen('ma-pass-tbl')">문자앱 열기</button>
+  <button class="mini" onclick="maBulkPlainList('ma-pass-tbl')">📨 개별발송 목록</button>
   <button class="mini" onclick="maBulkGenerateCards('ma-pass-tbl','pass',this)">🤖AI문자만들기</button>
  </div>
  <div id="ma-pass-tbl-aicards" style="display:none;margin-bottom:10px"></div>
@@ -2180,6 +2187,31 @@ async function maAiMsg(uid, btn, situationHint){
  const {text,usedFallback}=await maGenerateOneText(uid, situationHint);
  if(btn){btn.disabled=false;btn.textContent='🤖AI';}
  maShowAiModal(uid, text, usedFallback);
+}
+// AI 없이, 똑같은 문구를 개별발송용 목록으로 즉석에서 생성 (단체방 안 생기게 한 명씩 보내는 용도)
+function maBulkPlainList(containerId){
+ const uids=[...document.querySelectorAll('#'+containerId+' .ma-chk:checked')].map(el=>el.dataset.uid);
+ if(!uids.length){alert('선택된 회원이 없어요.');return;}
+ const msg=prompt(`${uids.length}명에게 보낼 문구를 입력하세요.\n(발송 전 사람별로 각자 수정도 가능해요)`, '');
+ if(msg===null) return;
+ const cardBox=document.getElementById(containerId+'-aicards');
+ if(!cardBox) return;
+ let rows='';
+ uids.forEach(uid=>{
+  const m=maByUid(uid); if(!m) return;
+  const boxId=`plain-${containerId}-${uid}`;
+  rows+=`<div style="display:flex;gap:8px;align-items:flex-start;padding:8px 10px;border-bottom:1px solid var(--line)">
+   <div style="flex:0 0 64px;padding-top:6px"><div style="font-weight:700;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(m.name)}</div></div>
+   <textarea id="${boxId}" style="flex:1;min-height:52px;font-size:11px">${esc(msg)}</textarea>
+   <div style="display:flex;flex-direction:column;gap:4px;flex:0 0 56px">
+    <button class="mini" style="font-size:10px;padding:4px 5px" onclick="navigator.clipboard.writeText(document.getElementById('${boxId}').value);alert('복사됨')">복사</button>
+    <button class="mini" style="font-size:10px;padding:4px 5px" onclick="maSendCardSms('${uid}','${boxId}')">문자</button>
+   </div>
+  </div>`;
+ });
+ cardBox.style.display='';
+ cardBox.innerHTML=`<div class="listhead">📨 <b>개별 발송 목록</b> ${uids.length}명 · 단체방 안 만들어지게 위에서부터 한 명씩 "문자" 눌러서 보내세요</div>
+  <div style="background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:hidden">${rows}</div>`;
 }
 // 체크한 사람들 AI문구를 화면 최하단에 표(행) 형태로 한꺼번에 생성 - 각자 수정+복사+개별발송 가능
 async function maBulkGenerateCards(containerId, situationHint, btn){
