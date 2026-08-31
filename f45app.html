@@ -1573,6 +1573,10 @@ async function updateBriefingBanner(){
  const bdays=Object.values(MEMBERS).filter(m=>
   m.glofox_user_id && daysToBday(m)===0 && m.stage==='회원' && payMember(m)
  );
+ // 웹랜딩으로 들어온 미접촉 리드 (아직 한 번도 안 나온 사람)
+ const newLeads=Object.values(MEMBERS).filter(m=>
+  m.glofox_user_id && m.stage==='리드' && m.source==='웹랜딩' && (!m._days||m._days.length===0)
+ );
  let handoffs=[];
  try{
   const{data}=await sb.from('handoff_notes').select('id,glofox_user_id,created_by,content,remind_at').eq('done',false).lte('remind_at',new Date().toISOString()).order('remind_at');
@@ -1580,8 +1584,9 @@ async function updateBriefingBanner(){
  }catch(e){}
  const banner=document.getElementById('briefing-banner');
  if(!banner)return;
- if(!bdays.length && !handoffs.length){banner.style.display='none';return;}
+ if(!bdays.length && !handoffs.length && !newLeads.length){banner.style.display='none';return;}
  let parts=[];
+ if(newLeads.length) parts.push(`🆕 신규 리드 ${newLeads.length}건 <button class="mini" style="font-size:10px;padding:1px 7px;margin-left:4px" onclick="showView('leads')">보기</button>`);
  if(bdays.length) parts.push('🎂 오늘 생일: '+bdays.map(function(m){return '<span style="cursor:pointer;text-decoration:underline" onclick="open_(\''+m.glofox_user_id+'\')">' +esc(m.name)+'</span>';}).join(', '));
  if(handoffs.length) parts.push(`📋 인수인계 ${handoffs.length}건 <button class="mini" style="font-size:10px;padding:1px 7px;margin-left:4px" onclick="showHandoffBannerDetail()">보기</button>`);
  banner.style.display='block';
@@ -2202,7 +2207,7 @@ function maBulkPlainList(containerId){
   const boxId=`plain-${containerId}-${uid}`;
   rows+=`<div style="display:flex;gap:8px;align-items:flex-start;padding:8px 10px;border-bottom:1px solid var(--line)">
    <div style="flex:0 0 64px;padding-top:6px"><div style="font-weight:700;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(m.name)}</div></div>
-   <textarea id="${boxId}" style="flex:1;min-height:52px;font-size:11px">${esc(msg)}</textarea>
+   <textarea id="${boxId}" data-uid="${uid}" style="flex:1;min-height:52px;font-size:11px">${esc(msg)}</textarea>
    <div style="display:flex;flex-direction:column;gap:4px;flex:0 0 56px">
     <button class="mini" style="font-size:10px;padding:4px 5px" onclick="navigator.clipboard.writeText(document.getElementById('${boxId}').value);alert('복사됨')">복사</button>
     <button class="mini" style="font-size:10px;padding:4px 5px" onclick="maSendCardSms('${uid}','${boxId}')">문자</button>
@@ -2211,6 +2216,7 @@ function maBulkPlainList(containerId){
  });
  cardBox.style.display='';
  cardBox.innerHTML=`<div class="listhead">📨 <b>개별 발송 목록</b> ${uids.length}명 · 단체방 안 만들어지게 위에서부터 한 명씩 "문자" 눌러서 보내세요</div>
+  <div style="margin-bottom:8px"><button class="mini" style="background:var(--red);border-color:var(--red)" onclick="maAligoSendAll('${containerId}',this)">🚀 전체 자동발송 (알리고)</button></div>
   <div style="background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:hidden">${rows}</div>`;
 }
 // 체크한 사람들 AI문구를 화면 최하단에 표(행) 형태로 한꺼번에 생성 - 각자 수정+복사+개별발송 가능
@@ -2234,7 +2240,7 @@ async function maBulkGenerateCards(containerId, situationHint, btn){
     <div style="font-weight:700;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(m.name)}</div>
     <div class="smeta" style="font-size:9px">${usedFallback?'템플릿':'🤖AI'}</div>
    </div>
-   <textarea id="${boxId}" style="flex:1;min-height:52px;font-size:11px">${esc(text)}</textarea>
+   <textarea id="${boxId}" data-uid="${uid}" style="flex:1;min-height:52px;font-size:11px">${esc(text)}</textarea>
    <div style="display:flex;flex-direction:column;gap:4px;flex:0 0 56px">
     <button class="mini" style="font-size:10px;padding:4px 5px" onclick="navigator.clipboard.writeText(document.getElementById('${boxId}').value);alert('복사됨')">복사</button>
     <button class="mini" style="font-size:10px;padding:4px 5px" onclick="maSendCardSms('${uid}','${boxId}')">문자</button>
@@ -2244,6 +2250,7 @@ async function maBulkGenerateCards(containerId, situationHint, btn){
  }
  if(btn) btn.textContent=origTxt;
  cardBox.innerHTML=`<div class="listhead">🤖 <b>생성된 문구</b> ${uids.length}건 · 각자 수정 후 개별 발송하세요</div>
+  <div style="margin-bottom:8px"><button class="mini" style="background:var(--red);border-color:var(--red)" onclick="maAligoSendAll('${containerId}',this)">🚀 전체 자동발송 (알리고)</button></div>
   <div style="background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:hidden">${rows}</div>`;
 }
 function maSendCardSms(uid, boxId){
@@ -2252,6 +2259,36 @@ function maSendCardSms(uid, boxId){
  const ph=(m.phone||'').replace(/[^0-9]/g,'');
  if(!ph){alert('번호가 없어요.');return;}
  location.href='sms:'+ph+'&body='+encodeURIComponent(t);
+}
+// 알리고 send_mass Edge Function 호출 - 사람마다 다른(또는 같은) 내용을 진짜 자동으로 개별 발송
+async function maAligoSendAll(containerId, btn){
+ const cardBox=document.getElementById(containerId+'-aicards');
+ if(!cardBox)return;
+ const textareas=[...cardBox.querySelectorAll('textarea[data-uid]')];
+ if(!textareas.length){alert('생성된 문구가 없어요.');return;}
+ const recipients=textareas.map(ta=>{
+  const uid=ta.dataset.uid; const m=maByUid(uid);
+  return {phone:(m?.phone||'').replace(/[^0-9]/g,''), msg:ta.value.trim(), name:m?.name||''};
+ }).filter(r=>r.phone && r.msg);
+ if(!recipients.length){alert('보낼 수 있는 대상이 없어요 (번호 없음/문구 없음).');return;}
+ if(recipients.length>500){alert(`한 번에 최대 500명까지 가능해요. 지금 ${recipients.length}명 선택돼있어요 - 나눠서 보내주세요.`);return;}
+ if(!confirm(`⚠️ 정말 ${recipients.length}명에게 문자를 실제로 발송할까요?\n포인트가 차감되고, 발송 후 취소할 수 없어요.`)) return;
+ const origTxt=btn?btn.textContent:'';
+ if(btn){btn.disabled=true;btn.textContent='발송 중…';}
+ try{
+  const {data,error}=await sb.functions.invoke('aligo-sms',{body:{recipients}});
+  if(btn){btn.disabled=false;btn.textContent=origTxt;}
+  if(error){alert('발송 요청 실패: '+error.message+'\n(Edge Function이 배포됐는지, 환경변수가 설정됐는지 확인해주세요)');return;}
+  if(data?.error){alert('발송 실패: '+data.error);return;}
+  if(data?.result_code && data.result_code>0){
+   alert(`✅ 발송 완료!\n성공 ${data.success_cnt}건 / 실패 ${data.error_cnt}건`);
+  } else {
+   alert('발송 실패: '+(data?.message||'알 수 없는 오류')+`\n(코드: ${data?.result_code})`);
+  }
+ }catch(e){
+  if(btn){btn.disabled=false;btn.textContent=origTxt;}
+  alert('오류: '+e.message);
+ }
 }
 function maShowAiModal(uid, text, usedFallback){
  const m=maByUid(uid);
@@ -2685,6 +2722,7 @@ async function loadData(manual){
  window._lastUpdate=now;
  if(btn){btn.disabled=false;btn.textContent='↻';}
  loadTrueVisitTotals(); // 화면은 빠르게 먼저 뜨고, 정확한 전체 출석수는 백그라운드로 이어서 채움
+ ensureBuddyGroups().then(()=>{ if(VIEW==='att') renderDay(false); }); // 페어링 정보도 백그라운드로 불러와서 이름표 색 반영
  }catch(e){
   document.getElementById('app').innerHTML=`<div class="center">예상치 못한 오류가 발생했어요.<br><small>${esc(e.message||JSON.stringify(e))}</small><br><br><small style="color:var(--dim)">${esc((e.stack||'').slice(0,400))}</small></div>`;
   if(btn){btn.disabled=false;btn.textContent='↻';}
@@ -2816,12 +2854,16 @@ function renderDay(doScroll){const evs=(SESSIONS[sel]||[]).slice().sort((a,b)=>(
   const cntTxt=`${ev.att.length}명 · ${present} 출석`+(noshow?` · <span style="color:#e0563a">${noshow} 노쇼</span>`:'')+(cancel?` · <span style="color:#e0954f">${cancel} 취소</span>`:'');
   const on=selEv===i;
   h+=`<div class="ev" id="ev_${i}"><div class="evh"><span class="time">${ev.time}</span><span class="enm">${esc(ev.name)}</span><span class="cnt">${cntTxt}</span><button class="selbtn" style="background:#2a5a3a" onclick="openBookingForEvent('${ev.event_id}','${sel}','${ev.time}',this)">+예약</button><button class="selbtn ${on?'on':''}" onclick="toggleSel(${i})">${on?'완료':'선택'}</button></div><div class="grid">`;
+  const buddyColors=buddyColorsForSession(ev.att.map(a=>a.uid));
   ev.att.forEach(a=>{if(a._dropin){h+=`<div class="chip s-${a._st}" style="cursor:default"><span class="ini" style="background:#4a5980">D</span><span class="nmwrap"><span class="nm">Drop in${a._dropin>1?` (${a._dropin}명)`:''}</span></span></div>`;return;}const m=MEMBERS[a.uid]||{name:'(미등록)'};const bd=badgeOf(m);
    const pk=on&&PICK.has(a.uid);
    const click=on?`pick('${a.uid}')`:`open_('${a.uid}')`;
    const drop=on?'':`ondragover="dOverChip(event)" ondragleave="dLeaveChip(event)" ondrop="dropChip(event,'${a.uid}')"`;
    const ig=(m.instagram||'').replace('@','').trim();
-   h+=`<div class="chip s-${a._st} ${pk?'picked':''}" onclick="${click}" ${drop}>${avatar(m,a._st)}<span class="nmwrap"><span class="nm">${esc(m.name)}</span>${(()=>{const igShort=ig.length>8?ig.slice(0,8)+'..':ig;const igt=ig?`@${esc(igShort)}`:'';return igt?`<span class="submini">${igt}</span>`:'';})()}</span>${m.injury_note?'<span class="inj">⚠</span>':''}${isBdayToday(m)?'<span title="오늘 생일">🎂</span>':''}${a.booking_id?`<span title="예약 취소" style="margin-left:3px;color:#e0563a;font-size:10px" onclick="event.stopPropagation();cancelBooking('${a.uid}','${ev.event_id}','${a.booking_id}',this)">✕</span>`:''}<span class="ck">✓</span></div>`;});
+   const bc=buddyColors[a.uid];
+   const bcStyle=bc?` style="background:${bc}"`:'';
+   const bcTitle=bc?' title="🤝 함께 옴"':'';
+   h+=`<div class="chip s-${a._st} ${pk?'picked':''}"${bcStyle}${bcTitle} onclick="${click}" ${drop}>${avatar(m,a._st)}<span class="nmwrap"><span class="nm">${esc(m.name)}</span>${(()=>{const igShort=ig.length>8?ig.slice(0,8)+'..':ig;const igt=ig?`@${esc(igShort)}`:'';return igt?`<span class="submini">${igt}</span>`:'';})()}</span>${m.injury_note?'<span class="inj">⚠</span>':''}${isBdayToday(m)?'<span title="오늘 생일">🎂</span>':''}${a.booking_id?`<span title="예약 취소" style="margin-left:3px;color:#e0563a;font-size:10px" onclick="event.stopPropagation();cancelBooking('${a.uid}','${ev.event_id}','${a.booking_id}',this)">✕</span>`:''}<span class="ck">✓</span></div>`;});
   h+='</div>';
   if(on){h+=`<div class="selbar"><span class="selcnt">${PICK.size}명 선택</span><button onclick="pickAll(${i})">전체</button><button onclick="pickNone()">해제</button><button class="pri" onclick="copyInsta()">@ 인스타복사</button><button class="pri" onclick="copyPhones()">번호복사</button><button onclick="smsOpen()">문자앱</button></div>`;}
   h+='</div>';});
@@ -2880,6 +2922,105 @@ function visitTotal(m){
  const uid=m.glofox_user_id;
  if(uid && TOTAL_VISITS[uid]!=null) return TOTAL_VISITS[uid];
  const days=(m._days||[]);if(m.visit_base==null){return days.length||null;}const vbd=m.visit_base_date||'2000-01-01';const after=days.filter(d=>d>vbd).length;return (m.visit_base||0)+after;
+}
+
+// ═══════════════════════════════════════════
+// 🤝 함께 오는 사람 (페어링) — 상세페이지 검색+연결, 출결 이름표 배경색
+// ═══════════════════════════════════════════
+let BUDDY_GROUPS=[];
+async function ensureBuddyGroups(){
+ if(window._buddyLoaded) return;
+ window._buddyLoaded=true;
+ try{
+  const{data,error}=await sb.from('buddy_pairs').select('*');
+  if(error){ console.error('buddy_pairs 로드 실패:',error.message); BUDDY_GROUPS=[]; return; }
+  BUDDY_GROUPS=data||[];
+ }catch(e){ BUDDY_GROUPS=[]; }
+}
+function buddyGroupsOf(uid){ return BUDDY_GROUPS.filter(g=>(g.member_uids||[]).includes(uid)); }
+function renderBuddySection(uid){
+ const box=document.getElementById('buddyList_'+uid);
+ if(!box)return;
+ const groups=buddyGroupsOf(uid);
+ const others=[];
+ groups.forEach(g=>{ (g.member_uids||[]).forEach(u=>{ if(u!==uid) others.push({uid:u, groupId:g.id}); }); });
+ box.innerHTML = others.length ? others.map(o=>{
+  const m=MEMBERS[o.uid]; if(!m)return '';
+  return `<span class="mini" style="display:inline-flex;align-items:center;gap:5px;margin:2px 4px 2px 0">${esc(m.name)}<span style="cursor:pointer;color:var(--red)" onclick="removeBuddy('${uid}',${o.groupId})">×</span></span>`;
+ }).join('') : '<div class="mini" style="color:var(--dim);background:none;border:none;padding:0">아직 페어링된 사람이 없어요.</div>';
+}
+async function buddySearchInput(uid,q){
+ await ensureBuddyGroups();
+ const box=document.getElementById('buddySearchResults_'+uid);
+ if(!box)return;
+ if(!q||!q.trim().length){box.innerHTML='';return;}
+ const already=new Set([uid,...buddyGroupsOf(uid).flatMap(g=>g.member_uids||[])]);
+ const matches=Object.values(MEMBERS).filter(m=>m.glofox_user_id && !already.has(m.glofox_user_id) && (m.name||'').includes(q)).slice(0,6);
+ box.innerHTML = matches.length ? matches.map(m=>`<div class="srow" style="cursor:pointer" onclick="addBuddy('${uid}','${m.glofox_user_id}')">${avatar(m,'bk')}<div class="sinfo"><div class="nm">${esc(m.name)}</div><div class="smeta">${esc(m.phone||'')}</div></div></div>`).join('') : '<div class="mini" style="color:var(--dim)">검색 결과 없음</div>';
+}
+async function addBuddy(uid, targetUid){
+ await ensureBuddyGroups();
+ let groupA=BUDDY_GROUPS.find(g=>(g.member_uids||[]).includes(uid));
+ let groupB=BUDDY_GROUPS.find(g=>(g.member_uids||[]).includes(targetUid));
+ try{
+  if(groupA && groupB && groupA.id!==groupB.id){
+   const merged=[...new Set([...(groupA.member_uids||[]),...(groupB.member_uids||[])])];
+   const{error}=await sb.from('buddy_pairs').update({member_uids:merged}).eq('id',groupA.id);
+   if(error){alert('추가 실패: '+error.message);return;}
+   await sb.from('buddy_pairs').delete().eq('id',groupB.id);
+   groupA.member_uids=merged;
+   BUDDY_GROUPS=BUDDY_GROUPS.filter(g=>g.id!==groupB.id);
+  } else if(groupA){
+   const merged=[...new Set([...(groupA.member_uids||[]),targetUid])];
+   const{error}=await sb.from('buddy_pairs').update({member_uids:merged}).eq('id',groupA.id);
+   if(error){alert('추가 실패: '+error.message);return;}
+   groupA.member_uids=merged;
+  } else if(groupB){
+   const merged=[...new Set([...(groupB.member_uids||[]),uid])];
+   const{error}=await sb.from('buddy_pairs').update({member_uids:merged}).eq('id',groupB.id);
+   if(error){alert('추가 실패: '+error.message);return;}
+   groupB.member_uids=merged;
+  } else {
+   const{data,error}=await sb.from('buddy_pairs').insert({member_uids:[uid,targetUid]}).select().single();
+   if(error){alert('추가 실패: '+error.message);return;}
+   BUDDY_GROUPS.push(data);
+  }
+  const si=document.getElementById('buddySearch_'+uid); if(si)si.value='';
+  const sr=document.getElementById('buddySearchResults_'+uid); if(sr)sr.innerHTML='';
+  renderBuddySection(uid);
+ }catch(e){alert('오류: '+e.message);}
+}
+async function removeBuddy(uid, groupId){
+ const g=BUDDY_GROUPS.find(x=>x.id===groupId);
+ if(!g)return;
+ const newList=(g.member_uids||[]).filter(u=>u!==uid);
+ try{
+  if(newList.length<2){
+   const{error}=await sb.from('buddy_pairs').delete().eq('id',groupId);
+   if(error){alert('제거 실패: '+error.message);return;}
+   BUDDY_GROUPS=BUDDY_GROUPS.filter(x=>x.id!==groupId);
+  } else {
+   const{error}=await sb.from('buddy_pairs').update({member_uids:newList}).eq('id',groupId);
+   if(error){alert('제거 실패: '+error.message);return;}
+   g.member_uids=newList;
+  }
+  renderBuddySection(uid);
+ }catch(e){alert('오류: '+e.message);}
+}
+// 특정 수업 세션에 실제로 같이 온 페어(2명 이상)에만 색 배정. 세션마다 색은 매번 새로 배정(고정 아님)
+function buddyColorsForSession(uids){
+ const set=new Set(uids);
+ const palette=['#5a3d00','#0d4d3a','#1a3d6b','#5c1a4d','#4a3d00','#1a5050','#4d1a2e','#2e4d1a'];
+ const map={}; let idx=0;
+ BUDDY_GROUPS.forEach(g=>{
+  const present=(g.member_uids||[]).filter(u=>set.has(u));
+  if(present.length>=2){
+   const color=palette[idx%palette.length];
+   present.forEach(u=>{map[u]=color;});
+   idx++;
+  }
+ });
+ return map;
 }
 function isBdayToday(m){if(!m.birth||m.birth.length<10)return false;const n=new Date();return (+m.birth.slice(5,7))===n.getMonth()+1&&(+m.birth.slice(8,10))===n.getDate();}
 function daysToBday(m){if(!m.birth||m.birth.length<10)return 999;const n=new Date();const b=new Date(n.getFullYear(),+m.birth.slice(5,7)-1,+m.birth.slice(8,10));const t=new Date(n.getFullYear(),n.getMonth(),n.getDate());let d=Math.round((b-t)/86400000);if(d<0)d+=365;return d;}
@@ -2976,10 +3117,15 @@ async function open_(uid){
  <div id="ai_input_box_${uid}"></div>
  ${managerRow()}
  <div class="wklab" style="margin-top:8px">인스타 ID</div><input id="f_insta" value="${esc(m.instagram)}">
+ <div class="wklab" style="margin-top:14px">🤝 함께 오는 사람 <span class="mini" style="background:none;border:none;color:var(--dim);padding:0">· 출결화면에서 이름표 색깔로 표시돼요</span></div>
+ <div id="buddyList_${uid}" style="margin-bottom:6px">불러오는 중…</div>
+ <input id="buddySearch_${uid}" class="memoin" style="margin-top:0" placeholder="🔍 이름 검색해서 페어링" oninput="buddySearchInput('${uid}',this.value)" autocomplete="off">
+ <div id="buddySearchResults_${uid}" style="margin-top:4px"></div>
  <button class="mini" style="margin-top:10px" onclick="openBookingPicker('${uid}')">📅 예약하기</button>
  <button class="save" onclick="save('${uid}')">저장</button>
  <div class="hint">저장하면 모든 코치에게 공유돼요.</div>`;
  document.getElementById('modal').style.display='flex'; if(!window._sheetOpen){history.pushState({sheet:1},'');window._sheetOpen=true;};
+ ensureBuddyGroups().then(()=>renderBuddySection(uid));
 }
 function toggleAiTextMemo(uid){
  const box=document.getElementById('ai_input_box_'+uid);
