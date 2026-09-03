@@ -144,7 +144,8 @@
     <div class="station-card">
       <div class="head">STATION 4 · 셔틀런 + 바벨 스러스터</div>
       <div class="body">
-        <p><strong>구성:</strong> 20m 셔틀런 x20 → 바벨 스러스터 x80</p>
+        <p><strong>구성:</strong> 15m 셔틀런 x20 (총 300m) → 바벨 스러스터 x80</p>
+        <p style="font-size:12px; color:var(--sub);">※ 공간에 따라 10m×30 / 7.5m×40 마커로 대체 가능 (모두 총 300m 동일)</p>
         <table>
           <tr><th></th><th>OPEN</th><th>CLASSIC</th></tr>
           <tr><td><span class="badge f">여성</span></td><td>바 + <span class="badge" style="background:#c0392b">레드 플레이트</span></td><td>바 + <span class="badge" style="background:#3f51b5">블루 플레이트</span></td></tr>
@@ -212,7 +213,10 @@
 <!-- 4 -->
 <section class="block" id="floor">
   <h2><span class="num">4</span>플로어 셋업 &amp; 장비 배치</h2>
-  <p class="sub-title">10 stations 레이스트랙 형태 (30명 기준, 스테이션당 3명)</p>
+  <p class="sub-title">10 stations 레이스트랙 형태</p>
+  <div class="callout red">
+    <strong>정정:</strong> 이전 버전에 있던 "30명, 스테이션당 3명"은 <strong>Threshold/Down Under 클래스(Series 3)의 스펙</strong>을 잘못 가져온 것입니다. PEAK500 공식 정원은 <strong>시간당 27명</strong>이며, 동시 플로어 인원수(스테이션당 몇 명이 함께 도는지)는 원본 자료에 별도로 명시되어 있지 않습니다. 각 웨이브(솔로/페어 단위)가 순차적으로 5개 스테이션을 함께 순환하는 구조로 이해하시면 됩니다.
+  </div>
   <table>
     <tr><th>구역</th><th>장비/배치</th></tr>
     <tr><td>Station 1 (하단 우측)</td><td>Bike Erg 3대 (B B B)</td></tr>
@@ -265,6 +269,9 @@
   </table>
   <div class="callout">
     코치가 3명뿐이라면 Wave Coordinator가 순회하며 판정을 겸하고, 회원이 스스로 기록하는 에르그 스테이션(1·3·5)은 상대적으로 자율 운영이 가능하므로 근력 판정이 필요한 2·4번 스테이션에 우선 배치하세요.
+  </div>
+  <div class="callout navy">
+    <strong>판정 기준 관련 안내:</strong> 원본 자료(툴킷)에는 "코치가 2·4번 스테이션에서 저지 역할을 한다"는 것만 명시되어 있고, 데빌스프레스·런지·스러스터의 구체적인 굿렙/노렙 판정 기준(가슴 터치 라인, 무릎 각도, 페어 싱크로 일치 기준 등)은 별도로 문서화되어 있지 않습니다. 클래스 전 코치 전원이 <strong>Movement Standards 영상</strong>을 함께 시청하고 판정 기준을 사전에 맞춰두는 것을 권장합니다.
   </div>
 </section>
 
@@ -425,9 +432,9 @@
   <h2><span class="num">13</span>PEAK500 이해에 필요한 최소 용어</h2>
   <table>
     <tr><th>용어</th><th>정의</th></tr>
-    <tr><td>Members (멤버)</td><td>동시에 운동하는 회원 수 (PEAK500: 30명, 스테이션당 3명)</td></tr>
+    <tr><td>Members (멤버)</td><td>동시에 운동하는 회원 수 (PEAK500: 클래스 정원 시간당 27명. 스테이션당 동시 인원수는 원본 자료에 별도 명시 없음)</td></tr>
     <tr><td>Stations (스테이션)</td><td>운동 종목의 수 (PEAK500: 5개)</td></tr>
-    <tr><td>Work / Rest</td><td>운동 시간 / 휴식 시간 (PEAK500: 5분 work, 별도 rest 없이 스테이션 전환)</td></tr>
+    <tr><td>Work / Rest</td><td>운동 시간 / 휴식 시간 (PEAK500: 스테이션당 Work 5분. 웨이브가 6분 간격으로 투입되므로 나머지 최대 1분은 이동/전환 시간으로 추정되나, 원본 자료에 "1분 Rest"로 명시된 문구는 없음 — 확정 규정 아님)</td></tr>
     <tr><td>Racetrack (레이스트랙)</td><td>스테이션이 방을 원형으로 순환하며 서로 연결되는 무브먼트 시스템 — PEAK500이 이 형식</td></tr>
     <tr><td>Pod (팟)</td><td>일정 수의 스테이션을 포함하는 워크아웃의 한 구역 (PEAK500: 1개 팟, 5개 스테이션)</td></tr>
     <tr><td>Wave (웨이브)</td><td>같은 시간 슬롯 안에서 순차적으로 투입되는 참가 그룹 단위 (PEAK500 핵심 운영 개념)</td></tr>
