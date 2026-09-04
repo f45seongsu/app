@@ -169,6 +169,7 @@ body{padding-bottom:76px}
 <div id="view-trial" class="view" style="display:none"><div class="center">준비중이에요.</div></div>
 <div id="view-pass" class="view" style="display:none"><div class="center">준비중이에요.</div></div>
 <div id="view-coach" class="view" style="display:none"></div>
+<div id="view-schedule" class="view" style="display:none"></div>
 <div id="view-photo" class="view" style="display:none"></div>
 <div id="view-birthday" class="view" style="display:none"></div>
 <div id="view-tshirt" class="view" style="display:none"></div>
@@ -204,6 +205,7 @@ body{padding-bottom:76px}
   <button onclick="if(checkAdminPw())showView('aiconfig')">⚙️ AI 프롬프트 설정</button>
   <button onclick="if(checkAdminPw())showView('report')">📊 리포트</button>
   <button onclick="if(checkAdminPw())showView('coach')">🔑 코치 링크 관리</button>
+  <button onclick="if(checkAdminPw())showView('schedule')">📅 스케줄표 입력</button>
   <button onclick="if(checkAdminPw())makeCoachLink()">🔗 코치 링크 생성</button>
  </div>
 </div>
@@ -240,9 +242,9 @@ function badgeOf(m){if(m.stage==='트라이얼')return '트라이얼';if(m.pass_
 let VIEW='att';
 function toggleDrawer(){const d=document.getElementById('drawer');d.style.display=d.style.display==='none'?'block':'none';}
 function showView(v){window.CURVIEW=v;VIEW=v;
- ['att','risk','expire','search','trial','pass','photo','birthday','tshirt','handoff','leads','report','coach','aiconfig','memberall','dashboard'].forEach(x=>{const el=document.getElementById('view-'+x);if(el)el.style.display=(x===v?'':'none');});
+ ['att','risk','expire','search','trial','pass','photo','birthday','tshirt','handoff','leads','report','coach','aiconfig','memberall','dashboard','schedule'].forEach(x=>{const el=document.getElementById('view-'+x);if(el)el.style.display=(x===v?'':'none');});
  document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('on',b.dataset.v===v));
- const T={att:'수업 출결',risk:'이탈 위험군',expire:'만료 임박',search:'회원 검색',trial:'트라이얼 현황',pass:'횟수권 관리',tshirt:'마일스톤 티셔츠',handoff:'인수인계 관리',leads:'리드 관리',photo:'사진 입력 (수업별)',birthday:'생일 예정자',report:'리포트',coach:'코치 링크 관리',memberall:'회원 전체보기',dashboard:'대시보드'};
+ const T={att:'수업 출결',risk:'이탈 위험군',expire:'만료 임박',search:'회원 검색',trial:'트라이얼 현황',pass:'횟수권 관리',tshirt:'마일스톤 티셔츠',handoff:'인수인계 관리',leads:'리드 관리',photo:'사진 입력 (수업별)',birthday:'생일 예정자',report:'리포트',coach:'코치 링크 관리',memberall:'회원 전체보기',dashboard:'대시보드',schedule:'스케줄표 입력'};
  document.getElementById('vtitle').textContent=T[v]||'';
  document.getElementById('sub').style.display=(v==='att'?'':'none');
  document.getElementById('drawer').style.display='none';
@@ -253,6 +255,7 @@ function showView(v){window.CURVIEW=v;VIEW=v;
  if(v==='trial')renderTrial();
  if(v==='pass')renderPass();
  if(v==='coach')renderCoachAdmin();
+ if(v==='schedule')renderScheduleInput();
  if(v==='birthday')renderBirthday();
  if(v==='report')renderReport();
  if(v==='tshirt')renderTshirt();
@@ -1694,6 +1697,10 @@ function maTableHTML(list, containerId, situationHint){
   <button class="mini" onclick="maBulkPlainList('${containerId}')">📨 개별발송 목록</button>
   <button class="mini" onclick="maBulkGenerateCards('${containerId}','${situationHint}',this)">🤖AI문자만들기</button>
  </div>
+ <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px">
+  <input id="${containerId}-customprompt" placeholder="✏️ 예: 최근 출석 저조한데 부담없이 다시 나와보라고 독려" style="flex:1;margin-top:0;font-size:12px">
+  <button class="mini" style="flex-shrink:0" onclick="maBulkCustomPrompt('${containerId}',this)">맞춤 프롬프트로 일괄생성</button>
+ </div>
  <div id="${containerId}-aicards" style="display:none;margin-bottom:10px"></div>`;
  h+=`<div style="background:var(--card);border:1px solid var(--line);border-radius:12px;overflow-x:auto" id="${containerId}">
   <div class="ma-row ma-row-head" style="display:flex;gap:8px;align-items:center;padding:6px 12px;border-bottom:1px solid var(--line);font-size:10px;color:var(--dim);min-width:900px;text-transform:uppercase">
@@ -1765,11 +1772,13 @@ function maRenderDash(){
  const q=(document.getElementById('ma-dash-q').value||'').trim().toLowerCase();
  const planF=document.getElementById('ma-dash-plan').value;
  const mode=document.getElementById('ma-dash-sort').value;
+ const noPass=document.getElementById('ma-dash-noPass')?.checked;
  let list=all;
+ if(noPass){ list=list.filter(m=>!isClassPass(m)); }
  if(q){ const qd=q.replace(/\D/g,''); list=list.filter(m=>(m.name||'').toLowerCase().includes(q)||(qd.length>=3&&(m.phone||'').replace(/\D/g,'').includes(qd))); }
  if(planF){ list=list.filter(m=>(m.membership||'(없음)')===planF); }
  list=maSort(list, mode);
- box.innerHTML=`<div class="listhead">👥 <b>활성 회원</b> ${list.length}명${planF?` · ${esc(planF)}`:''}</div>`+maTableHTML(list,'ma-dash-tbl');
+ box.innerHTML=`<div class="listhead">👥 <b>활성 회원</b> ${list.length}명${planF?` · ${esc(planF)}`:''}${noPass?' · 횟수권 제외됨':''}</div>`+maTableHTML(list,'ma-dash-tbl');
  maUpdateCnt('ma-dash-tbl');
 }
 
@@ -2133,11 +2142,11 @@ function maTemplateFallback(m, r14, situationHint){
  if(r14>=6) return `${nm}님, 요즘 정말 꾸준히 나오고 계시네요! 대단해요 💪 그 페이스 계속 이어가봐요 -F45 성수`;
  return `${nm}님, 오늘 하루 어떠셨어요? 시간 되실 때 F45에서 같이 운동해요 😊 -F45 성수`;
 }
-async function maGenerateOneText(uid, situationHint){
+async function maGenerateOneText(uid, situationHint, customPrompt){
  const m=maByUid(uid); if(!m)return{text:'',usedFallback:true};
  const r7=maCountDays(m._days,7), r14=maCountDays(m._days,14);
  const season=maSeasonHint();
- let detail=`오늘 날짜 ${today} (${season}). 최근 7일 출석 ${r7}회, 최근 14일 출석 ${r14}회.`;
+ let detail=`오늘 날짜 ${today} (${season}). [가장 중요] 마지막 1주일 출석: ${r7}회. 최근 2주 전체 출석: ${r14}회.`;
  if(r14<=1) detail+=' 최근 거의 안 나옴 - 부담없이 부드럽게 독려.';
  else if(r14>=6) detail+=' 꾸준히 잘 나옴 - 칭찬 위주.';
  else detail+=' 보통 수준 - 가볍게 안부+독려.';
@@ -2152,7 +2161,9 @@ async function maGenerateOneText(uid, situationHint){
  if(memoCtx.length) detail+=` [참고사항 - 직접 언급하지 말고 톤과 방향에만 자연스럽게 반영] ${memoCtx.join(' · ')}`;
 
  let situation='최근 출석 패턴 맞춰 안부/독려. 날씨·계절 변화 자연스럽게 한마디.';
- if(situationHint==='pass'){
+ if(situationHint==='custom' && customPrompt){
+  situation = customPrompt + ' (마지막 1주일 출석 횟수를 가장 중요하게 참고해서, 그 사람 상황에 맞게 자연스럽게 반영할 것)';
+ } else if(situationHint==='pass'){
   const dd=maDday(m.pass_expiry);
   const p=maPassPace(m);
   const usedCount=(m.pass_total||0)-(m.pass_remaining||0);
@@ -2184,7 +2195,14 @@ async function maGenerateOneText(uid, situationHint){
   if(i<1) await new Promise(r=>setTimeout(r,1500));
  }
  let usedFallback=false;
- if(!text){ text=maTemplateFallback(m, r14, situationHint); usedFallback=true; }
+ if(!text){
+  if(situationHint==='custom'){
+   text = `${m.name||'회원'}님, 최근 일주일 출석 ${r7}회예요. ${customPrompt||''} -F45 성수`.trim();
+  } else {
+   text=maTemplateFallback(m, r14, situationHint);
+  }
+  usedFallback=true;
+ }
  return {text, usedFallback};
 }
 async function maAiMsg(uid, btn, situationHint){
@@ -2250,6 +2268,45 @@ async function maBulkGenerateCards(containerId, situationHint, btn){
  }
  if(btn) btn.textContent=origTxt;
  cardBox.innerHTML=`<div class="listhead">🤖 <b>생성된 문구</b> ${uids.length}건 · 각자 수정 후 개별 발송하세요</div>
+  <div style="margin-bottom:8px"><button class="mini" style="background:var(--red);border-color:var(--red)" onclick="maAligoSendAll('${containerId}',this)">🚀 전체 자동발송 (알리고)</button></div>
+  <div style="background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:hidden">${rows}</div>`;
+}
+// 체크한 사람들한테, 관리자가 직접 입력한 프롬프트 기준으로 각자 다른 문구 일괄생성
+// (마지막 1주일 출석횟수를 AI한테 가장 중요한 정보로 강조해서 넘김)
+async function maBulkCustomPrompt(containerId, btn){
+ const promptInput=document.getElementById(containerId+'-customprompt');
+ const customPrompt=(promptInput?.value||'').trim();
+ if(!customPrompt){ alert('어떤 내용으로 문자를 만들지, 프롬프트를 먼저 입력해주세요.'); promptInput?.focus(); return; }
+ const uids=[...document.querySelectorAll('#'+containerId+' .ma-chk:checked')].map(el=>el.dataset.uid);
+ if(!uids.length){alert('선택된 회원이 없어요.');return;}
+ const cardBox=document.getElementById(containerId+'-aicards');
+ if(!cardBox)return;
+ cardBox.style.display='';
+ cardBox.innerHTML=`<div class="wklab">✏️ 맞춤 문구 생성 중… (0/${uids.length})</div>`;
+ const origTxt=btn?btn.textContent:'';
+ let rows='';
+ for(let i=0;i<uids.length;i++){
+  const uid=uids[i]; const m=maByUid(uid); if(!m)continue;
+  if(btn) btn.textContent=`생성중 ${i+1}/${uids.length}`;
+  cardBox.querySelector('.wklab') && (cardBox.querySelector('.wklab').textContent=`✏️ 맞춤 문구 생성 중… (${i+1}/${uids.length})`);
+  const {text,usedFallback}=await maGenerateOneText(uid, 'custom', customPrompt);
+  const boxId=`aicard-${containerId}-${uid}`;
+  const r7=maCountDays(m._days,7);
+  rows+=`<div style="display:flex;gap:8px;align-items:flex-start;padding:8px 10px;border-bottom:1px solid var(--line)">
+   <div style="flex:0 0 64px;padding-top:6px">
+    <div style="font-weight:700;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(m.name)}</div>
+    <div class="smeta" style="font-size:9px">마지막주 ${r7}회 · ${usedFallback?'템플릿':'🤖AI'}</div>
+   </div>
+   <textarea id="${boxId}" data-uid="${uid}" style="flex:1;min-height:52px;font-size:11px">${esc(text)}</textarea>
+   <div style="display:flex;flex-direction:column;gap:4px;flex:0 0 56px">
+    <button class="mini" style="font-size:10px;padding:4px 5px" onclick="navigator.clipboard.writeText(document.getElementById('${boxId}').value);alert('복사됨')">복사</button>
+    <button class="mini" style="font-size:10px;padding:4px 5px" onclick="maSendCardSms('${uid}','${boxId}')">문자</button>
+   </div>
+  </div>`;
+  if(i<uids.length-1) await new Promise(r=>setTimeout(r,300));
+ }
+ if(btn) btn.textContent=origTxt;
+ cardBox.innerHTML=`<div class="listhead">✏️ <b>맞춤 문구</b> ${uids.length}건 · "${esc(customPrompt)}" 기준 · 각자 마지막주 출석 반영됨</div>
   <div style="margin-bottom:8px"><button class="mini" style="background:var(--red);border-color:var(--red)" onclick="maAligoSendAll('${containerId}',this)">🚀 전체 자동발송 (알리고)</button></div>
   <div style="background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:hidden">${rows}</div>`;
 }
@@ -2326,7 +2383,7 @@ function renderMemberAll(){
   </div>
   <div id="ma-pane-dash">
    <div class="carecard">
-    <div style="display:flex;gap:8px;flex-wrap:wrap">
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
      <input id="ma-dash-q" placeholder="🔍 이름/번호 검색" style="flex:1;min-width:140px" oninput="maRenderDash()">
      <select id="ma-dash-plan" class="memoin" style="margin-top:0;width:auto" onchange="maRenderDash()"><option value="">전체 회원권</option></select>
      <select id="ma-dash-sort" class="memoin" style="margin-top:0;width:auto" onchange="maRenderDash()">
@@ -2334,6 +2391,7 @@ function renderMemberAll(){
       <option value="att_desc">출석많은순</option><option value="att_asc">출석적은순</option>
       <option value="exp">만료임박순</option>
      </select>
+     <label style="font-size:12px;color:var(--dim);display:flex;align-items:center;gap:5px;white-space:nowrap"><input type="checkbox" id="ma-dash-noPass" onchange="maRenderDash()"> 횟수권 제외</label>
     </div>
    </div>
    <div id="ma-dash-result"></div>
@@ -2788,13 +2846,14 @@ async function renderCoachAdmin(){
  if(!data||!data.length){box.innerHTML='<div class="center">아직 생성된 코치 링크가 없어요.<br>≡ 메뉴 → 🔗 코치 링크 생성으로 만들어보세요.</div>';return;}
 
  const stats=await Promise.all(data.map(async c=>{
-  const[{count:logins},{count:views},{data:last},{count:comments}]=await Promise.all([
+  const[{count:logins},{count:views},{data:last},{count:comments},{count:checkins}]=await Promise.all([
    sb.from('coach_activity').select('id',{count:'exact',head:true}).eq('token',c.token).eq('event_type','login'),
    sb.from('coach_activity').select('id',{count:'exact',head:true}).eq('token',c.token).eq('event_type','view_member'),
    sb.from('coach_activity').select('created_at').eq('token',c.token).order('created_at',{ascending:false}).limit(1),
    sb.from('memo_log').select('id',{count:'exact',head:true}).eq('coach_name',c.coach_name),
+   sb.from('coach_activity').select('id',{count:'exact',head:true}).eq('token',c.token).eq('event_type','checkin_open'),
   ]);
-  return{logins:logins||0,views:views||0,comments:comments||0,last:(last&&last[0])?last[0].created_at:null};
+  return{logins:logins||0,views:views||0,comments:comments||0,checkins:checkins||0,last:(last&&last[0])?last[0].created_at:null};
  }));
 
  box.innerHTML='<div class="listhead">🔑 <b>코치 링크 관리</b> '+data.length+'개</div>'+
@@ -2808,20 +2867,147 @@ async function renderCoachAdmin(){
    return `<div class="carecard">
     <div class="srow" style="border:0;padding:0;margin:0;background:none">
      <div class="sinfo"><div class="nm">${esc(c.coach_name)} ${c.active?'':'<span class="badge" style="background:#555">비활성</span>'}</div>
-      <div class="smeta">생성 ${ds} · 로그인 <b>${st.logins}</b>회 · 조회 <b>${st.views}</b>건 · 코멘트 <b>${st.comments}</b>개</div>
+      <div class="smeta">생성 ${ds} · 로그인 <b>${st.logins}</b>회 · 조회 <b>${st.views}</b>건 · 코멘트 <b>${st.comments}</b>개 · 체크인열람 <b>${st.checkins}</b>회</div>
       <div class="smeta" style="color:var(--dim)">마지막 접속: ${lastTxt}</div></div>
      <div class="cacts">
       <button class="mini" onclick="copyTxt('${link}','링크 복사됨')">링크복사</button>
+      <button class="mini" onclick="makeCheckinLink('${c.token}','${esc(c.coach_name)}')">📋체크인링크</button>
       <button class="mini" style="color:${c.active?'#e0563a':'#5ac07a'}" onclick="toggleCoachLink(${c.id},${!c.active})">${c.active?'끄기':'켜기'}</button>
      </div>
     </div></div>`;
   }).join('');
+}
+async function makeCheckinLink(token, coachName){
+ const dateInput=prompt(`${coachName} 코치 - 체크인 확인할 날짜 (YYYY-MM-DD)`, today);
+ if(!dateInput)return;
+ // 스케줄표 입력해둔 게 있으면 자동으로 시간 채워줌
+ let defaultTimes='';
+ try{
+  const{data}=await sb.from('coach_schedule').select('work_time').eq('coach_name',coachName).eq('work_date',dateInput.trim());
+  if(data&&data.length) defaultTimes=data.map(r=>r.work_time.replace(':','')).join(',');
+ }catch(e){}
+ const timesInput=prompt(`${coachName} 코치가 그날 맡은 수업 시간을 콤마로 입력 (예: 0700,0900,1730)${defaultTimes?'\n(스케줄표 기반으로 자동 채워넣었어요, 맞는지 확인해주세요)':'\n※ 스케줄표 입력이 안 되어있어서 직접 입력해주세요'}`, defaultTimes);
+ if(!timesInput)return;
+ const u=new URL(location.href.replace(/f45app\.html.*$/,'checkin.html'));
+ const p=new URLSearchParams();
+ if(TOKEN)p.set('key',TOKEN);
+ p.set('t',token);
+ p.set('date',dateInput.trim());
+ p.set('times',timesInput.trim());
+ u.search=p.toString();
+ navigator.clipboard.writeText(u.toString()).then(()=>{
+  alert(`${coachName} 코치용 체크인 링크가 복사됐어요!\n\n${u.toString()}\n\n이 링크를 문자/카톡으로 보내주세요.`);
+ }).catch(()=>{ prompt('아래 링크를 복사하세요:',u.toString()); });
 }
 async function toggleCoachLink(id,newActive){
  const{error}=await sb.from('coach_links').update({active:newActive}).eq('id',id);
  if(error){alert('변경 실패: '+error.message);return;}
  renderCoachAdmin();
 }
+
+// ═══════════════════════════════════════════
+// 📅 스케줄표 입력 — Claude/제미나이가 정리해준 "코치명,날짜,시간" 형식을 붙여넣어 저장
+// ═══════════════════════════════════════════
+function renderScheduleInput(){
+ const box=document.getElementById('view-schedule');
+ box.innerHTML=`
+  <div class="listhead">📅 <b>스케줄표 입력</b> · Claude(또는 제미나이)한테 스케줄표를 보여주고,<br>아래 형식으로 정리해달라고 한 뒤 결과를 붙여넣으세요.</div>
+  <div class="carecard">
+   <div class="wklab">형식: 한 줄에 "코치명,YYYY-MM-DD,HH:MM" (콤마 구분)</div>
+   <textarea id="sched_paste" style="min-height:180px;font-family:monospace;font-size:12px" placeholder="성진,2026-09-01,07:00
+태준,2026-09-01,07:00
+성진,2026-09-01,08:00
+..."></textarea>
+   <button class="mini" style="margin-top:8px" onclick="previewSchedule()">미리보기</button>
+  </div>
+  <div id="sched_preview"></div>
+  <div class="carecard" style="margin-top:14px">
+   <div class="wklab">📆 저장된 스케줄로 특정 날짜 근무자 전체 체크인 링크 한꺼번에 만들기</div>
+   <input id="sched_batch_date" type="text" placeholder="YYYY-MM-DD" value="${today}" style="margin-top:4px">
+   <button class="mini" style="margin-top:8px" onclick="batchCheckinLinks()">이 날짜 근무자 전체 링크 생성</button>
+   <div id="sched_batch_result" style="margin-top:8px"></div>
+  </div>`;
+}
+function parseScheduleText(text){
+ const lines=text.split('\n').map(l=>l.trim()).filter(Boolean);
+ const rows=[]; const errors=[];
+ lines.forEach((l,i)=>{
+  const parts=l.split(',').map(p=>p.trim());
+  if(parts.length!==3){ errors.push(`${i+1}행: 형식이 맞지 않아요 ("${l}")`); return; }
+  const[coach,date,time]=parts;
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(date)){ errors.push(`${i+1}행: 날짜 형식 이상함 ("${date}")`); return; }
+  if(!/^\d{2}:\d{2}$/.test(time)){ errors.push(`${i+1}행: 시간 형식 이상함 ("${time}")`); return; }
+  if(!coach){ errors.push(`${i+1}행: 코치 이름이 비어있어요`); return; }
+  rows.push({coach_name:coach, work_date:date, work_time:time});
+ });
+ return {rows, errors};
+}
+function previewSchedule(){
+ const text=document.getElementById('sched_paste').value||'';
+ const{rows,errors}=parseScheduleText(text);
+ const box=document.getElementById('sched_preview');
+ if(!rows.length && !errors.length){ box.innerHTML='<div class="center">붙여넣은 내용이 없어요.</div>'; return; }
+ // 코치별로 묶어서 요약
+ const byCoach={};
+ rows.forEach(r=>{ (byCoach[r.coach_name]=byCoach[r.coach_name]||{}); const k=r.work_date; (byCoach[r.coach_name][k]=byCoach[r.coach_name][k]||[]).push(r.work_time); });
+ let h=`<div class="carecard"><div class="listhead" style="margin:0 0 8px">✅ 정상 인식 ${rows.length}건 · 코치 ${Object.keys(byCoach).length}명</div>`;
+ Object.keys(byCoach).sort().forEach(coach=>{
+  const dates=byCoach[coach];
+  h+=`<div style="margin-bottom:8px"><b style="font-size:13px">${esc(coach)}</b><br>`;
+  Object.keys(dates).sort().forEach(d=>{ h+=`<span class="mini" style="margin:2px 4px 2px 0">${d}: ${dates[d].join(', ')}</span>`; });
+  h+=`</div>`;
+ });
+ h+=`</div>`;
+ if(errors.length){
+  h+=`<div class="carecard" style="border-color:#e0563a"><div class="listhead" style="margin:0 0 6px;color:#e0563a">⚠️ 인식 안 된 줄 ${errors.length}건 (이 줄들은 저장 안 돼요)</div>${errors.map(e=>`<div class="mini" style="color:#e0563a;margin:2px 0">${esc(e)}</div>`).join('')}</div>`;
+ }
+ if(rows.length){
+  h+=`<button class="mini" style="margin-top:8px;background:var(--red);border-color:var(--red)" onclick='saveSchedule(${JSON.stringify(rows)})'>이대로 저장하기 (${rows.length}건)</button>`;
+ }
+ box.innerHTML=h;
+}
+async function saveSchedule(rows){
+ if(!confirm(`${rows.length}건을 저장할까요?\n(같은 코치+날짜+시간이 이미 있으면 덮어써요)`))return;
+ try{
+  const{error}=await sb.from('coach_schedule').upsert(rows, {onConflict:'coach_name,work_date,work_time'});
+  if(error){alert('저장 실패: '+error.message);return;}
+  alert(`✅ ${rows.length}건 저장 완료!`);
+  document.getElementById('sched_paste').value='';
+  document.getElementById('sched_preview').innerHTML='';
+ }catch(e){alert('오류: '+e.message);}
+}
+async function batchCheckinLinks(){
+ const date=(document.getElementById('sched_batch_date').value||'').trim();
+ if(!/^\d{4}-\d{2}-\d{2}$/.test(date)){ alert('날짜 형식을 YYYY-MM-DD로 입력해주세요.'); return; }
+ const box=document.getElementById('sched_batch_result');
+ box.innerHTML='<div class="center">불러오는 중…</div>';
+ try{
+  const{data:sched,error:sErr}=await sb.from('coach_schedule').select('coach_name,work_time').eq('work_date',date);
+  if(sErr){box.innerHTML='조회 실패: '+esc(sErr.message);return;}
+  if(!sched||!sched.length){ box.innerHTML='<div class="center">그 날짜에 저장된 스케줄이 없어요.</div>'; return; }
+  const byCoach={};
+  sched.forEach(r=>{(byCoach[r.coach_name]=byCoach[r.coach_name]||[]).push(r.work_time);});
+  const{data:links,error:lErr}=await sb.from('coach_links').select('coach_name,token,active').in('coach_name',Object.keys(byCoach));
+  if(lErr){box.innerHTML='코치링크 조회 실패: '+esc(lErr.message);return;}
+  const linkMap={}; (links||[]).forEach(l=>{if(l.active!==false)linkMap[l.coach_name]=l.token;});
+  let h='<div class="listhead">📋 '+date+' 근무자 '+Object.keys(byCoach).length+'명</div>';
+  Object.keys(byCoach).sort().forEach(coach=>{
+   const times=byCoach[coach].sort();
+   const token=linkMap[coach];
+   if(!token){
+    h+=`<div class="carecard" style="border-color:#e0563a"><b>${esc(coach)}</b> <span class="mini" style="color:#e0563a">코치 링크 없음 (먼저 "코치 링크 관리"에서 생성해주세요)</span></div>`;
+    return;
+   }
+   const u=new URL(location.href.replace(/f45app\.html.*$/,'checkin.html'));
+   const p=new URLSearchParams(); if(TOKEN)p.set('key',TOKEN); p.set('t',token); p.set('date',date); p.set('times',times.map(t=>t.replace(':','')).join(','));
+   u.search=p.toString();
+   h+=`<div class="carecard"><b>${esc(coach)}</b> <span class="mini">${times.join(', ')}</span><br>
+    <button class="mini" style="margin-top:6px" onclick="navigator.clipboard.writeText('${u.toString()}');alert('${esc(coach)} 링크 복사됨')">링크 복사</button></div>`;
+  });
+  box.innerHTML=h;
+ }catch(e){ box.innerHTML='오류: '+esc(e.message); }
+}
+
 function renderTimebar(){
  const bar=document.getElementById('timebar'); if(!bar)return;
  const evs=(SESSIONS[sel]||[]).slice().sort((a,b)=>(a.time||'').localeCompare(b.time||''));
@@ -2960,65 +3146,48 @@ async function buddySearchInput(uid,q){
 }
 async function addBuddy(uid, targetUid){
  await ensureBuddyGroups();
- let groupA=BUDDY_GROUPS.find(g=>(g.member_uids||[]).includes(uid));
- let groupB=BUDDY_GROUPS.find(g=>(g.member_uids||[]).includes(targetUid));
+ // 이미 이 둘만의 1:1 관계가 있으면 중복 생성 안 함
+ const already=BUDDY_GROUPS.some(g=>{const u=g.member_uids||[]; return u.includes(uid)&&u.includes(targetUid)&&u.length===2;});
+ if(already){ alert('이미 페어링되어 있어요.'); return; }
  try{
-  if(groupA && groupB && groupA.id!==groupB.id){
-   const merged=[...new Set([...(groupA.member_uids||[]),...(groupB.member_uids||[])])];
-   const{error}=await sb.from('buddy_pairs').update({member_uids:merged}).eq('id',groupA.id);
-   if(error){alert('추가 실패: '+error.message);return;}
-   await sb.from('buddy_pairs').delete().eq('id',groupB.id);
-   groupA.member_uids=merged;
-   BUDDY_GROUPS=BUDDY_GROUPS.filter(g=>g.id!==groupB.id);
-  } else if(groupA){
-   const merged=[...new Set([...(groupA.member_uids||[]),targetUid])];
-   const{error}=await sb.from('buddy_pairs').update({member_uids:merged}).eq('id',groupA.id);
-   if(error){alert('추가 실패: '+error.message);return;}
-   groupA.member_uids=merged;
-  } else if(groupB){
-   const merged=[...new Set([...(groupB.member_uids||[]),uid])];
-   const{error}=await sb.from('buddy_pairs').update({member_uids:merged}).eq('id',groupB.id);
-   if(error){alert('추가 실패: '+error.message);return;}
-   groupB.member_uids=merged;
-  } else {
-   const{data,error}=await sb.from('buddy_pairs').insert({member_uids:[uid,targetUid]}).select().single();
-   if(error){alert('추가 실패: '+error.message);return;}
-   BUDDY_GROUPS.push(data);
-  }
+  // ⚠️ 절대 다른 그룹이랑 합치지 않음 - 딱 이 둘만의 1:1 관계로 새로 만듦
+  // (안 그러면 "민재-A", "민재-B"가 하나로 합쳐져서 A,B가 서로 모르는데도 연결된 것처럼 되는 버그 생김)
+  const{data,error}=await sb.from('buddy_pairs').insert({member_uids:[uid,targetUid]}).select().single();
+  if(error){alert('추가 실패: '+error.message);return;}
+  BUDDY_GROUPS.push(data);
   const si=document.getElementById('buddySearch_'+uid); if(si)si.value='';
   const sr=document.getElementById('buddySearchResults_'+uid); if(sr)sr.innerHTML='';
   renderBuddySection(uid);
  }catch(e){alert('오류: '+e.message);}
 }
 async function removeBuddy(uid, groupId){
- const g=BUDDY_GROUPS.find(x=>x.id===groupId);
- if(!g)return;
- const newList=(g.member_uids||[]).filter(u=>u!==uid);
+ // 각 row가 정확히 2명짜리 1:1 관계라, 하나 없애면 그냥 그 관계 자체를 통째로 삭제
  try{
-  if(newList.length<2){
-   const{error}=await sb.from('buddy_pairs').delete().eq('id',groupId);
-   if(error){alert('제거 실패: '+error.message);return;}
-   BUDDY_GROUPS=BUDDY_GROUPS.filter(x=>x.id!==groupId);
-  } else {
-   const{error}=await sb.from('buddy_pairs').update({member_uids:newList}).eq('id',groupId);
-   if(error){alert('제거 실패: '+error.message);return;}
-   g.member_uids=newList;
-  }
+  const{error}=await sb.from('buddy_pairs').delete().eq('id',groupId);
+  if(error){alert('제거 실패: '+error.message);return;}
+  BUDDY_GROUPS=BUDDY_GROUPS.filter(x=>x.id!==groupId);
   renderBuddySection(uid);
  }catch(e){alert('오류: '+e.message);}
 }
-// 특정 수업 세션에 실제로 같이 온 페어(2명 이상)에만 색 배정. 세션마다 색은 매번 새로 배정(고정 아님)
+// 특정 수업 세션에서, 실제로 서로 직접 연결된(1:1 관계) 사람들끼리만 묶어서 색 배정.
+// 연쇄(A-B, B-C 있지만 A-C는 없는 경우)로 여러 명이 한 색이 될 수 있는 건 알아둘 점 - 아래 설명 참고
 function buddyColorsForSession(uids){
  const set=new Set(uids);
  const palette=['#5a3d00','#0d4d3a','#1a3d6b','#5c1a4d','#4a3d00','#1a5050','#4d1a2e','#2e4d1a'];
- const map={}; let idx=0;
- BUDDY_GROUPS.forEach(g=>{
-  const present=(g.member_uids||[]).filter(u=>set.has(u));
-  if(present.length>=2){
-   const color=palette[idx%palette.length];
-   present.forEach(u=>{map[u]=color;});
-   idx++;
-  }
+ // 이 세션에 실제로 같이 온 사람들 사이의 1:1 관계만 추림
+ const edges=BUDDY_GROUPS.filter(g=>{const u=g.member_uids||[]; return u.length===2 && set.has(u[0]) && set.has(u[1]);});
+ if(!edges.length) return {};
+ // 연결된 사람들끼리 묶기 (A-B, B-C면 A,B,C 한 덩어리로 - 아래 설명 참고)
+ const adj={};
+ edges.forEach(g=>{const [a,b]=g.member_uids; (adj[a]=adj[a]||[]).push(b); (adj[b]=adj[b]||[]).push(a);});
+ const seen=new Set(); const map={}; let idx=0;
+ Object.keys(adj).forEach(start=>{
+  if(seen.has(start))return;
+  const stack=[start]; const comp=[];
+  while(stack.length){ const cur=stack.pop(); if(seen.has(cur))continue; seen.add(cur); comp.push(cur); (adj[cur]||[]).forEach(n=>{if(!seen.has(n))stack.push(n);}); }
+  const color=palette[idx%palette.length];
+  comp.forEach(u=>{map[u]=color;});
+  idx++;
  });
  return map;
 }
