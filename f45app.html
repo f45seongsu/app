@@ -341,12 +341,12 @@ function ddaysAgo(n){const t=new Date(today+'T00:00:00');t.setDate(t.getDate()-n
 function lastVisit(m){const d=(m._days||[]).slice().sort();return d.length?d[d.length-1]:null;}
 function ddayOf(m){if(!m.end_date||m.end_date.length<10)return null;const t=new Date(today+'T00:00:00');const e=new Date(m.end_date.slice(0,10)+'T00:00:00');return Math.round((e-t)/86400000);}
 function msgFor(uid,type){const m=MEMBERS[uid]||{};const nm=m.name||'회원';
- if(type==='trial'){return `${nm}님, F45 성수 체험 어떠셨어요? 😊 함께 운동해보니 정말 좋으셨죠! 지금 등록하시면 끊김 없이 이어가실 수 있어요. 궁금하신 점이나 등록 문의는 편하게 답장 주세요 💪 -F45 성수`;}
+ if(type==='trial'){return `${nm}님, F45 성수 체험 어떠셨어요? 함께 운동해보니 정말 좋으셨죠! 지금 등록하시면 끊김 없이 이어가실 수 있어요. 궁금하신 점이나 등록 문의는 편하게 답장 주세요 -F45 성수`;}
  if(type==='risk'){const lv=lastVisit(m);const disp=lv?lv.slice(5).replace('-','/'):'';
-  return `${nm}님! 요즘 F45에서 통 못 뵀네요 😊 ${disp?'마지막 운동이 '+disp+'이었어요. ':''}이번 주에 다시 나오셔서 같이 땀 흘려요! 편하신 시간 말씀 주시면 예약 도와드릴게요 💪 -F45 성수`;}
+  return `${nm}님! 요즘 F45에서 통 못 뵀네요 ${disp?'마지막 운동이 '+disp+'이었어요. ':''}이번 주에 다시 나오셔서 같이 땀 흘려요! 편하신 시간 말씀 주시면 예약 도와드릴게요 -F45 성수`;}
  const dd=ddayOf(m);const ed=m.end_date?m.end_date.slice(0,10):'';
  const when=dd===0?'오늘':(dd>0?`${dd}일 뒤(${ed})`:ed);
- return `${nm}님, 멤버십이 ${when} 만료 예정이에요. 끊김 없이 운동 이어가실 수 있게 재등록 안내드려요! 궁금하신 점 있으면 편하게 답장 주세요 😊 -F45 성수`;}
+ return `${nm}님, 멤버십이 ${when} 만료 예정이에요. 끊김 없이 운동 이어가실 수 있게 재등록 안내드려요! 궁금하신 점 있으면 편하게 답장 주세요 -F45 성수`;}
 function smsMsg(uid,type){const m=MEMBERS[uid]||{};const ph=(m.phone||'').replace(/[^0-9]/g,'');if(!ph){alert('번호가 없어요.');return;}location.href='sms:'+ph+'&body='+encodeURIComponent(msgFor(uid,type));}
 function copyMsg(uid,type){const t=msgFor(uid,type);navigator.clipboard.writeText(t);alert('문구 복사됨:\n'+t);}
 function isUnlimited(m){const s=m.membership||'';return s.includes('무제한')||s.includes('Unlimited')||s.includes('파운데이션')||s.includes('Foundation');}
@@ -724,7 +724,7 @@ function renderBirthday(){
 }
 let MILEDATA=null;
 function nextMile(t){if(t<45)return 45;return (Math.floor(t/100)+1)*100;}
-function msgMile(uid,nm){const m=MEMBERS[uid]||{};const n=m.name||'회원';return `${n}님, 곧 F45 성수 ${nm}회 출석 달성이에요! 🎉 꾸준함이 정말 대단하세요 💪 함께 축하해요!`;}
+function msgMile(uid,nm){const m=MEMBERS[uid]||{};const n=m.name||'회원';return `${n}님, 곧 F45 성수 ${nm}회 출석 달성이에요! 꾸준함이 정말 대단하세요 함께 축하해요!`;}
 function smsMile(uid,nm){const m=MEMBERS[uid]||{};const ph=(m.phone||'').replace(/[^0-9]/g,'');if(!ph){alert('번호가 없어요.');return;}location.href='sms:'+ph+'&body='+encodeURIComponent(msgMile(uid,nm));}
 function copyMile(uid,nm){navigator.clipboard.writeText(msgMile(uid,nm));alert('축하 문구 복사됨');}
 async function renderMilestone(){
@@ -2131,16 +2131,16 @@ function maTemplateFallback(m, r14, situationHint){
   const maxDays=maMaxAttendableDays(today, m.pass_expiry);
   const remain=m.pass_remaining||0;
   if(maxDays!=null && remain>0 && remain>=maxDays){
-   return `${nm}님, 횟수권이 ${expTxt}에 만료되는데 아직 ${remain}회나 남았어요! 남은 기간 동안 최대한 자주 나오셔서 다 쓰고 가세요 💪 -F45 성수`;
+   return `${nm}님, 횟수권이 ${expTxt}에 만료되는데 아직 ${remain}회나 남았어요! 남은 기간 동안 최대한 자주 나오셔서 다 쓰고 가세요 -F45 성수`;
   }
-  return `${nm}님, 횟수권이 ${expTxt}에 만료돼요! 아직 ${remain}회 남았으니, 이번 주부터 좀 더 자주 나오셔서 알차게 다 쓰고 가세요 💪 -F45 성수`;
+  return `${nm}님, 횟수권이 ${expTxt}에 만료돼요! 아직 ${remain}회 남았으니, 이번 주부터 좀 더 자주 나오셔서 알차게 다 쓰고 가세요 -F45 성수`;
  }
  if(situationHint==='winback'){
-  return `${nm}님, 오랜만이에요! ${season.includes('선선')?'날씨도 선선해졌는데':'날씨 어떻든'} 예전처럼 다시 F45에서 땀 흘려보시는 거 어때요? 재등록 문의 편하게 주세요 😊 -F45 성수`;
+  return `${nm}님, 오랜만이에요! ${season.includes('선선')?'날씨도 선선해졌는데':'날씨 어떻든'} 예전처럼 다시 F45에서 땀 흘려보시는 거 어때요? 재등록 문의 편하게 주세요 -F45 성수`;
  }
- if(r14<=1) return `${nm}님, 요즘 ${season.includes('선선')?'날씨도 선선해졌는데':'날씨 어떻든'} 통 못 뵀네요 😊 이번 주에 다시 나오셔서 같이 땀 흘려요! -F45 성수`;
- if(r14>=6) return `${nm}님, 요즘 정말 꾸준히 나오고 계시네요! 대단해요 💪 그 페이스 계속 이어가봐요 -F45 성수`;
- return `${nm}님, 오늘 하루 어떠셨어요? 시간 되실 때 F45에서 같이 운동해요 😊 -F45 성수`;
+ if(r14<=1) return `${nm}님, 요즘 ${season.includes('선선')?'날씨도 선선해졌는데':'날씨 어떻든'} 통 못 뵀네요 이번 주에 다시 나오셔서 같이 땀 흘려요! -F45 성수`;
+ if(r14>=6) return `${nm}님, 요즘 정말 꾸준히 나오고 계시네요! 대단해요 그 페이스 계속 이어가봐요 -F45 성수`;
+ return `${nm}님, 오늘 하루 어떠셨어요? 시간 되실 때 F45에서 같이 운동해요 -F45 성수`;
 }
 async function maGenerateOneText(uid, situationHint, customPrompt){
  const m=maByUid(uid); if(!m)return{text:'',usedFallback:true};
@@ -3193,7 +3193,7 @@ function buddyColorsForSession(uids){
 }
 function isBdayToday(m){if(!m.birth||m.birth.length<10)return false;const n=new Date();return (+m.birth.slice(5,7))===n.getMonth()+1&&(+m.birth.slice(8,10))===n.getDate();}
 function daysToBday(m){if(!m.birth||m.birth.length<10)return 999;const n=new Date();const b=new Date(n.getFullYear(),+m.birth.slice(5,7)-1,+m.birth.slice(8,10));const t=new Date(n.getFullYear(),n.getMonth(),n.getDate());let d=Math.round((b-t)/86400000);if(d<0)d+=365;return d;}
-function msgBday(uid){const m=MEMBERS[uid]||{};const nm=m.name||'회원';const k=ageInfo(m.birth);return `${nm}님, 생일 진심으로 축하드려요! 🎉 F45 성수에서 올 한 해도 건강하고 활기차게 보내세요 💪 생일 기념 방문하시면 작은 선물 준비해뒀어요 😊`;}
+function msgBday(uid){const m=MEMBERS[uid]||{};const nm=m.name||'회원';const k=ageInfo(m.birth);return `${nm}님, 생일 진심으로 축하드려요! F45 성수에서 올 한 해도 건강하고 활기차게 보내세요 생일 기념 방문하시면 작은 선물 준비해뒀어요`;}
 function smsBday(uid){const m=MEMBERS[uid]||{};const ph=(m.phone||'').replace(/[^0-9]/g,'');if(!ph){alert('번호가 없어요.');return;}location.href='sms:'+ph+'&body='+encodeURIComponent(msgBday(uid));}
 function copyBday(uid){navigator.clipboard.writeText(msgBday(uid));alert('생일 문구 복사됨');}
 async function upDetailPhoto(uid,file){await upPhotoApp(uid,file);open_(uid);}
