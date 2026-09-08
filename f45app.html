@@ -672,7 +672,7 @@ function totalVisitsOf(m){
 }
 function renderTrial(){
  let list=Object.values(MEMBERS).filter(m=>isTrialLike(m)&&!m.trial_hidden);
- list.sort((a,b)=>(b.join_date||'').localeCompare(a.join_date||''));
+ list.sort((a,b)=>((b.join_date||b.updated_at||'')).localeCompare(a.join_date||a.updated_at||''));
  const box=document.getElementById('view-trial');
  if(!list.length){box.innerHTML='<div class="center">트라이얼 회원이 없어요.</div>';return;}
  box.innerHTML=`<div class="listhead">⚡ 체험 회원 <b>${list.length}명</b> (최근 등록순) · 아직 정회원 전환 안 한 분들이에요. 등록 유도 + 메모로 관리하세요. <span class="mini" style="background:none;border:none;color:var(--dim)">(⚡추정 = 글로폭스에 아직 미확정, 예약기록으로 추정)</span></div>`+
@@ -2124,6 +2124,15 @@ function maCountDays(days,n){
  const t=new Date(today+'T00:00:00'); const lim=new Date(t); lim.setDate(t.getDate()-n);
  return (days||[]).filter(d=>new Date(d+'T00:00:00')>lim).length;
 }
+// 최근 n일 중 일요일(휴무일) 빼고 실제로 나올 수 있었던 최대 일수 - 출석률(%) 계산용
+function maWindowMaxDays(n){
+ const t=new Date(today+'T00:00:00'); let cnt=0;
+ for(let i=0;i<n;i++){
+  const d=new Date(t); d.setDate(t.getDate()-i);
+  if(d.getDay()!==0) cnt++;
+ }
+ return cnt||1;
+}
 function maTemplateFallback(m, r14, situationHint){
  const nm=m.name||'회원'; const season=maSeasonHint();
  if(situationHint==='pass'){
@@ -2142,14 +2151,31 @@ function maTemplateFallback(m, r14, situationHint){
  if(r14>=6) return `${nm}님, 요즘 정말 꾸준히 나오고 계시네요! 대단해요 그 페이스 계속 이어가봐요 -F45 성수`;
  return `${nm}님, 오늘 하루 어떠셨어요? 시간 되실 때 F45에서 같이 운동해요 -F45 성수`;
 }
+// F45 성수 문자 톤 가이드 - 모든 AI 문구 생성에 공통 적용
+const MA_TONE_GUIDE = `[문체/톤 규칙 - 반드시 지킬 것] AI가 쓴 티 안 나는 자연스러운 실제 매니저 말투. 친절하되 지나치게 여성스럽거나 과장되지 않게, 남자답고 씩씩한 톤. "~했어요"체보다 "~습니다!"체 위주로 (예: "확인했습니다!", "뵙겠습니다!"). "계셨을까요?", "하셨을까요?" 같은 지나치게 공손하고 부자연스러운 표현 금지 - 대신 "어떠셨나요?", "편하게 알려주세요" 식으로. "ㅎㅎㅎ" 같은 과도하게 가벼운 표현 금지. 회원을 구박하거나 압박하거나 죄책감 느끼게 하는 표현 금지. 발신자는 "F45 성수"로, 개인 매니저 이름은 쓰지 않음. 부담스러운 영업 느낌보다 자연스러운 권유.`;
+
 async function maGenerateOneText(uid, situationHint, customPrompt){
  const m=maByUid(uid); if(!m)return{text:'',usedFallback:true};
- const r7=maCountDays(m._days,7), r14=maCountDays(m._days,14);
+ const r7=maCountDays(m._days,7), r14=maCountDays(m._days,14), r28=maCountDays(m._days,28);
+ const rate7=Math.round((r7/maWindowMaxDays(7))*100);
+ const rate28=Math.round((r28/maWindowMaxDays(28))*100);
  const season=maSeasonHint();
- let detail=`오늘 날짜 ${today} (${season}). [가장 중요] 마지막 1주일 출석: ${r7}회. 최근 2주 전체 출석: ${r14}회.`;
+ // 신규회원 여부 (가입일 기준)
+ let joinCtx='';
+ if(m.join_date){
+  const jd=m.join_date.slice(0,10);
+  const daysSinceJoin=Math.round((new Date(today+'T00:00:00')-new Date(jd+'T00:00:00'))/86400000);
+  if(daysSinceJoin<=30) joinCtx=` 가입한지 ${daysSinceJoin}일 된 신규회원(가입일 ${jd}) - 적응 중일 수 있으니 부담 덜 주는 톤으로.`;
+  else joinCtx=` 가입일 ${jd} (약 ${Math.floor(daysSinceJoin/30)}개월차 회원).`;
+ }
+ let detail=`오늘 날짜 ${today} (${season}).${joinCtx} [가장 중요] 마지막 1주일 출석: ${r7}회 (해당 기간 출석률 약 ${rate7}%). 최근 4주간 출석: ${r28}회 (출석률 약 ${rate28}%). 최근 2주 전체 출석: ${r14}회.`;
  if(r14<=1) detail+=' 최근 거의 안 나옴 - 부담없이 부드럽게 독려.';
  else if(r14>=6) detail+=' 꾸준히 잘 나옴 - 칭찬 위주.';
  else detail+=' 보통 수준 - 가볍게 안부+독려.';
+ // 횟수권 잔여도 상황과 무관하게 항상 참고 정보로 (기계적 소진 재촉 금지, 자연스럽게만 참고)
+ if(m.pass_remaining!=null && situationHint!=='pass'){
+  detail+=` 참고: 현재 횟수권 잔여 ${m.pass_remaining}회 (직접 "OO회 남았다"고 재촉하듯 언급하지 말고, 필요하면 자연스러운 권유 톤에만 은근히 녹일 것).`;
+ }
 
  // 코치 메모/주의사항 반영 (직접 언급하지 않고 톤에만 자연스럽게 참고)
  const memoCtx=[];
@@ -2160,9 +2186,9 @@ async function maGenerateOneText(uid, situationHint, customPrompt){
  if(recentLogs.length) memoCtx.push(`최근 코치 코멘트: ${recentLogs.join(' / ')}`);
  if(memoCtx.length) detail+=` [참고사항 - 직접 언급하지 말고 톤과 방향에만 자연스럽게 반영] ${memoCtx.join(' · ')}`;
 
- let situation='최근 출석 패턴 맞춰 안부/독려. 날씨·계절 변화 자연스럽게 한마디.';
+ let situation=MA_TONE_GUIDE+' 최근 출석 패턴 맞춰 안부/독려. 날씨·계절 변화 자연스럽게 한마디.';
  if(situationHint==='custom' && customPrompt){
-  situation = customPrompt + ' (마지막 1주일 출석 횟수를 가장 중요하게 참고해서, 그 사람 상황에 맞게 자연스럽게 반영할 것)';
+  situation = MA_TONE_GUIDE+' '+customPrompt + ' (마지막 1주일 출석 횟수를 가장 중요하게 참고해서, 그 사람 상황에 맞게 자연스럽게 반영할 것)';
  } else if(situationHint==='pass'){
   const dd=maDday(m.pass_expiry);
   const p=maPassPace(m);
@@ -2177,14 +2203,14 @@ async function maGenerateOneText(uid, situationHint, customPrompt){
   const urgent = (maxDays!=null && remain>0 && remain>=maxDays);
   if(urgent){
    detail+=` [중요] 만료까지 (일요일 휴무 제외) 최대로 나올 수 있는 날이 ${maxDays}일뿐인데 잔여 ${remain}회 - 지금부터 거의 매번 나와도 다 못 쓸 수도 있는 빠듯한 상황.`;
-   situation='횟수권 만료가 임박했는데 잔여 횟수를 다 쓰기엔 남은 기간이 매우 빠듯함. 정확한 만료일과 잔여횟수를 알려주고, "최대한 자주 나와서 남은 걸 다 써보자"는 식으로 적극적이고 긴급하게 독려. 날씨도 한마디.';
+   situation=MA_TONE_GUIDE+' 횟수권 만료가 임박했는데 잔여 횟수를 다 쓰기엔 남은 기간이 매우 빠듯함. "OO회 남았으니 다 쓰세요" 식의 기계적인 소진 재촉은 절대 하지 말 것. 대신 "요즘 어떻게 지내시는지", "다양한 프로그램 경험해보시라" 같은 자연스러운 관심 표현으로 시작해서, 정확한 만료일을 알려주고, 남은 기간 동안 편한 시간에 자주 들르시라고 부드럽고 센스있게 권유. 날씨도 한마디.';
   } else {
-   situation='횟수권 만료일을 명확한 날짜로 알려주고, 현재 몇 회 사용했는지·잔여가 몇 회인지 구체적 숫자로 알려준 뒤, "이 페이스면 더 자주 나와야 다 쓸 수 있다"는 식으로 자연스럽게 재방문을 권유. 날씨도 한마디.';
+   situation=MA_TONE_GUIDE+' 횟수권 만료일을 명확한 날짜로 알려주되, "OO회 남았다"는 숫자를 재촉하듯 강조하지 말고 자연스러운 안부 인사 속에 은근히 녹여서, 편한 시간에 방문하시라고 부드럽게 권유. 날씨도 한마디.';
   }
  } else if(situationHint==='winback'){
   detail=`오늘 날짜 ${today} (${season}). 만료된 지 오래됐고, 예전엔 총 ${(visitTotal(m)||0)}회 방문할 만큼 열심히 다니던 회원.`;
   if(memoCtx.length) detail+=` [참고사항] ${memoCtx.join(' · ')}`;
-  situation='오랫동안 못 본 예전 열심회원에게 재등록을 부담없이 유도하는 문자. 반가움 표현 + 날씨 한마디.';
+  situation=MA_TONE_GUIDE+' 오랫동안 못 본 예전 열심회원에게 재등록을 부담없이 유도하는 문자. 반가움 표현 + 날씨 한마디.';
  }
  let text=null;
  for(let i=0;i<2 && !text;i++){
@@ -2499,8 +2525,9 @@ async function renderDashboardHome(){
 
 function renderLeads(){
  const box=document.getElementById('view-leads');
- let list=Object.values(MEMBERS).filter(m=>m.glofox_user_id&&m.stage==='리드'&&(!m._days||m._days.length===0));
- list.sort((a,b)=>(b.join_date||'').localeCompare(a.join_date||''));
+ // 2026-02-16 이전 가입은 하파나→글로폭스 이전 시점에 일괄 생성된 리드라 관리 가치 없음 - 리드관리 화면에서만 숨김 (DB/검색엔 그대로 남음)
+ let list=Object.values(MEMBERS).filter(m=>m.glofox_user_id&&m.stage==='리드'&&(!m._days||m._days.length===0)&&(!m.join_date||m.join_date.slice(0,10)>='2026-02-17'));
+ list.sort((a,b)=>((b.join_date||b.updated_at||'')).localeCompare(a.join_date||a.updated_at||''));
  if(!list.length){box.innerHTML='<div class="center">방문 이력 없는 리드가 없어요 👍</div>';return;}
  box.innerHTML=`<div class="listhead">🎯 <b>리드 관리</b> ${list.length}명 · 앱 가입은 했지만 한 번도 안 오신 분들 · 최근 가입순</div>`+
   list.map(m=>{const uid=m.glofox_user_id;
