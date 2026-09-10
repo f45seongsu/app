@@ -121,11 +121,24 @@
     nav, main, footer{ padding-left:18px; padding-right:18px; }
     table{ font-size:.8rem; } th,td{ padding:8px 6px; }
   }
+  @page{ size:A4; margin:14mm 12mm; }
   @media print{
     body{ background:#fff; } nav{ display:none; }
-    section{ page-break-inside:avoid; border-bottom:1px solid #ccc; }
-    header{ -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+    .print-btn{ display:none !important; }
+    section{ page-break-inside:avoid; border-bottom:1px solid #ccc; padding:16px 0; }
+    table{ page-break-inside:avoid; }
+    .daycoach{ page-break-inside:avoid; }
+    header{ -webkit-print-color-adjust:exact; print-color-adjust:exact; padding:20px 6px; }
+    .wrap{ max-width:none; }
+    main{ padding:0 6px; }
+    html{ font-size:13px; }
   }
+
+  .print-btn{ position:fixed; right:22px; bottom:22px; z-index:100; display:flex; align-items:center; gap:8px;
+              padding:13px 20px; border:none; border-radius:30px; background:var(--navy);
+              color:#fff; font-weight:700; font-size:.9rem; cursor:pointer; box-shadow:0 6px 18px rgba(21,33,81,.35); }
+  .print-btn:hover{ background:var(--navy2); }
+  .print-btn svg{ width:18px; height:18px; flex-shrink:0; }
 </style>
 </head>
 <body>
@@ -769,5 +782,9 @@
 </footer>
 
 </div>
+<button class="print-btn" onclick="window.print()" type="button">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
+  인쇄 / PDF 저장
+</button>
 </body>
 </html>
