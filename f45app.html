@@ -3178,6 +3178,14 @@ function jumpTo(i){
 let selEv=null; const PICK=new Set();
 function renderDay(doScroll){const evs=(SESSIONS[sel]||[]).slice().sort((a,b)=>(a.time||'').localeCompare(b.time||''));
  SESSIONS[sel]=evs; let h='';const nowTs=new Date();
+ // 그날 전체(모든 시간대) 선택 바
+ if(evs.length){
+  if(DAYSEL){
+   h+=`<div class="selbar" style="margin:8px 10px 4px"><span class="selcnt">📅 ${sel.slice(5).replace('-','/')} 전체 · ${PICK.size}명 선택</span><button onclick="pickAllDay()">전체</button><button onclick="pickNone()">해제</button><button class="pri" onclick="copyInsta()">@ 인스타복사</button><button class="pri" onclick="copyPhones()">번호복사</button><button onclick="smsOpen()">문자앱</button><button onclick="dayselOff()">완료</button></div>`;
+  } else {
+   h+=`<div style="padding:8px 10px 2px"><button class="mini" onclick="dayselOn()">📅 이 날 참여자 전체선택</button></div>`;
+  }
+ }
  evs.forEach((ev,i)=>{
   const passed=new Date(sel+'T'+(ev.time||'23:59')+':00')<nowTs;
   ev.att.forEach(a=>{a._st=a.status==='CANCELED'?'cancel':(a.attended?'att':(passed?'noshow':'bk'));});
@@ -3194,7 +3202,7 @@ function renderDay(doScroll){const evs=(SESSIONS[sel]||[]).slice().sort((a,b)=>(
   const noshow=ev.att.filter(a=>a._st==='noshow').length;
   const cancel=ev.att.filter(a=>a._st==='cancel').length;
   const cntTxt=`${ev.att.length}명 · ${present} 출석`+(noshow?` · <span style="color:#e0563a">${noshow} 노쇼</span>`:'')+(cancel?` · <span style="color:#e0954f">${cancel} 취소</span>`:'');
-  const on=selEv===i;
+  const on=(selEv===i)||DAYSEL;
   h+=`<div class="ev" id="ev_${i}"><div class="evh"><span class="time">${ev.time}</span><span class="enm">${esc(ev.name)}</span><span class="cnt">${cntTxt}</span><button class="selbtn" style="background:#2a5a3a" onclick="openBookingForEvent('${ev.event_id}','${sel}','${ev.time}',this)">+예약</button><button class="selbtn ${on?'on':''}" onclick="toggleSel(${i})">${on?'완료':'선택'}</button></div><div class="grid">`;
   const buddyColors=buddyColorsForSession(ev.att.map(a=>a.uid));
   ev.att.forEach(a=>{if(a._dropin){h+=`<div class="chip s-${a._st}" style="cursor:default"><span class="ini" style="background:#4a5980">D</span><span class="nmwrap"><span class="nm">Drop in${a._dropin>1?` (${a._dropin}명)`:''}</span></span></div>`;return;}const m=MEMBERS[a.uid]||{name:'(미등록)'};const bd=badgeOf(m);
@@ -3207,7 +3215,7 @@ function renderDay(doScroll){const evs=(SESSIONS[sel]||[]).slice().sort((a,b)=>(
    const bcTitle=bc?' title="🤝 함께 옴"':'';
    h+=`<div class="chip s-${a._st} ${pk?'picked':''}"${bcStyle}${bcTitle} onclick="${click}" ${drop}>${avatar(m,a._st)}<span class="nmwrap"><span class="nm">${esc(m.name)}</span>${(()=>{const igShort=ig.length>8?ig.slice(0,8)+'..':ig;const igt=ig?`@${esc(igShort)}`:'';return igt?`<span class="submini">${igt}</span>`:'';})()}</span>${m.injury_note?'<span class="inj">⚠</span>':''}${isBdayToday(m)?'<span title="오늘 생일">🎂</span>':''}${a.booking_id?`<span title="예약 취소" style="margin-left:3px;color:#e0563a;font-size:10px" onclick="event.stopPropagation();cancelBooking('${a.uid}','${ev.event_id}','${a.booking_id}',this)">✕</span>`:''}<span class="ck">✓</span></div>`;});
   h+='</div>';
-  if(on){h+=`<div class="selbar"><span class="selcnt">${PICK.size}명 선택</span><button onclick="pickAll(${i})">전체</button><button onclick="pickNone()">해제</button><button class="pri" onclick="copyInsta()">@ 인스타복사</button><button class="pri" onclick="copyPhones()">번호복사</button><button onclick="smsOpen()">문자앱</button></div>`;}
+  if(on&&!DAYSEL){h+=`<div class="selbar"><span class="selcnt">${PICK.size}명 선택</span><button onclick="pickAll(${i})">전체</button><button onclick="pickNone()">해제</button><button class="pri" onclick="copyInsta()">@ 인스타복사</button><button class="pri" onclick="copyPhones()">번호복사</button><button onclick="smsOpen()">문자앱</button></div>`;}
   h+='</div>';});
  document.getElementById('app').innerHTML=h||'<div class="center">이 날은 수업이 없어요.</div>';
  if(doScroll!==false && sel===today && evs.length){
@@ -3215,7 +3223,15 @@ function renderDay(doScroll){const evs=(SESSIONS[sel]||[]).slice().sort((a,b)=>(
   evs.forEach((ev,i)=>{const pr=(ev.time||'0:0').split(':').map(Number);const em=pr[0]*60+pr[1];if(tg<0&&em+60>=nowM)tg=i;});
   if(tg<0)tg=evs.length-1;const el=document.getElementById('ev_'+tg);if(el)el.scrollIntoView({behavior:'smooth',block:'start'});
  }}
-function toggleSel(i){if(selEv===i){selEv=null;}else{selEv=i;PICK.clear();}renderDay(false);}
+function toggleSel(i){DAYSEL=false;if(selEv===i){selEv=null;}else{selEv=i;PICK.clear();}renderDay(false);}
+let DAYSEL=false;
+function dayselOn(){DAYSEL=true;selEv=null;PICK.clear();pickAllDay();}
+function dayselOff(){DAYSEL=false;PICK.clear();renderDay(false);}
+// 그날 모든 시간대의 참여자를 한번에 선택 (Drop in 같은 가상 항목은 제외)
+function pickAllDay(){
+ (SESSIONS[sel]||[]).forEach(ev=>ev.att.forEach(a=>{if(!a._dropin&&a.uid&&MEMBERS[a.uid])PICK.add(a.uid);}));
+ renderDay(false);
+}
 function pick(uid){if(PICK.has(uid))PICK.delete(uid);else PICK.add(uid);renderDay(false);}
 function pickAll(i){SESSIONS[sel][i].att.forEach(a=>PICK.add(a.uid));renderDay(false);}
 function pickNone(){PICK.clear();renderDay(false);}
