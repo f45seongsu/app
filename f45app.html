@@ -177,6 +177,7 @@ body{padding-bottom:76px}
 <div id="view-leads" class="view" style="display:none"></div>
 <div id="view-aiconfig" class="view" style="display:none"></div>
 <div id="view-report" class="view" style="display:none"></div>
+<div id="view-heatmap" class="view" style="display:none"></div>
 <div id="view-memberall" class="view" style="display:none"></div>
 <div id="view-dashboard" class="view" style="display:none"></div>
 
@@ -204,6 +205,7 @@ body{padding-bottom:76px}
   <h3 style="margin-top:10px">관리자</h3>
   <button onclick="if(checkAdminPw())showView('aiconfig')">⚙️ AI 프롬프트 설정</button>
   <button onclick="if(checkAdminPw())showView('report')">📊 리포트</button>
+  <button onclick="if(checkAdminPw())showView('heatmap')">🗓️ 출석 히트맵</button>
   <button onclick="if(checkAdminPw())showView('coach')">🔑 코치 링크 관리</button>
   <button onclick="if(checkAdminPw())showView('schedule')">📅 스케줄표 입력</button>
   <button onclick="if(checkAdminPw())makeCoachLink()">🔗 코치 링크 생성</button>
@@ -213,6 +215,7 @@ body{padding-bottom:76px}
 <div id="lightbox" onclick="this.style.display='none'"></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
 <script>
 // ===== 설정: 아래 두 개를 본인 프로젝트 값으로 =====
 const SUPABASE_URL = "https://mvgbwsbvngdnxdndwimb.supabase.co";
@@ -244,7 +247,7 @@ function toggleDrawer(){const d=document.getElementById('drawer');d.style.displa
 function showView(v){window.CURVIEW=v;VIEW=v;
  ['att','risk','expire','search','trial','pass','photo','birthday','tshirt','handoff','leads','report','coach','aiconfig','memberall','dashboard','schedule'].forEach(x=>{const el=document.getElementById('view-'+x);if(el)el.style.display=(x===v?'':'none');});
  document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('on',b.dataset.v===v));
- const T={att:'수업 출결',risk:'이탈 위험군',expire:'만료 임박',search:'회원 검색',trial:'트라이얼 현황',pass:'횟수권 관리',tshirt:'마일스톤 티셔츠',handoff:'인수인계 관리',leads:'리드 관리',photo:'사진 입력 (수업별)',birthday:'생일 예정자',report:'리포트',coach:'코치 링크 관리',memberall:'회원 전체보기',dashboard:'대시보드',schedule:'스케줄표 입력'};
+ const T={att:'수업 출결',risk:'이탈 위험군',expire:'만료 임박',search:'회원 검색',trial:'트라이얼 현황',pass:'횟수권 관리',tshirt:'마일스톤 티셔츠',handoff:'인수인계 관리',leads:'리드 관리',photo:'사진 입력 (수업별)',birthday:'생일 예정자',report:'리포트',heatmap:'출석 히트맵',coach:'코치 링크 관리',memberall:'회원 전체보기',dashboard:'대시보드',schedule:'스케줄표 입력'};
  document.getElementById('vtitle').textContent=T[v]||'';
  document.getElementById('sub').style.display=(v==='att'?'':'none');
  document.getElementById('drawer').style.display='none';
@@ -258,6 +261,7 @@ function showView(v){window.CURVIEW=v;VIEW=v;
  if(v==='schedule')renderScheduleInput();
  if(v==='birthday')renderBirthday();
  if(v==='report')renderReport();
+ if(v==='heatmap')renderHeatmap();
  if(v==='tshirt')renderTshirt();
  if(v==='handoff')renderHandoff();
  if(v==='leads')renderLeads();
@@ -525,7 +529,19 @@ async function logLeadAttempt(uid,statusText){
   await sb.from('people').update({care_memo:quickTxt}).eq('glofox_user_id',uid);
   if(MEMBERS[uid])MEMBERS[uid].care_memo=quickTxt;
   renderLeads();
+  // 글로폭스에도 연락 기록 남기기 - 실패해도 우리 저장은 이미 끝났으니 조용히 무시
+  syncLeadToGlofox(uid,{outcome:statusText,note:`[${author}] ${statusText}`});
  }catch(e){alert('오류: '+e.message);}
+}
+// 우리 CRM 리드 액션을 글로폭스에도 반영 (Edge Function 경유)
+// 실패해도 우리 쪽 저장엔 영향 없게 조용히 처리 - 글로폭스가 죽어도 우리 업무는 계속돼야 함
+async function syncLeadToGlofox(uid,payload){
+ try{
+  if(!uid)return;
+  const {data,error}=await sb.functions.invoke('glofox-lead-sync',{body:{user_id:uid,...payload}});
+  if(error){console.warn('글로폭스 연동 실패',error);return;}
+  console.log('글로폭스 연동 결과',data);
+ }catch(e){console.warn('글로폭스 연동 오류',e);}
 }
 function channelRow(inputId){
  const chans=['통화','대면','문자','카톡','DM'];
@@ -967,6 +983,87 @@ async function genAiReport(){
   if(error||!data?.text){box.innerHTML='<div class="center">AI 분석 실패 <button class="mini" onclick="genAiReport()">재시도</button></div>';return;}
   box.innerHTML=`<div class="carecard" style="border-color:#7a5aa0">${esc(data.text).replace(/\n/g,'<br>')}</div><button class="mini" style="margin-top:8px" onclick="genAiReport()">🔄 다시 생성</button>`;
  }catch(e){box.innerHTML='<div class="center">오류: '+esc(e.message)+'</div>';}
+}
+
+// ===== 출석 히트맵 (날짜×시간대별 출석인원, 색깔로 시각화 + 그래프 토글) =====
+let HEATDATA=null; // {rows:[{class_date,class_hhmm,cnt}], dates:[...], slots:[...]}
+let HEATMODE='grid'; // 'grid' | 'chart'
+let HEATCHART=null; // Chart.js 인스턴스
+
+async function ensureHeatData(){
+ if(HEATDATA)return HEATDATA;
+ const {data,error}=await sb.rpc('attendance_heatmap');
+ if(error) throw new Error(error.message);
+ const rows=data||[];
+ const dateSet=new Set(), slotSet=new Set();
+ rows.forEach(r=>{dateSet.add(r.class_date); slotSet.add(r.class_hhmm);});
+ const dates=[...dateSet].sort();
+ const slots=[...slotSet].sort();
+ const map={}; rows.forEach(r=>{map[r.class_date+'_'+r.class_hhmm]=Number(r.cnt);});
+ HEATDATA={rows,dates,slots,map};
+ return HEATDATA;
+}
+
+function heatColor(cnt,maxCnt){
+ if(!cnt) return '#1c2536'; // 아예 없음 - 어두운 배경색
+ const ratio=Math.min(1, cnt/(maxCnt||1));
+ // 연한 초록 -> 진한 초록 (GitHub 잔디 느낌)
+ if(ratio<0.25) return '#1f4d3a';
+ if(ratio<0.5) return '#2d7a52';
+ if(ratio<0.75) return '#3fae6c';
+ return '#4ee88a';
+}
+
+async function renderHeatmap(){
+ const box=document.getElementById('view-heatmap');
+ box.innerHTML='<div class="center">데이터를 불러오고 있어요…</div>';
+ let d;
+ try{ d=await ensureHeatData(); }
+ catch(e){ box.innerHTML='<div class="center">불러오기 실패: '+esc(e.message)+'<br><span style="font-size:12px;color:var(--dim)">attendance_heatmap 함수가 Supabase에 생성되어 있는지 확인해주세요</span></div>'; return; }
+
+ if(!d.dates.length){ box.innerHTML='<div class="center">출석 기록이 없어요.</div>'; return; }
+
+ const header=`<div class="listhead">🗓️ <b>출석 히트맵</b> · ${d.dates[0]} ~ ${d.dates[d.dates.length-1]} · 기록 있는 전체 기간
+  <div style="margin-top:8px">
+   <button class="mini ${HEATMODE==='grid'?'pri':''}" onclick="HEATMODE='grid';renderHeatmap()">🗓️ 달력 보기</button>
+   <button class="mini ${HEATMODE==='chart'?'pri':''}" onclick="HEATMODE='chart';renderHeatmap()">📈 그래프 보기</button>
+  </div>
+ </div>`;
+
+ if(HEATMODE==='chart'){
+  box.innerHTML=header+`<div style="padding:12px"><canvas id="heatChartCanvas" height="260"></canvas>
+   <div style="margin-top:16px;font-size:13px;color:var(--dim)">일자별 총 출석 인원 추이 (전체 시간대 합산)</div></div>`;
+  const totalsByDate={};
+  d.dates.forEach(dt=>{ totalsByDate[dt]=d.slots.reduce((s,sl)=>s+(d.map[dt+'_'+sl]||0),0); });
+  const ctx=document.getElementById('heatChartCanvas');
+  if(HEATCHART) HEATCHART.destroy();
+  HEATCHART=new Chart(ctx,{
+   type:'line',
+   data:{labels:d.dates.map(x=>x.slice(2).replace(/-/g,'.')),
+    datasets:[{label:'일 총 출석',data:d.dates.map(dt=>totalsByDate[dt]),
+     borderColor:'#4ee88a',backgroundColor:'rgba(78,232,138,0.15)',fill:true,tension:0.25,pointRadius:0}]},
+   options:{responsive:true,scales:{x:{ticks:{maxTicksLimit:12,color:'#9fb0c9'},grid:{color:'#22304a'}},y:{beginAtZero:true,ticks:{color:'#9fb0c9'},grid:{color:'#22304a'}}},
+    plugins:{legend:{display:false}}}
+  });
+  return;
+ }
+
+ // grid 모드
+ const maxCnt=Math.max(...d.rows.map(r=>Number(r.cnt)),1);
+ let grid='<div style="overflow-x:auto;padding:12px"><table style="border-collapse:separate;border-spacing:3px">';
+ grid+='<tr><td></td>'+d.dates.map(dt=>`<td style="font-size:9px;color:var(--dim);writing-mode:vertical-rl;text-align:left;padding-bottom:4px">${dt.slice(5).replace('-','/')}</td>`).join('')+'</tr>';
+ d.slots.forEach(sl=>{
+  grid+=`<tr><td style="font-size:11px;color:var(--dim);padding-right:6px;white-space:nowrap">${sl}</td>`;
+  d.dates.forEach(dt=>{
+   const cnt=d.map[dt+'_'+sl]||0;
+   const color=heatColor(cnt,maxCnt);
+   grid+=`<td title="${dt} ${sl} · ${cnt}명" style="width:11px;height:11px;background:${color};border-radius:2px"></td>`;
+  });
+  grid+='</tr>';
+ });
+ grid+='</table></div>';
+ grid+=`<div style="padding:0 12px 12px;font-size:12px;color:var(--dim)">색이 진할수록 출석 인원이 많았던 시간대예요. 칸에 마우스 올리면(모바일은 탭) 정확한 날짜·인원 확인 가능해요.</div>`;
+ box.innerHTML=header+grid;
 }
 
 async function ensureMileData(){
