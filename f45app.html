@@ -205,7 +205,7 @@ body{padding-bottom:76px}
   <h3 style="margin-top:10px">관리자</h3>
   <button onclick="if(checkAdminPw())showView('aiconfig')">⚙️ AI 프롬프트 설정</button>
   <button onclick="if(checkAdminPw())showView('report')">📊 리포트</button>
-  <button onclick="if(checkAdminPw())showView('heatmap')">🗓️ 출석 히트맵</button>
+  <button onclick="showView('heatmap')">🗓️ 출석 히트맵</button>
   <button onclick="if(checkAdminPw())showView('coach')">🔑 코치 링크 관리</button>
   <button onclick="if(checkAdminPw())showView('schedule')">📅 스케줄표 입력</button>
   <button onclick="if(checkAdminPw())makeCoachLink()">🔗 코치 링크 생성</button>
@@ -500,10 +500,16 @@ function recentMemosHtml(uid,n){
   +'</div>';
 }
 function careCard(uid,metaHtml,type,showGrid){const m=MEMBERS[uid]||{name:'?'};const bd=badgeOf(m);
+ const curStage=m.stage||'';
+ const stageBtn=(label,color)=>`<button class="mini" style="flex:1;padding:3px 4px;font-size:10px;${curStage===label?'border-color:'+color+';color:'+color+';font-weight:700':'opacity:.55'}" onclick="setLeadStage('${uid}','${label}')">${label}</button>`;
  const leadBtns = type==='lead' ? `<div style="display:flex;gap:6px;margin-top:8px">
    <button class="mini" style="flex:1;color:var(--grn)" onclick="logLeadAttempt('${uid}','연락함')">📞 연락함</button>
    <button class="mini" style="flex:1;color:#e0954f" onclick="logLeadAttempt('${uid}','응답없음')">🚫 응답없음</button>
    <button class="mini" style="flex:1;color:#5aa0e0" onclick="logLeadAttempt('${uid}','재방문예정')">📅 재방문예정</button>
+  </div>
+  <div style="display:flex;gap:4px;margin-top:6px;align-items:center">
+   <span style="font-size:10px;color:var(--dim);white-space:nowrap">상태</span>
+   ${stageBtn('리드','#5aa0e0')}${stageBtn('트라이얼','#4ee88a')}${stageBtn('콜드','#8892a6')}${stageBtn('투어','#e0954f')}
   </div>` : '';
  return `<div class="carecard">
    <div class="srow" style="border:0;padding:0;margin:0;background:none">
@@ -531,6 +537,21 @@ async function logLeadAttempt(uid,statusText){
   renderLeads();
   // 글로폭스에도 연락 기록 남기기 - 실패해도 우리 저장은 이미 끝났으니 조용히 무시
   syncLeadToGlofox(uid,{outcome:statusText,note:`[${author}] ${statusText}`});
+ }catch(e){alert('오류: '+e.message);}
+}
+// 리드 상태 변경 - 우리 DB + 글로폭스 양쪽에 반영
+async function setLeadStage(uid,stage){
+ if(!uid||!stage)return;
+ const m=MEMBERS[uid]; if(m&&m.stage===stage)return; // 이미 같은 상태면 무시
+ try{
+  const{error}=await sb.from('people').update({stage}).eq('glofox_user_id',uid);
+  if(error){alert('상태 변경 실패: '+error.message);return;}
+  if(m)m.stage=stage;
+  const author=COACH||ACTIVE_STAFF||'미지정';
+  const today2=new Date().toLocaleDateString('sv-SE',{timeZone:'Asia/Seoul'}).slice(5).replace('-','/');
+  await sb.from('memo_log').insert({glofox_user_id:uid,coach_name:author,content:`[${today2}] 상태 → ${stage}`});
+  renderLeads();
+  syncLeadToGlofox(uid,{stage,note:`[${author}] 상태 변경: ${stage}`});
  }catch(e){alert('오류: '+e.message);}
 }
 // 우리 CRM 리드 액션을 글로폭스에도 반영 (Edge Function 경유)
@@ -1019,7 +1040,18 @@ async function renderHeatmap(){
  box.innerHTML='<div class="center">데이터를 불러오고 있어요…</div>';
  let d;
  try{ d=await ensureHeatData(); }
- catch(e){ box.innerHTML='<div class="center">불러오기 실패: '+esc(e.message)+'<br><span style="font-size:12px;color:var(--dim)">attendance_heatmap 함수가 Supabase에 생성되어 있는지 확인해주세요</span></div>'; return; }
+ catch(e){
+  box.innerHTML=`<div style="padding:16px">
+   <div class="listhead">🗓️ <b>출석 히트맵</b></div>
+   <div class="carecard" style="border-color:#e0563a;margin-top:10px">
+    <b>불러오기 실패</b><br><span style="font-size:12px">${esc(e.message||String(e))}</span>
+    <div style="margin-top:10px;font-size:12px;color:var(--dim)">
+     대부분 <b>attendance_heatmap 함수가 아직 Supabase에 안 만들어진 경우</b>예요.<br>
+     Supabase → SQL Editor에서 attendance_heatmap.sql 실행했는지 확인해주세요.
+    </div>
+   </div></div>`;
+  return;
+ }
 
  if(!d.dates.length){ box.innerHTML='<div class="center">출석 기록이 없어요.</div>'; return; }
 
