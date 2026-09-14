@@ -362,6 +362,7 @@ async function saveTrialMemo(uid,val){
   if(val&&val.trim()){
    const author=COACH||ACTIVE_STAFF||'미지정';
    sb.from('memo_log').insert({glofox_user_id:uid,coach_name:author,content:val}).then(()=>{},()=>{});
+   syncLeadToGlofox(uid,{note:`[${author}] ${val}`});
   }
  }catch(e){alert('오류: '+e.message);}
 }
@@ -373,6 +374,7 @@ async function saveMemo(uid,val){
   if(val&&val.trim()){
    const author=COACH||ACTIVE_STAFF||'미지정';
    sb.from('memo_log').insert({glofox_user_id:uid,coach_name:author,content:val}).then(()=>{},()=>{});
+   syncLeadToGlofox(uid,{note:`[${author}] ${val}`});
   }
  }catch(e){alert('오류: '+e.message);}
 }
@@ -528,15 +530,20 @@ function careCard(uid,metaHtml,type,showGrid){const m=MEMBERS[uid]||{name:'?'};c
 async function logLeadAttempt(uid,statusText){
  const author=COACH||ACTIVE_STAFF||'미지정';
  const today2=new Date().toLocaleDateString('sv-SE',{timeZone:'Asia/Seoul'}).slice(5).replace('-','/');
- const quickTxt=statusText+' ('+today2+')';
+ // 메모칸 맨 앞에 붙은 채널 태그([문자]/[카톡] 등)를 읽어서 글로폭스에 정확한 방식으로 기록
+ let channel='';
+ const el=document.getElementById('care_'+uid);
+ const mm=el&&el.value?el.value.match(/^\[(통화|대면|문자|카톡|DM)\]/):null;
+ if(mm)channel=mm[1];
+ const quickTxt=(channel?'['+channel+'] ':'')+statusText+' ('+today2+')';
  try{
-  const{error}=await sb.from('memo_log').insert({glofox_user_id:uid,coach_name:author,content:`[${today2}] ${statusText}`});
+  const{error}=await sb.from('memo_log').insert({glofox_user_id:uid,coach_name:author,content:`[${today2}] ${channel?'['+channel+'] ':''}${statusText}`});
   if(error){alert('저장 실패: '+error.message);return;}
   await sb.from('people').update({care_memo:quickTxt}).eq('glofox_user_id',uid);
   if(MEMBERS[uid])MEMBERS[uid].care_memo=quickTxt;
   renderLeads();
   // 글로폭스에도 연락 기록 남기기 - 실패해도 우리 저장은 이미 끝났으니 조용히 무시
-  syncLeadToGlofox(uid,{outcome:statusText,note:`[${author}] ${statusText}`});
+  syncLeadToGlofox(uid,{outcome:statusText,channel,note:`[${author}] ${channel?channel+' · ':''}${statusText}`});
  }catch(e){alert('오류: '+e.message);}
 }
 // 리드 상태 변경 - 우리 DB + 글로폭스 양쪽에 반영
@@ -3521,6 +3528,7 @@ async function addComment(uid){
  try{
   const {error}=await sb.from('memo_log').insert({glofox_user_id:uid,coach_name:effectiveName||'미지정',content:val});
   if(error){alert('저장 실패: '+error.message);return;}
+  syncLeadToGlofox(uid,{note:`[${effectiveName||'미지정'}] ${val}`});
   el.value=''; open_(uid);
  }catch(e){alert('오류: '+e.message);}
 }
