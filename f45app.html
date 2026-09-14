@@ -3187,10 +3187,11 @@ function renderDay(doScroll){const evs=(SESSIONS[sel]||[]).slice().sort((a,b)=>(
  SESSIONS[sel]=evs; let h='';const nowTs=new Date();
  // 그날 전체(모든 시간대) 선택 바
  if(evs.length){
+  const noPhotoN=evs.reduce((s,ev)=>s+ev.att.filter(a=>!a._dropin&&a.uid&&MEMBERS[a.uid]&&!photoOf(MEMBERS[a.uid])).length,0);
   if(DAYSEL){
-   h+=`<div class="selbar" style="margin:8px 10px 4px"><span class="selcnt">📅 ${sel.slice(5).replace('-','/')} 전체 · ${PICK.size}명 선택</span><button onclick="pickAllDay()">전체</button><button onclick="pickNone()">해제</button><button class="pri" onclick="copyInsta()">@ 인스타복사</button><button class="pri" onclick="copyPhones()">번호복사</button><button onclick="smsOpen()">문자앱</button><button onclick="dayselOff()">완료</button></div>`;
+   h+=`<div class="selbar" style="margin:8px 10px 4px"><span class="selcnt">📅 ${sel.slice(5).replace('-','/')} 전체 · ${PICK.size}명 선택</span><button onclick="pickAllDay()">전체</button><button onclick="pickNoPhoto()">📷 사진없음</button><button onclick="pickNone()">해제</button><button class="pri" onclick="copyInsta()">@ 인스타복사</button><button class="pri" onclick="copyPhones()">번호복사</button><button onclick="smsOpen()">문자앱</button><button onclick="dayselOff()">완료</button></div>`;
   } else {
-   h+=`<div style="padding:8px 10px 2px"><button class="mini" onclick="dayselOn()">📅 이 날 참여자 전체선택</button></div>`;
+   h+=`<div style="padding:8px 10px 2px;display:flex;gap:6px;flex-wrap:wrap"><button class="mini" onclick="dayselOn()">📅 이 날 참여자 전체선택</button>${noPhotoN?`<button class="mini" style="color:#e0954f" onclick="dayselNoPhoto()">📷 사진없음 ${noPhotoN}명</button>`:''}</div>`;
   }
  }
  evs.forEach((ev,i)=>{
@@ -3220,7 +3221,7 @@ function renderDay(doScroll){const evs=(SESSIONS[sel]||[]).slice().sort((a,b)=>(
    const bc=buddyColors[a.uid];
    const bcStyle=bc?` style="background:${bc}"`:'';
    const bcTitle=bc?' title="🤝 함께 옴"':'';
-   h+=`<div class="chip s-${a._st} ${pk?'picked':''}"${bcStyle}${bcTitle} onclick="${click}" ${drop}>${avatar(m,a._st)}<span class="nmwrap"><span class="nm">${esc(m.name)}</span>${(()=>{const igShort=ig.length>8?ig.slice(0,8)+'..':ig;const igt=ig?`@${esc(igShort)}`:'';return igt?`<span class="submini">${igt}</span>`:'';})()}</span>${m.injury_note?'<span class="inj">⚠</span>':''}${isBdayToday(m)?'<span title="오늘 생일">🎂</span>':''}${a.booking_id?`<span title="예약 취소" style="margin-left:3px;color:#e0563a;font-size:10px" onclick="event.stopPropagation();cancelBooking('${a.uid}','${ev.event_id}','${a.booking_id}',this)">✕</span>`:''}<span class="ck">✓</span></div>`;});
+   h+=`<div class="chip s-${a._st} ${pk?'picked':''}"${bcStyle}${bcTitle} onclick="${click}" ${drop}>${avatar(m,a._st)}<span class="nmwrap"><span class="nm">${esc(m.name)}</span>${(()=>{const igShort=ig.length>8?ig.slice(0,8)+'..':ig;const igt=ig?`@${esc(igShort)}`:'';return igt?`<span class="submini">${igt}</span>`:'';})()}</span>${(!a._dropin&&!photoOf(m))?'<span title="사진 없음" style="margin-left:2px;font-size:10px;opacity:.85">📷</span>':''}${m.injury_note?'<span class="inj">⚠</span>':''}${isBdayToday(m)?'<span title="오늘 생일">🎂</span>':''}${a.booking_id?`<span title="예약 취소" style="margin-left:3px;color:#e0563a;font-size:10px" onclick="event.stopPropagation();cancelBooking('${a.uid}','${ev.event_id}','${a.booking_id}',this)">✕</span>`:''}<span class="ck">✓</span></div>`;});
   h+='</div>';
   if(on&&!DAYSEL){h+=`<div class="selbar"><span class="selcnt">${PICK.size}명 선택</span><button onclick="pickAll(${i})">전체</button><button onclick="pickNone()">해제</button><button class="pri" onclick="copyInsta()">@ 인스타복사</button><button class="pri" onclick="copyPhones()">번호복사</button><button onclick="smsOpen()">문자앱</button></div>`;}
   h+='</div>';});
@@ -3233,7 +3234,17 @@ function renderDay(doScroll){const evs=(SESSIONS[sel]||[]).slice().sort((a,b)=>(
 function toggleSel(i){DAYSEL=false;if(selEv===i){selEv=null;}else{selEv=i;PICK.clear();}renderDay(false);}
 let DAYSEL=false;
 function dayselOn(){DAYSEL=true;selEv=null;PICK.clear();pickAllDay();}
+function dayselNoPhoto(){DAYSEL=true;selEv=null;PICK.clear();pickNoPhoto();}
 function dayselOff(){DAYSEL=false;PICK.clear();renderDay(false);}
+// 그날 참여자 중 사진 없는 사람만 선택 (사진 찍어야 할 사람 추리기용)
+function pickNoPhoto(){
+ PICK.clear();
+ (SESSIONS[sel]||[]).forEach(ev=>ev.att.forEach(a=>{
+  const m=MEMBERS[a.uid];
+  if(!a._dropin&&a.uid&&m&&!photoOf(m))PICK.add(a.uid);
+ }));
+ renderDay(false);
+}
 // 그날 모든 시간대의 참여자를 한번에 선택 (Drop in 같은 가상 항목은 제외)
 function pickAllDay(){
  (SESSIONS[sel]||[]).forEach(ev=>ev.att.forEach(a=>{if(!a._dropin&&a.uid&&MEMBERS[a.uid])PICK.add(a.uid);}));
