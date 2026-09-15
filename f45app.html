@@ -178,6 +178,11 @@ body{padding-bottom:76px}
 <div id="view-aiconfig" class="view" style="display:none"></div>
 <div id="view-report" class="view" style="display:none"></div>
 <div id="view-heatmap" class="view" style="display:none"></div>
+<div id="view-tasks" class="view" style="display:none"></div>
+<div id="view-coachcash" class="view" style="display:none"></div>
+<div id="view-xlsxsched" class="view" style="display:none"></div>
+<div id="view-coachmgr" class="view" style="display:none"></div>
+<div id="view-coaches" class="view" style="display:none"></div>
 <div id="view-memberall" class="view" style="display:none"></div>
 <div id="view-dashboard" class="view" style="display:none"></div>
 
@@ -206,8 +211,13 @@ body{padding-bottom:76px}
   <button onclick="if(checkAdminPw())showView('aiconfig')">⚙️ AI 프롬프트 설정</button>
   <button onclick="if(checkAdminPw())showView('report')">📊 리포트</button>
   <button onclick="showView('heatmap')">🗓️ 출석 히트맵</button>
+  <button onclick="showView('tasks')">✅ 할 일 보드</button>
+  <button onclick="if(checkAdminPw())showView('coachcash')">💰 코치캐시 정산</button>
+  <button onclick="if(checkAdminPw())showView('coachmgr')">👥 코치 관리</button>
   <button onclick="if(checkAdminPw())showView('coach')">🔑 코치 링크 관리</button>
   <button onclick="if(checkAdminPw())showView('schedule')">📅 스케줄표 입력</button>
+  <button onclick="if(checkAdminPw())showView('xlsxsched')">📊 근무표 엑셀 업로드</button>
+  <button onclick="if(checkAdminPw())showView('coaches')">🧑‍🏫 코치 관리</button>
   <button onclick="if(checkAdminPw())makeCoachLink()">🔗 코치 링크 생성</button>
  </div>
 </div>
@@ -247,7 +257,7 @@ function toggleDrawer(){const d=document.getElementById('drawer');d.style.displa
 function showView(v){window.CURVIEW=v;VIEW=v;
  ['att','risk','expire','search','trial','pass','photo','birthday','tshirt','handoff','leads','report','coach','aiconfig','memberall','dashboard','schedule'].forEach(x=>{const el=document.getElementById('view-'+x);if(el)el.style.display=(x===v?'':'none');});
  document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('on',b.dataset.v===v));
- const T={att:'수업 출결',risk:'이탈 위험군',expire:'만료 임박',search:'회원 검색',trial:'트라이얼 현황',pass:'횟수권 관리',tshirt:'마일스톤 티셔츠',handoff:'인수인계 관리',leads:'리드 관리',photo:'사진 입력 (수업별)',birthday:'생일 예정자',report:'리포트',heatmap:'출석 히트맵',coach:'코치 링크 관리',memberall:'회원 전체보기',dashboard:'대시보드',schedule:'스케줄표 입력'};
+ const T={att:'수업 출결',risk:'이탈 위험군',expire:'만료 임박',search:'회원 검색',trial:'트라이얼 현황',pass:'횟수권 관리',tshirt:'마일스톤 티셔츠',handoff:'인수인계 관리',leads:'리드 관리',photo:'사진 입력 (수업별)',birthday:'생일 예정자',report:'리포트',heatmap:'출석 히트맵',tasks:'할 일 보드',coachcash:'코치캐시 정산',xlsxsched:'근무표 엑셀 업로드',coachmgr:'코치 관리',coaches:'코치 관리',coach:'코치 링크 관리',memberall:'회원 전체보기',dashboard:'대시보드',schedule:'스케줄표 입력'};
  document.getElementById('vtitle').textContent=T[v]||'';
  document.getElementById('sub').style.display=(v==='att'?'':'none');
  document.getElementById('drawer').style.display='none';
@@ -262,6 +272,11 @@ function showView(v){window.CURVIEW=v;VIEW=v;
  if(v==='birthday')renderBirthday();
  if(v==='report')renderReport();
  if(v==='heatmap')renderHeatmap();
+ if(v==='tasks')renderTasks();
+ if(v==='coachcash')renderCoachCash();
+ if(v==='xlsxsched')renderXlsxSched();
+ if(v==='coachmgr')renderCoachMgr();
+ if(v==='coaches')renderCoaches();
  if(v==='tshirt')renderTshirt();
  if(v==='handoff')renderHandoff();
  if(v==='leads')renderLeads();
@@ -1103,6 +1118,536 @@ async function renderHeatmap(){
  grid+='</table></div>';
  grid+=`<div style="padding:0 12px 12px;font-size:12px;color:var(--dim)">색이 진할수록 출석 인원이 많았던 시간대예요. 칸에 마우스 올리면(모바일은 탭) 정확한 날짜·인원 확인 가능해요.</div>`;
  box.innerHTML=header+grid;
+}
+
+// ===== 할 일 보드 (항목별 담당자 배정 + 항목별 댓글) =====
+let TASKS=[], TASK_COMMENTS={}, TASK_OPEN=null, TASK_SHOWDONE=false;
+
+async function renderTasks(){
+ const box=document.getElementById('view-tasks');
+ box.innerHTML='<div class="center">불러오는 중…</div>';
+ try{
+  const{data,error}=await sb.from('tasks').select('*').order('created_at',{ascending:false});
+  if(error)throw error;
+  TASKS=data||[];
+ }catch(e){
+  box.innerHTML=`<div style="padding:16px"><div class="carecard" style="border-color:#e0563a"><b>불러오기 실패</b><br><span style="font-size:12px">${esc(e.message||String(e))}</span><div style="margin-top:8px;font-size:12px;color:var(--dim)">tasks 테이블이 아직 없으면 tasks_setup.sql을 Supabase에서 먼저 실행해주세요.</div></div></div>`;
+  return;
+ }
+ const open=TASKS.filter(t=>t.status!=='완료');
+ const done=TASKS.filter(t=>t.status==='완료');
+ const staffOpts=['<option value="">담당자 미정</option>'].concat(STAFF_LIST.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`)).join('');
+
+ let h=`<div class="listhead">✅ <b>할 일 보드</b> · 진행중 ${open.length}건 · 완료 ${done.length}건</div>
+ <div style="padding:10px">
+  <div class="carecard">
+   <input id="tkTitle" placeholder="할 일 (예: 트레드밀 운영시간 상의)" style="width:100%;margin-bottom:6px">
+   <div style="display:flex;gap:6px;flex-wrap:wrap">
+    <select id="tkAssignee" style="flex:1;min-width:110px">${staffOpts}</select>
+    <input id="tkDue" type="date" style="flex:1;min-width:130px">
+   </div>
+   <input id="tkTags" placeholder="관련자 (쉼표로 구분, 예: 승헌,기찬)" style="width:100%;margin-top:6px">
+   <button class="mini pri" style="margin-top:8px" onclick="addTask()">+ 추가</button>
+  </div>
+ </div>`;
+
+ h+=open.map(t=>taskCard(t)).join('');
+ h+=`<div style="padding:10px"><button class="mini" onclick="TASK_SHOWDONE=!TASK_SHOWDONE;renderTasks()">${TASK_SHOWDONE?'완료 숨기기':`완료된 항목 보기 (${done.length})`}</button></div>`;
+ if(TASK_SHOWDONE) h+=done.map(t=>taskCard(t)).join('');
+ box.innerHTML=h;
+ if(TASK_OPEN) loadTaskComments(TASK_OPEN);
+}
+
+function taskCard(t){
+ const isDone=t.status==='완료';
+ const overdue=!isDone&&t.due_date&&t.due_date<today;
+ const meta=[t.assignee?'👤 '+esc(t.assignee):'👤 미정',
+   t.due_date?`<span style="color:${overdue?'var(--red)':'var(--dim)'}">📅 ${t.due_date.slice(5).replace('-','/')}${overdue?' 지남':''}</span>`:'',
+   t.tags?'🏷 '+esc(t.tags):''].filter(Boolean).join(' · ');
+ return `<div class="carecard" style="margin:0 10px 8px;${isDone?'opacity:.55':''}">
+  <div style="display:flex;align-items:flex-start;gap:8px">
+   <button class="mini" style="padding:2px 7px" onclick="toggleTask(${t.id},'${isDone?'진행중':'완료'}')">${isDone?'↩':'✓'}</button>
+   <div style="flex:1">
+    <div style="font-weight:700;${isDone?'text-decoration:line-through':''}">${esc(t.title)}</div>
+    <div style="font-size:11px;color:var(--dim);margin-top:3px">${meta}</div>
+   </div>
+   <button class="mini" style="padding:2px 6px;color:#e0563a" onclick="delTask(${t.id})">✕</button>
+  </div>
+  <div style="margin-top:7px;display:flex;gap:6px;flex-wrap:wrap">
+   <button class="mini" onclick="openTask(${t.id})">💬 이야기 ${TASK_OPEN===t.id?'닫기':'열기'}</button>
+   <select onchange="setTaskAssignee(${t.id},this.value)" style="font-size:11px">
+    <option value="">담당자 변경…</option>
+    ${STAFF_LIST.map(n=>`<option value="${esc(n)}"${t.assignee===n?' selected':''}>${esc(n)}</option>`).join('')}
+   </select>
+  </div>
+  ${TASK_OPEN===t.id?`<div id="tkc_${t.id}" style="margin-top:8px;border-top:1px solid var(--line);padding-top:8px"><div class="center" style="font-size:12px">댓글 불러오는 중…</div></div>`:''}
+ </div>`;
+}
+
+async function addTask(){
+ const title=(document.getElementById('tkTitle').value||'').trim();
+ if(!title){alert('할 일을 입력해주세요');return;}
+ const assignee=document.getElementById('tkAssignee').value||null;
+ const due=document.getElementById('tkDue').value||null;
+ const tags=(document.getElementById('tkTags').value||'').trim()||null;
+ try{
+  const{error}=await sb.from('tasks').insert({title,assignee,due_date:due,tags,created_by:COACH||ACTIVE_STAFF||'미지정'});
+  if(error){alert('추가 실패: '+error.message);return;}
+  renderTasks();
+ }catch(e){alert('오류: '+e.message);}
+}
+async function toggleTask(id,newStatus){
+ try{
+  const patch={status:newStatus,done_at:newStatus==='완료'?new Date().toISOString():null};
+  const{error}=await sb.from('tasks').update(patch).eq('id',id);
+  if(error){alert('변경 실패: '+error.message);return;}
+  renderTasks();
+ }catch(e){alert('오류: '+e.message);}
+}
+async function setTaskAssignee(id,name){
+ if(!name)return;
+ try{
+  const{error}=await sb.from('tasks').update({assignee:name}).eq('id',id);
+  if(error){alert('변경 실패: '+error.message);return;}
+  renderTasks();
+ }catch(e){alert('오류: '+e.message);}
+}
+async function delTask(id){
+ if(!confirm('이 할 일을 삭제할까요? (댓글도 같이 지워져요)'))return;
+ try{
+  const{error}=await sb.from('tasks').delete().eq('id',id);
+  if(error){alert('삭제 실패: '+error.message);return;}
+  if(TASK_OPEN===id)TASK_OPEN=null;
+  renderTasks();
+ }catch(e){alert('오류: '+e.message);}
+}
+function openTask(id){TASK_OPEN=(TASK_OPEN===id)?null:id;renderTasks();}
+
+async function loadTaskComments(id){
+ const box=document.getElementById('tkc_'+id); if(!box)return;
+ try{
+  const{data,error}=await sb.from('task_comments').select('*').eq('task_id',id).order('created_at');
+  if(error)throw error;
+  const rows=data||[];
+  const list=rows.length?rows.map(c=>`<div style="margin-bottom:6px"><b style="font-size:11px;color:#5aa0e0">${esc(c.author||'익명')}</b> <span style="font-size:10px;color:var(--dim)">${(c.created_at||'').slice(5,16).replace('T',' ')}</span><div style="font-size:13px">${esc(c.content).replace(/\n/g,'<br>')}</div></div>`).join('')
+   :'<div style="font-size:12px;color:var(--dim);margin-bottom:6px">아직 이야기가 없어요.</div>';
+  box.innerHTML=list+`<div style="display:flex;gap:5px;margin-top:6px">
+   <input id="tkcIn_${id}" placeholder="이야기 남기기…" style="flex:1" onkeydown="if(event.key==='Enter')addTaskComment(${id})">
+   <button class="mini pri" onclick="addTaskComment(${id})">등록</button></div>`;
+ }catch(e){ box.innerHTML='<div style="font-size:12px;color:var(--red)">댓글 로드 실패: '+esc(e.message)+'</div>'; }
+}
+async function addTaskComment(id){
+ const el=document.getElementById('tkcIn_'+id); if(!el)return;
+ const val=(el.value||'').trim(); if(!val)return;
+ try{
+  const{error}=await sb.from('task_comments').insert({task_id:id,author:COACH||ACTIVE_STAFF||'미지정',content:val});
+  if(error){alert('등록 실패: '+error.message);return;}
+  el.value='';
+  loadTaskComments(id);
+ }catch(e){alert('오류: '+e.message);}
+}
+
+// ===== 코치캐시 정산 (퀴즈 참여 적립 현황) =====
+async function renderCoachCash(){
+ const box=document.getElementById('view-coachcash');
+ box.innerHTML='<div class="center">불러오는 중…</div>';
+ let rows=[];
+ try{
+  const{data,error}=await sb.from('quiz_sessions').select('*').order('play_date',{ascending:false});
+  if(error)throw error;
+  rows=data||[];
+ }catch(e){
+  box.innerHTML=`<div style="padding:16px"><div class="carecard" style="border-color:#e0563a"><b>불러오기 실패</b><br><span style="font-size:12px">${esc(e.message||String(e))}</span><div style="margin-top:8px;font-size:12px;color:var(--dim)">quiz_setup.sql을 Supabase에서 먼저 실행해주세요.</div></div></div>`;
+  return;
+ }
+ if(!rows.length){box.innerHTML='<div class="center">아직 퀴즈 참여 기록이 없어요.</div>';return;}
+
+ // 이번 달 기준 집계
+ const ym=today.slice(0,7);
+ const byCoach={};
+ rows.forEach(r=>{
+  const c=r.coach_name||'미지정';
+  if(!byCoach[c])byCoach[c]={days:0,cash:0,accSum:0,mDays:0,mCash:0,last:''};
+  const b=byCoach[c];
+  b.days++; b.cash+=(r.reward||0); b.accSum+=(r.accuracy||0);
+  if((r.play_date||'').slice(0,7)===ym){b.mDays++; b.mCash+=(r.reward||0);}
+  if(!b.last||r.play_date>b.last)b.last=r.play_date;
+ });
+ const list=Object.entries(byCoach).sort((a,b)=>b[1].mCash-a[1].mCash);
+ const mTotal=list.reduce((s,[,b])=>s+b.mCash,0);
+ const aTotal=list.reduce((s,[,b])=>s+b.cash,0);
+
+ let h=`<div class="listhead">💰 <b>코치캐시 정산</b> · 이번 달(${ym}) 지급액 <b style="color:#ffd166">${mTotal.toLocaleString()}원</b> · 누적 ${aTotal.toLocaleString()}원</div>`;
+ h+=list.map(([c,b])=>`<div class="carecard" style="margin:0 10px 8px">
+   <div style="display:flex;align-items:center;gap:10px">
+    <div style="flex:1"><b style="font-size:15px">${esc(c)}</b>
+     <div style="font-size:11px;color:var(--dim);margin-top:3px">이번 달 ${b.mDays}일 참여 · 평균 정답률 ${Math.round(b.accSum/b.days)}% · 최근 ${b.last||'-'}</div></div>
+    <div style="text-align:right">
+     <div style="font-size:19px;font-weight:900;color:#ffd166">${b.mCash.toLocaleString()}원</div>
+     <div style="font-size:10px;color:var(--dim)">누적 ${b.cash.toLocaleString()}원</div>
+    </div>
+   </div></div>`).join('');
+
+ h+=`<div class="listhead" style="margin-top:10px">📋 최근 참여 기록</div>`;
+ h+=rows.slice(0,40).map(r=>`<div style="padding:7px 14px;border-bottom:1px solid var(--line);display:flex;gap:8px;font-size:13px;align-items:center">
+   <span style="color:var(--dim);font-size:11px;min-width:42px">${(r.play_date||'').slice(5)}</span>
+   <span style="flex:1"><b>${esc(r.coach_name||'-')}</b> <span style="color:var(--dim)">${r.correct}/${r.total} (${r.accuracy}%)</span></span>
+   <span style="color:#ffd166;font-weight:700">+${(r.reward||0).toLocaleString()}</span>
+  </div>`).join('');
+
+ box.innerHTML=h;
+}
+
+// ===== 근무표 엑셀 업로드 (년.월 시트 → coach_schedule) =====
+// 엑셀 격자 구조: 1열=시간, 월2~4 화5~7 수8~10 목11~13 금14~16, 토는 17열=시간/18~19열=코치
+// 주차 머리행(1열에 'N주차') 바로 다음 행에 날짜가 들어있음
+let XS_ROWS=[], XS_WARN=[], XS_SHEET='', XS_WB=null;
+
+const XS_DAYCOLS={'월':[2,3,4],'화':[5,6,7],'수':[8,9,10],'목':[11,12,13],'금':[14,15,16]};
+// 코치 이름처럼 2~4글자 한글이지만 사람이 아닌 단어들 - 이걸 안 막으면 '추석'이 코치로 등록됨
+const XS_NOTNAME=['추석','설날','신정','한글날','개천절','광복절','성탄절','어린이날','현충일','삼일절',
+ '대체','휴무','휴관','공휴일','불참','가능','연휴','명절','휴일','예정','미정','오픈','마감','보너스','대체휴일'];
+function xsIsCoachName(v){
+ if(!/^[가-힣]{2,4}$/.test(v))return false;
+ if(XS_NOTNAME.includes(v))return false;
+ if(/절$|날$|일$/.test(v)&&v.length<=3)return false;  // 개천절/한글날 류 방어
+ return true;
+}
+const XS_DATECOL={'월':2,'화':5,'수':8,'목':11,'금':14,'토':17};
+
+function renderXlsxSched(){
+ const box=document.getElementById('view-xlsxsched');
+ box.innerHTML=`<div style="padding:12px">
+  <div class="carecard">
+   <b>📊 근무표 엑셀 업로드</b>
+   <div style="font-size:12px;color:var(--dim);margin-top:6px;line-height:1.6">
+    쓰시던 근무표 파일을 그대로 올리면, 시트(년.월)를 골라서 미리보기 후 저장해요.<br>
+    <b style="color:var(--acc)">저장 전에 반드시 미리보기를 확인</b>해주세요. 이상한 칸은 주황색으로 표시돼요.
+   </div>
+   <input type="file" id="xsFile" accept=".xlsx,.xls" style="margin-top:10px" onchange="xsLoadFile(this)">
+  </div>
+  <div id="xsSheets" style="margin-top:10px"></div>
+  <div id="xsPreview" style="margin-top:10px"></div>
+ </div>`;
+}
+
+function xsLoadFile(input){
+ const f=input.files&&input.files[0]; if(!f)return;
+ const fr=new FileReader();
+ fr.onload=e=>{
+  try{
+   XS_WB=XLSX.read(new Uint8Array(e.target.result),{type:'array'});
+   const names=XS_WB.SheetNames.filter(n=>/^\d{2}[.]\d{1,2}$/.test(n.trim()));
+   const others=XS_WB.SheetNames.filter(n=>!/^\d{2}[.]\d{1,2}$/.test(n.trim()));
+   document.getElementById('xsSheets').innerHTML=
+    `<div class="carecard"><b>시트 선택</b>
+     <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
+      ${names.map(n=>`<button class="mini" onclick="xsParse('${esc(n)}')">${esc(n)}</button>`).join('')}
+     </div>
+     ${others.length?`<div style="font-size:11px;color:var(--dim);margin-top:8px">년.월 형식이 아닌 시트는 제외했어요: ${esc(others.join(', '))}</div>`:''}
+    </div>`;
+   document.getElementById('xsPreview').innerHTML='';
+  }catch(err){ alert('엑셀을 읽지 못했어요: '+err.message); }
+ };
+ fr.readAsArrayBuffer(f);
+}
+
+function xsCell(g,r,c){ const row=g[r]; const v=row?row[c-1]:null; return (v==null?'':String(v)).trim(); }
+function xsNum(s){ const m=String(s).match(/^(\d+)(\.0+)?$/); return m?parseInt(m[1],10):null; }
+// '900'->09:00, '1030'->10:30, '0700'->07:00
+function xsTime(raw){
+ const s=String(raw).replace(/\.0+$/,'').trim();
+ if(!/^\d{3,4}$/.test(s))return null;
+ const p=s.padStart(4,'0');
+ const hh=p.slice(0,2), mm=p.slice(2);
+ if(+hh>23||+mm>59)return null;
+ return hh+':'+mm;
+}
+
+function xsParse(sheetName){
+ XS_SHEET=sheetName; XS_ROWS=[]; XS_WARN=[];
+ const ws=XS_WB.Sheets[sheetName];
+ const g=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:null});
+ // 시트명 26.09 -> 2026-09
+ const mm=sheetName.trim().split('.');
+ const year=2000+parseInt(mm[0],10), month=parseInt(mm[1],10);
+ const ymd=d=>`${year}-${String(month).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+
+ for(let r=0;r<g.length;r++){
+  if(!/주차/.test(xsCell(g,r,1)))continue;
+  const dateRow=r+1;
+  // 이 주차 블록의 날짜들
+  const dates={};
+  Object.keys(XS_DATECOL).forEach(day=>{
+   const n=xsNum(xsCell(g,dateRow,XS_DATECOL[day]));
+   if(n&&n>=1&&n<=31)dates[day]=ymd(n);
+  });
+  // 다음 주차 머리행 전까지가 이 블록
+  let end=g.length;
+  for(let k=r+1;k<g.length;k++){ if(/주차/.test(xsCell(g,k,1))){end=k;break;} }
+
+  for(let rr=dateRow+1;rr<end;rr++){
+   const tLabel=xsCell(g,rr,1);
+   const wTime=xsTime(tLabel);
+   // 평일
+   if(wTime){
+    Object.keys(XS_DAYCOLS).forEach(day=>{
+     if(!dates[day])return;
+     XS_DAYCOLS[day].forEach(c=>{
+      const v=xsCell(g,rr,c); if(!v)return;
+      if(xsIsCoachName(v)) XS_ROWS.push({coach:v,date:dates[day],time:wTime});
+      else XS_WARN.push({date:dates[day],time:wTime,text:v,why:'코치 이름이 아닌 것 같음'});
+     });
+    });
+   }
+   // 토요일 (17열에 시간, 18~19열에 코치)
+   if(dates['토']){
+    const sTime=xsTime(xsCell(g,rr,17));
+    if(sTime){ XS_SATTIME=sTime; }
+    const cur=(typeof XS_SATTIME!=='undefined')?XS_SATTIME:null;
+    [18,19].forEach(c=>{
+     const v=xsCell(g,rr,c); if(!v)return;
+     if(!cur){ XS_WARN.push({date:dates['토'],time:'?',text:v,why:'토요일 시간을 못 찾음'}); return; }
+     if(xsIsCoachName(v)) XS_ROWS.push({coach:v,date:dates['토'],time:cur});
+     else XS_WARN.push({date:dates['토'],time:cur,text:v,why:'코치 이름이 아닌 것 같음'});
+    });
+   }
+  }
+  XS_SATTIME=undefined;
+ }
+ // 중복 제거
+ const seen=new Set();
+ XS_ROWS=XS_ROWS.filter(x=>{const k=x.coach+'|'+x.date+'|'+x.time;if(seen.has(k))return false;seen.add(k);return true;});
+ XS_ROWS.sort((a,b)=>(a.date+a.time+a.coach).localeCompare(b.date+b.time+b.coach));
+ xsPreview();
+}
+let XS_SATTIME;
+
+function xsPreview(){
+ const box=document.getElementById('xsPreview');
+ if(!XS_ROWS.length){ box.innerHTML='<div class="carecard">읽어낸 근무 기록이 없어요. 시트를 다시 확인해주세요.</div>'; return; }
+ const byDate={};
+ XS_ROWS.forEach(x=>{ (byDate[x.date]=byDate[x.date]||[]).push(x); });
+ const dates=Object.keys(byDate).sort();
+ const coaches={}; XS_ROWS.forEach(x=>coaches[x.coach]=(coaches[x.coach]||0)+1);
+
+ let h=`<div class="carecard"><b>${esc(XS_SHEET)} 미리보기</b>
+  <div style="font-size:12px;color:var(--dim);margin-top:4px">근무 ${XS_ROWS.length}건 · 날짜 ${dates.length}일 · 코치 ${Object.keys(coaches).length}명</div>
+  <div style="margin-top:8px;font-size:12px">${Object.entries(coaches).sort((a,b)=>b[1]-a[1]).map(([c,n])=>`<span class="pill" style="display:inline-block;background:#16223a;border:1px solid var(--line);border-radius:99px;padding:3px 10px;margin:2px">${esc(c)} ${n}타임</span>`).join('')}</div>
+ </div>`;
+
+ if(XS_WARN.length){
+  h+=`<div class="carecard" style="border-color:#e0954f;margin-top:8px"><b style="color:#e0954f">⚠ 확인 필요 ${XS_WARN.length}건</b>
+   <div style="font-size:12px;color:var(--dim);margin-top:4px">아래 칸은 자동 저장되지 않아요. 공휴일·특이사항은 직접 입력해주세요.</div>
+   <div style="margin-top:6px;font-size:12px;max-height:160px;overflow:auto">
+   ${XS_WARN.slice(0,50).map((w,wi)=>`<div style="padding:4px 0;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:6px">
+     <span style="flex:1">${esc(w.date)} ${esc(w.time)} · <b>${esc(w.text)}</b> <span style="color:var(--dim)">(${esc(w.why)})</span></span>
+     <button class="mini" style="padding:1px 7px;font-size:10px" onclick="xsFixWarn(${wi})">근무로 추가</button>
+    </div>`).join('')}
+   </div></div>`;
+ }
+
+ h+=`<div style="margin-top:10px;max-height:340px;overflow:auto">`
+  +dates.map(d=>{
+   const items=byDate[d];
+   const byTime={}; items.forEach(x=>(byTime[x.time]=byTime[x.time]||[]).push(x.coach));
+   const dow=['일','월','화','수','목','금','토'][new Date(d+'T00:00:00').getDay()];
+   const isSat=dow==='토';
+   return `<div class="carecard" style="margin-bottom:6px;padding:8px 10px">
+    <div style="display:flex;align-items:center;gap:6px">
+     <b style="font-size:13px">${d.slice(5).replace('-','/')} (${dow})</b>
+     ${isSat?'<span style="font-size:10px;color:#ffd166">토요일 · 보너스 1타임 별도</span>':''}
+     <button class="mini" style="margin-left:auto;padding:1px 7px;font-size:10px" onclick="xsAddRow('${d}')">+ 수업 추가</button>
+    </div>
+    <div style="font-size:12px;margin-top:5px;display:flex;flex-wrap:wrap;gap:4px">
+     ${Object.keys(byTime).sort().map(t=>byTime[t].map(c=>
+       `<span style="background:#16223a;border:1px solid var(--line);border-radius:8px;padding:2px 7px">${t} ${esc(c)}<span style="color:#e0563a;margin-left:5px;cursor:pointer" onclick="xsDelRow('${d}','${t}','${esc(c)}')">✕</span></span>`
+      ).join('')).join('')}
+    </div></div>`;
+  }).join('')
+  +`</div>
+  <button class="btn-save" style="margin-top:10px;width:100%;padding:12px;border-radius:12px;border:none;background:#3f7fd4;color:#fff;font-weight:800;font-size:15px" onclick="xsSave()">이 내용으로 저장하기 (${XS_ROWS.length}건)</button>`;
+ box.innerHTML=h;
+}
+
+// 미리보기에서 직접 수업 추가 (촬영 특강처럼 갑자기 생긴 수업용)
+function xsAddRow(date){
+ const coach=prompt(`${date}에 추가할 코치 이름을 입력해주세요`,'');
+ if(!coach||!coach.trim())return;
+ const t=prompt('시간을 입력해주세요 (예: 1400 또는 14:00)','1400');
+ if(!t)return;
+ const time=xsTime(t.replace(':',''))||(/^\d{1,2}:\d{2}$/.test(t.trim())?t.trim():null);
+ if(!time){alert('시간 형식을 알아볼 수 없어요. 1400 또는 14:00 형태로 입력해주세요.');return;}
+ const k=coach.trim();
+ if(XS_ROWS.some(x=>x.coach===k&&x.date===date&&x.time===time)){alert('이미 있는 근무예요.');return;}
+ XS_ROWS.push({coach:k,date,time});
+ XS_ROWS.sort((a,b)=>(a.date+a.time+a.coach).localeCompare(b.date+b.time+b.coach));
+ xsPreview();
+}
+function xsDelRow(date,time,coach){
+ XS_ROWS=XS_ROWS.filter(x=>!(x.date===date&&x.time===time&&x.coach===coach));
+ xsPreview();
+}
+// 경고로 빠진 칸을 근무로 되살리기
+function xsFixWarn(i){
+ const w=XS_WARN[i]; if(!w)return;
+ // 칸 내용이 시간처럼 생겼으면(예: 1400) 그 시간으로, 아니면 원래 행 시간으로
+ const maybeTime=xsTime(String(w.text).replace(/\D/g,''));
+ const defTime=maybeTime||(w.time!=='?'?w.time:'14:00');
+ const coach=prompt(`${w.date} · 원본 칸 내용: "${w.text}"\n\n어느 코치의 근무인가요?`,'');
+ if(!coach||!coach.trim())return;
+ const t=prompt('시간을 확인해주세요',defTime);
+ if(!t)return;
+ const time=/^\d{1,2}:\d{2}$/.test(t.trim())?t.trim():xsTime(t.replace(/\D/g,''));
+ if(!time){alert('시간 형식을 알아볼 수 없어요.');return;}
+ XS_ROWS.push({coach:coach.trim(),date:w.date,time});
+ XS_WARN.splice(i,1);
+ XS_ROWS.sort((a,b)=>(a.date+a.time+a.coach).localeCompare(b.date+b.time+b.coach));
+ xsPreview();
+}
+async function xsSave(){
+ if(!XS_ROWS.length)return;
+ const dates=[...new Set(XS_ROWS.map(x=>x.date))].sort();
+ if(!confirm(`${XS_SHEET} 근무표를 저장할까요?\n\n기간: ${dates[0]} ~ ${dates[dates.length-1]}\n건수: ${XS_ROWS.length}건\n\n같은 기간에 이미 저장된 근무 기록은 이 내용으로 교체돼요.`))return;
+ const btn=document.querySelector('.btn-save'); if(btn){btn.disabled=true;btn.textContent='저장 중…';}
+ try{
+  // 같은 기간 기존 기록 삭제 후 새로 넣기 (중복 방지)
+  const{error:delErr}=await sb.from('coach_schedule').delete()
+   .gte('work_date',dates[0]).lte('work_date',dates[dates.length-1]);
+  if(delErr)throw delErr;
+  for(let i=0;i<XS_ROWS.length;i+=200){
+   const chunk=XS_ROWS.slice(i,i+200).map(x=>({coach_name:x.coach,work_date:x.date,work_time:x.time}));
+   const{error}=await sb.from('coach_schedule').insert(chunk);
+   if(error)throw error;
+   if(btn)btn.textContent=`저장 중… ${Math.min(i+200,XS_ROWS.length)}/${XS_ROWS.length}`;
+  }
+  alert(`저장 완료! ${XS_ROWS.length}건이 등록됐어요.`);
+  if(btn){btn.disabled=false;btn.textContent='저장 완료 ✓';}
+ }catch(e){
+  alert('저장 실패: '+e.message);
+  if(btn){btn.disabled=false;btn.textContent='다시 저장 시도';}
+ }
+}
+
+// ===== 코치 관리 (연락처 · 근무 집계 · 전용 링크 문자 발송) =====
+const QUIZ_URL='https://f45seongsu.github.io/coachquiz.html';
+let CM_YM='';
+
+async function renderCoachMgr(){
+ const box=document.getElementById('view-coachmgr');
+ box.innerHTML='<div class="center">불러오는 중…</div>';
+ if(!CM_YM)CM_YM=today.slice(0,7);
+ const from=CM_YM+'-01';
+ const to=CM_YM+'-31';
+ let staff=[],links=[],sched=[],quiz=[];
+ try{
+  const r=await Promise.all([
+   sb.from('staff_list').select('id,name,phone,active').order('active',{ascending:false}).order('created_at'),
+   sb.from('coach_links').select('coach_name,token,active'),
+   sb.from('coach_schedule').select('coach_name,work_date,work_time').gte('work_date',from).lte('work_date',to),
+   sb.from('quiz_sessions').select('coach_name,reward,play_date').gte('play_date',from).lte('play_date',to)
+  ]);
+  if(r[0].error)throw r[0].error;
+  staff=r[0].data||[]; links=r[1].data||[]; sched=r[2].data||[]; quiz=r[3].data||[];
+ }catch(e){
+  box.innerHTML=`<div style="padding:16px"><div class="carecard" style="border-color:#e0563a"><b>불러오기 실패</b><br><span style="font-size:12px">${esc(e.message||String(e))}</span><div style="margin-top:8px;font-size:12px;color:var(--dim)">staff_phone.sql을 Supabase에서 먼저 실행하셨는지 확인해주세요.</div></div></div>`;
+  return;
+ }
+
+ const tokenOf={}; links.forEach(l=>{ if(l.active)tokenOf[l.coach_name]=l.token; });
+ const stat={};
+ sched.forEach(s=>{
+  const c=s.coach_name; if(!stat[c])stat[c]={times:0,days:new Set(),sat:0};
+  stat[c].times++; stat[c].days.add(s.work_date);
+  if(new Date(s.work_date+'T00:00:00').getDay()===6)stat[c].sat++;
+ });
+ const cash={}; quiz.forEach(q=>{cash[q.coach_name]=(cash[q.coach_name]||0)+(q.reward||0);});
+
+ const act=staff.filter(s=>s.active), inact=staff.filter(s=>!s.active);
+ const totalTimes=Object.values(stat).reduce((a,b)=>a+b.times,0);
+
+ let h=`<div class="listhead">👥 <b>코치 관리</b>
+  <div style="margin-top:8px;display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+   <input type="month" value="${CM_YM}" onchange="CM_YM=this.value;renderCoachMgr()" style="font-size:13px">
+   <span style="font-size:12px;color:var(--dim)">총 ${totalTimes}타임 · 재직 ${act.length}명</span>
+   <button class="mini" onclick="cmSmsAll()">📱 전체에게 퀴즈 링크 발송</button>
+  </div></div>`;
+
+ h+=act.map(s=>cmCard(s,stat[s.name],cash[s.name]||0,tokenOf[s.name])).join('');
+ if(inact.length){
+  h+=`<div class="listhead" style="margin-top:10px">퇴사/비활성 ${inact.length}명</div>`;
+  h+=inact.map(s=>cmCard(s,stat[s.name],cash[s.name]||0,tokenOf[s.name])).join('');
+ }
+ box.innerHTML=h;
+}
+
+function cmCard(s,st,cash,token){
+ const times=st?st.times:0, days=st?st.days.size:0, sat=st?st.sat:0;
+ const link=token?`${QUIZ_URL}?t=${token}`:'';
+ return `<div class="carecard" style="margin:0 10px 8px;${s.active?'':'opacity:.55'}">
+  <div style="display:flex;align-items:center;gap:8px">
+   <b style="font-size:15px">${esc(s.name)}</b>
+   ${!s.active?'<span style="font-size:10px;color:var(--dim)">비활성</span>':''}
+   <div style="margin-left:auto;text-align:right">
+    <div style="font-weight:900;font-size:17px">${times}<span style="font-size:11px;font-weight:400;color:var(--dim)">타임</span></div>
+    <div style="font-size:10px;color:var(--dim)">${days}일 근무${sat?` · 토 ${sat}회`:''}</div>
+   </div>
+  </div>
+  <div style="display:flex;gap:6px;margin-top:7px;align-items:center">
+   <input id="cmph_${s.id}" value="${esc(s.phone||'')}" placeholder="연락처 (010-0000-0000)" style="flex:1;font-size:13px" onchange="cmSavePhone(${s.id},this.value)">
+   ${s.phone?`<a class="mini" href="tel:${esc((s.phone||'').replace(/[^0-9]/g,''))}" style="text-decoration:none">📞</a>`:''}
+  </div>
+  <div style="display:flex;gap:6px;margin-top:7px;flex-wrap:wrap;align-items:center">
+   <span style="font-size:12px;color:#ffd166">코치캐시 ${cash.toLocaleString()}원</span>
+   ${link?`<button class="mini" style="margin-left:auto" onclick="cmCopy('${link}')">🔗 링크복사</button>
+      <button class="mini" onclick="cmSmsOne('${esc(s.name)}','${esc(s.phone||'')}','${link}')">📱 문자</button>`
+     :`<span style="margin-left:auto;font-size:11px;color:#e0954f">코치 링크 없음 → 🔑 코치 링크 관리에서 먼저 생성</span>`}
+  </div>
+ </div>`;
+}
+
+async function cmSavePhone(id,val){
+ try{
+  const{error}=await sb.from('staff_list').update({phone:val.trim()||null}).eq('id',id);
+  if(error){alert('저장 실패: '+error.message);return;}
+ }catch(e){alert('오류: '+e.message);}
+}
+function cmCopy(link){
+ navigator.clipboard.writeText(link).then(()=>alert('링크를 복사했어요!'),()=>prompt('복사해서 쓰세요',link));
+}
+function cmMsg(name,link){
+ return `${name} 코치님, 오늘도 고생 많으셨습니다!\n퇴근길에 잠깐, 오늘 수업 오신 회원분들 이름 맞히기 어떠세요?\n참여만 해도 코치캐시가 쌓입니다.\n${link}\n- F45 성수`;
+}
+async function cmSmsOne(name,phone,link){
+ if(!phone){alert('연락처를 먼저 입력해주세요.');return;}
+ const msg=cmMsg(name,link);
+ if(!confirm(`${name} 코치님(${phone})에게 보낼까요?\n\n${msg}`))return;
+ try{
+  const{data,error}=await sb.functions.invoke('aligo-sms',{body:{recipients:[{phone,msg,name}]}});
+  if(error){alert('발송 실패: '+error.message);return;}
+  alert(data&&data.result_code=='1'?'발송 완료!':'응답: '+JSON.stringify(data));
+ }catch(e){alert('오류: '+e.message);}
+}
+async function cmSmsAll(){
+ let staff=[],links=[];
+ try{
+  const r=await Promise.all([
+   sb.from('staff_list').select('name,phone').eq('active',true),
+   sb.from('coach_links').select('coach_name,token,active')
+  ]);
+  staff=r[0].data||[]; links=r[1].data||[];
+ }catch(e){alert('오류: '+e.message);return;}
+ const tokenOf={}; links.forEach(l=>{if(l.active)tokenOf[l.coach_name]=l.token;});
+ const targets=staff.filter(s=>s.phone&&tokenOf[s.name]);
+ const skipped=staff.filter(s=>!s.phone||!tokenOf[s.name]).map(s=>s.name);
+ if(!targets.length){alert('보낼 대상이 없어요. 연락처와 코치 링크가 모두 있어야 해요.');return;}
+ if(!confirm(`${targets.length}명에게 퀴즈 링크를 보낼까요?${skipped.length?`\n\n제외됨(연락처/링크 없음): ${skipped.join(', ')}`:''}`))return;
+ const recipients=targets.map(s=>({phone:s.phone,name:s.name,msg:cmMsg(s.name,`${QUIZ_URL}?t=${tokenOf[s.name]}`)}));
+ try{
+  const{data,error}=await sb.functions.invoke('aligo-sms',{body:{recipients}});
+  if(error){alert('발송 실패: '+error.message);return;}
+  alert('발송 요청 완료! 응답: '+JSON.stringify(data));
+ }catch(e){alert('오류: '+e.message);}
 }
 
 async function ensureMileData(){
