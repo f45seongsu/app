@@ -1555,7 +1555,10 @@ async function renderCoachMgr(){
   return;
  }
 
- const tokenOf={}; links.forEach(l=>{ if(l.active)tokenOf[l.coach_name]=l.token; });
+ // 예전에 만든 링크가 비활성이거나 이름에 공백 차이가 있어도 찾아내도록 (토큰은 절대 새로 만들지 않음)
+ const norm=s=>String(s||'').replace(/\s/g,'').trim();
+ const tokenOf={}, linkActive={};
+ links.forEach(l=>{ const k=norm(l.coach_name); if(!tokenOf[k]||l.active){ tokenOf[k]=l.token; linkActive[k]=!!l.active; } });
  // 코치별 활동(링크 접속) 집계
  const actBy={}; act.forEach(a=>{ if(!actBy[a.token])actBy[a.token]={n:0,last:a.created_at}; actBy[a.token].n++; });
  const stat={};
@@ -1566,6 +1569,10 @@ async function renderCoachMgr(){
  });
  const cash={}; quiz.forEach(q=>{cash[q.coach_name]=(cash[q.coach_name]||0)+(q.reward||0);});
 
+ // staff_list에 없는데 예전 링크만 있는 코치도 목록에 보이도록 합침
+ const known=new Set(staff.map(s=>norm(s.name)));
+ links.forEach(l=>{ const k=norm(l.coach_name);
+  if(k&&!known.has(k)){ known.add(k); staff.push({id:null,name:l.coach_name,phone:null,active:false,_linkOnly:true}); } });
  const actv=staff.filter(s=>s.active), inact=staff.filter(s=>!s.active);
  const totalTimes=Object.values(stat).reduce((a,b)=>a+b.times,0);
 
@@ -1577,10 +1584,10 @@ async function renderCoachMgr(){
    <button class="mini" onclick="cmSmsAll()">📱 전체에게 퀴즈 링크 발송</button>
   </div></div>`;
 
- h+=actv.map(s=>cmCard(s,stat[s.name],cash[s.name]||0,tokenOf[s.name],actBy)).join('');
+ h+=actv.map(s=>cmCard(s,stat[s.name],cash[s.name]||0,tokenOf[norm(s.name)],actBy)).join('');
  if(inact.length){
   h+=`<div class="listhead" style="margin-top:10px">퇴사/비활성 ${inact.length}명</div>`;
-  h+=inact.map(s=>cmCard(s,stat[s.name],cash[s.name]||0,tokenOf[s.name],actBy)).join('');
+  h+=inact.map(s=>cmCard(s,stat[s.name],cash[s.name]||0,tokenOf[norm(s.name)],actBy)).join('');
  }
  box.innerHTML=h;
 }
@@ -1608,7 +1615,7 @@ function cmCard(s,st,cash,token,actBy){
    ${link?`<button class="mini" onclick="cmCopy('${link}')">🔗 링크복사</button>
       <button class="mini" onclick="cmSmsOne('${esc(s.name)}','${esc(s.phone||'')}','${link}')">📱 문자</button>`
      :`<button class="mini" style="color:#e0954f" onclick="cmMakeLink('${esc(s.name)}')">🔑 링크 생성</button>`}
-   <button class="mini" style="margin-left:auto;${s.active?'color:#e0954f':'color:var(--grn)'}" onclick="cmToggleActive(${s.id},${s.active?'false':'true'},'${esc(s.name)}')">${s.active?'퇴사 처리':'복귀 처리'}</button>
+   <button class="mini" style="margin-left:auto;${s.active?'color:#e0954f':'color:var(--grn)'}" onclick="cmToggleActive(${s.id||'null'},${s.active?'false':'true'},'${esc(s.name)}')">${s.active?'퇴사 처리':'복귀 처리'}</button>
   </div>
  </div>`;
 }
@@ -1656,8 +1663,12 @@ async function cmToggleActive(id,toActive,name){
    :`${name} 코치를 퇴사 처리할까요?\n\n명단에서 숨겨지고 전용 링크도 막혀요.\n과거 근무·코치캐시 기록은 그대로 남아요.`;
  if(!confirm(msg))return;
  try{
-  const{error}=await sb.from('staff_list').update({active:toActive}).eq('id',id);
-  if(error){alert('변경 실패: '+error.message);return;}
+  if(id){
+   const{error}=await sb.from('staff_list').update({active:toActive}).eq('id',id);
+   if(error){alert('변경 실패: '+error.message);return;}
+  }else if(toActive){
+   await sb.from('staff_list').insert({name,active:true});
+  }
   await sb.from('coach_links').update({active:toActive}).eq('coach_name',name);
   await loadStaffList();
   renderCoachMgr();
