@@ -115,7 +115,7 @@ body{
   <div style="margin:18px 0">
    <span class="pill">참여만 해도 <b style="color:var(--gold)">1,000원</b></span>
    <span class="pill">60% 이상 <b style="color:var(--gold)">2,000원</b></span>
-   <span class="pill">만점 <b style="color:var(--gold)">3,000원</b></span>
+   <span class="pill">만점 <b style="color:var(--gold)">3,000원</b></span><div style="font-size:12px;color:var(--dim);margin-top:8px">문제당 5초 · 시간 지나면 오답 처리돼요</div>
   </div>
   <div id="startMsg" class="sub" style="margin-bottom:16px">준비 중…</div>
   <button id="startBtn" class="btn gold" style="display:none" onclick="startGame()">시작하기</button>
@@ -129,6 +129,7 @@ body{
   <div id="streak"></div>
   <div id="bar"><div id="barfill"></div></div>
   <div id="qn"></div>
+  <div id="tmr" style="font-size:15px;font-weight:900;min-width:30px;text-align:right"></div>
  </div>
  <div id="stage"></div>
  <div id="choices"></div>
@@ -153,9 +154,12 @@ body{
 <script>
 const SB_URL='https://mvgbwsbvngdnxdndwimb.supabase.co';
 const SB_KEY='sb_publishable_ZRHS4-UR7Q07Fmtc_P-19g_fVlIc85X';
-const sb=supabase.createClient(SB_URL,SB_KEY);
+// 본앱(f45app)과 동일하게 x-app-token 헤더를 붙여야 RLS를 통과함.
+// 이게 없으면 에러 없이 조용히 0건이 돌아와서 "사진 등록된 회원 0명"으로 보임.
+const APP_TOKEN=new URLSearchParams(location.search).get('key')||'f45sujong-2026';
+const sb=supabase.createClient(SB_URL,SB_KEY,{global:{headers:{'x-app-token':APP_TOKEN}}});
 
-const QN=10;                  // 문항 수
+let QN=10;                  // 문항 수 (시작화면에서 선택)
 let TOKEN='',COACH='';
 let POOL=[],ALLNAMES=[],SCOPE='',QUIZ=[],IDX=0,CORRECT=0,STREAK=0,BEST=0,WRONGS=[],LOCK=false;
 
@@ -168,6 +172,26 @@ function photoOf(m){return m.photo_url||m.glofox_photo||'';}
 function todayKst(){return new Date().toLocaleDateString('sv-SE',{timeZone:'Asia/Seoul'});}
 
 // ===== 초기화 =====
+// Supabase는 한 번에 최대 1000행만 주므로 나눠서 전부 받아옴 (이거 없으면 앞쪽 1000명만 읽혀서 사진 있는 회원이 0명으로 나옴)
+let DIAG={total:0,withPhoto:0,named:0};
+async function fetchPhotoMembers(){
+ // 본앱(loadData)과 동일하게 people 전체를 1000행씩 나눠 받아옴 (서버측 필터는 쓰지 않음)
+ let out=[],from=0;
+ while(true){
+  const{data,error}=await sb.from('people').select('*').range(from,from+999);
+  if(error)throw error;
+  out=out.concat(data||[]);
+  if(!data||data.length<1000)break;
+  from+=1000;
+ }
+ DIAG.total=out.length;
+ const mapped=out.map(m=>({uid:m.glofox_user_id,name:(m.name_override||m.name||'').trim(),photo:photoOf(m),stage:m.stage}));
+ DIAG.withPhoto=mapped.filter(m=>m.photo).length;
+ const res=mapped.filter(m=>m.uid&&m.name&&m.photo&&m.stage!=='리드');
+ DIAG.named=res.length;
+ return res;
+}
+
 (async function init(){
  TOKEN=new URLSearchParams(location.search).get('t')||'';
  if(!TOKEN){$('startMsg').textContent='링크가 올바르지 않아요. 관리자에게 문의해주세요.';return;}
@@ -202,15 +226,8 @@ function todayKst(){return new Date().toLocaleDateString('sv-SE',{timeZone:'Asia
 
  // 회원 정보 불러오기
  let all=[];
- try{
-  const{data,error}=await sb.from('people')
-   .select('glofox_user_id,name,name_override,photo_url,glofox_photo,stage')
-   .not('glofox_user_id','is',null).limit(2000);
-  if(error)throw error;
-  all=(data||[])
-   .map(m=>({uid:m.glofox_user_id,name:(m.name_override||m.name||'').trim(),photo:photoOf(m),stage:m.stage}))
-   .filter(m=>m.name&&m.photo&&m.stage!=='리드');
- }catch(e){$('startMsg').textContent='회원 정보를 못 불러왔어요: '+e.message;return;}
+ try{ all=await fetchPhotoMembers(); }
+ catch(e){$('startMsg').textContent='회원 정보를 못 불러왔어요: '+e.message;return;}
 
  const todayOnly=all.filter(m=>uids.includes(m.uid));
  SCOPE = todayOnly.length>=6 ? '오늘 내 수업' : '전체 회원';
@@ -220,8 +237,11 @@ function todayKst(){return new Date().toLocaleDateString('sv-SE',{timeZone:'Asia
 
  if(POOL.length<6){$('startMsg').textContent=`사진 등록된 회원이 ${POOL.length}명뿐이라 아직 퀴즈를 만들 수 없어요. (최소 6명 필요)`;return;}
 
+ QN=Math.min(15,POOL.length);
  $('startMsg').innerHTML=`<b>${esc(COACH)}</b> 코치님, 오늘도 고생하셨어요!<br>출제 범위: <b style="color:var(--acc)">${SCOPE}</b> (${POOL.length}명)`
-  +(SCOPE==='전체 회원'?'<br><span style="font-size:12px">오늘 수업 출석자가 적어서 전체 회원에서 냅니다</span>':'');
+  +(SCOPE==='전체 회원'?'<br><span style="font-size:12px">오늘 수업 출석자가 적어서 전체 회원에서 냅니다</span>':'')
+  +`<div style="margin-top:12px;font-size:13px">문항 수 선택</div><div id="qnSel" style="display:flex;gap:6px;justify-content:center;margin-top:6px;flex-wrap:wrap"></div>`;
+ renderQnSel();
  $('startBtn').style.display='inline-block';
  loadMyCash();
 })();
@@ -238,6 +258,14 @@ async function loadMyCash(){
 }
 
 // ===== 게임 시작 =====
+function renderQnSel(){
+ const opts=[10,15,20,POOL.length].filter((v,i,a)=>v<=POOL.length&&a.indexOf(v)===i).sort((a,b)=>a-b);
+ $('qnSel').innerHTML=opts.map(n=>{
+  const full=(n===POOL.length&&POOL.length>15);
+  return `<button class="ch" style="padding:8px 14px;font-size:14px;${QN===n?'border-color:var(--acc);color:var(--acc)':''}${full?';border-color:#ffd166':''}" onclick="QN=${n};renderQnSel()">${full?`🔥 끝까지 ${n}`:n+'문항'}</button>`;
+ }).join('')
+ + (POOL.length>15?`<div style="width:100%;font-size:12px;color:#ffd166;margin-top:6px">전체(${POOL.length}문항) 완주하면 <b>+500원</b> 추가 적립!</div>`:'');
+}
 function startGame(){
  const picks=shuffle(POOL.slice()).slice(0,QN);
  QUIZ=picks.map(ans=>{
@@ -250,6 +278,19 @@ function startGame(){
  renderQ();
 }
 
+const LIMIT=5; // 문제당 제한시간(초) - 찾아보고 답하는 걸 막기 위함
+let TID=null,TLEFT=0;
+function stopTimer(){ if(TID){clearInterval(TID);TID=null;} }
+function startTimer(){
+ stopTimer(); TLEFT=LIMIT;
+ const el=$('tmr'); if(el){el.textContent=TLEFT;el.style.color='var(--dim)';}
+ TID=setInterval(()=>{
+  TLEFT--;
+  const e2=$('tmr');
+  if(e2){ e2.textContent=Math.max(0,TLEFT); e2.style.color=TLEFT<=2?'var(--red)':'var(--dim)'; }
+  if(TLEFT<=0){ stopTimer(); if(!LOCK) answer(-1); }
+ },1000);
+}
 function renderQ(){
  const q=QUIZ[IDX];
  $('qn').textContent=`${IDX+1}/${QN}`;
@@ -262,57 +303,54 @@ function renderQ(){
   const qq=QUIZ[IDX+k]; if(!qq)continue;
   const cls=k===0?'card':(k===1?'card behind1':'card behind2');
   const id=k===0?'id="curcard"':'';
-  html+=`<div class="${cls}" ${id}><img src="${esc(qq.ans.photo)}" alt="" onerror="this.outerHTML='<div class=\\'initial\\'>${esc((qq.ans.name||'?').slice(0,1))}</div>'"><div class="flash"></div></div>`;
+  html+=`<div class="${cls}" ${id}><img src="${esc(qq.ans.photo)}" alt="" onerror="this.style.visibility='hidden'"><div class="flash"></div></div>`;
  }
  $('stage').innerHTML=html;
 
  $('choices').innerHTML=q.choices.map((c,i)=>
   `<button class="ch" data-i="${i}" onclick="answer(${i})">${esc(c.name)}</button>`).join('');
+ startTimer();
 }
 
 function answer(i){
- if(LOCK)return; LOCK=true;
- const q=QUIZ[IDX];
- const picked=q.choices[i];
- const ok=picked.uid===q.ans.uid;
- const btns=[...document.querySelectorAll('.ch')];
- const card=$('curcard');
-
- btns.forEach((b,bi)=>{
-  const c=q.choices[bi];
-  if(c.uid===q.ans.uid)b.classList.add('ok');
-  else if(bi===i)b.classList.add('no');
-  else b.classList.add('dim');
- });
-
- if(ok){
-  CORRECT++;STREAK++;BEST=Math.max(BEST,STREAK);
-  card&&card.classList.add('correct');
-  buzz(18);
- }else{
-  STREAK=0;WRONGS.push(q.ans);
-  card&&card.classList.add('wrong');
-  buzz([40,50,40]);
+ if(LOCK)return; LOCK=true; stopTimer();
+ const el=$('tmr'); if(el)el.textContent='';
+ try{
+  const q=QUIZ[IDX];
+  const timeout=(i<0);
+  const ok=!timeout && q.choices[i] && q.choices[i].uid===q.ans.uid;
+  document.querySelectorAll('.ch').forEach((b,bi)=>{
+   const c=q.choices[bi];
+   if(c&&c.uid===q.ans.uid)b.classList.add('ok');
+   else if(bi===i)b.classList.add('no');
+   else b.classList.add('dim');
+  });
+  const card=$('curcard');
+  if(ok){CORRECT++;STREAK++;BEST=Math.max(BEST,STREAK);card&&card.classList.add('correct');buzz(18);}
+  else{STREAK=0;WRONGS.push(q.ans);card&&card.classList.add('wrong');buzz([40,50,40]);}
+  $('barfill').style.width=((IDX+1)/QN*100)+'%';
+  setTimeout(()=>{ IDX++; LOCK=false; if(IDX>=QN)finish(); else renderQ(); }, ok?520:1050);
+ }catch(e){
+  // 어떤 이유로든 오류가 나도 게임이 멈추지 않게 다음 문제로 넘어감
+  console.error('answer error',e);
+  setTimeout(()=>{ IDX++; LOCK=false; if(IDX>=QN)finish(); else renderQ(); },400);
  }
- $('barfill').style.width=((IDX+1)/QN*100)+'%';
-
- setTimeout(()=>{
-  IDX++;LOCK=false;
-  if(IDX>=QN)finish(); else renderQ();
- },ok?520:1050);
 }
 
-// ===== 결과 =====
 function rewardFor(acc){ if(acc>=100)return 3000; if(acc>=60)return 2000; return 1000; }
+// 전체 문항 완주 시 보너스 (풀이 15명 넘을 때만 의미있음)
+function fullBonus(){ return (POOL.length>15 && QN===POOL.length) ? 500 : 0; }
 
 async function finish(){
+ stopTimer(); const te=$('tmr'); if(te)te.textContent='';
  const acc=Math.round(CORRECT/QN*100);
- const reward=rewardFor(acc);
+ const bonus=fullBonus();
+ const reward=rewardFor(acc)+bonus;
  show('sc-done');
  $('doneEmoji').textContent=acc>=100?'🏆':(acc>=60?'👏':'💪');
  $('doneScore').textContent=`${CORRECT} / ${QN}`;
  $('doneAcc').innerHTML=`정답률 <b>${acc}%</b>${BEST>=3?` · 최고 연속 🔥${BEST}`:''}`;
- $('doneCash').textContent=`+${reward.toLocaleString()}원`;
+ $('doneCash').innerHTML=`+${reward.toLocaleString()}원`+(bonus?`<div style="font-size:13px;color:var(--grn);font-weight:700">🔥 끝까지 도전 보너스 +${bonus}원 포함</div>`:'');
 
  if(acc>=100){confetti();buzz([30,40,30,40,60]);}
 
