@@ -1300,7 +1300,7 @@ async function renderCoachCash(){
 // ===== 근무표 엑셀 업로드 (년.월 시트 → coach_schedule) =====
 // 엑셀 격자 구조: 1열=시간, 월2~4 화5~7 수8~10 목11~13 금14~16, 토는 17열=시간/18~19열=코치
 // 주차 머리행(1열에 'N주차') 바로 다음 행에 날짜가 들어있음
-let XS_ROWS=[], XS_WARN=[], XS_SHEET='', XS_WB=null;
+let XS_ROWS=[], XS_WARN=[], XS_MGR=[], XS_SHEET='', XS_WB=null;
 
 const XS_DAYCOLS={'월':[2,3,4],'화':[5,6,7],'수':[8,9,10],'목':[11,12,13],'금':[14,15,16]};
 // 코치 이름처럼 2~4글자 한글이지만 사람이 아닌 단어들 - 이걸 안 막으면 '추석'이 코치로 등록됨
@@ -1365,7 +1365,7 @@ function xsTime(raw){
 }
 
 function xsParse(sheetName){
- XS_SHEET=sheetName; XS_ROWS=[]; XS_WARN=[];
+ XS_SHEET=sheetName; XS_ROWS=[]; XS_WARN=[]; XS_MGR=[];
  const ws=XS_WB.Sheets[sheetName];
  const g=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:null});
  // 시트명 26.09 -> 2026-09
@@ -1373,8 +1373,16 @@ function xsParse(sheetName){
  const year=2000+parseInt(mm[0],10), month=parseInt(mm[1],10);
  const ymd=d=>`${year}-${String(month).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
 
+ // 시트 아래쪽에 매니저 근무표가 한 번 더 나옴 (월 숫자만 적힌 행이 구분선)
+ let mgrStart=g.length;
+ for(let r=10;r<g.length;r++){
+  const v=xsCell(g,r,1).replace(/\.0+$/,'');
+  if(v===String(month)){ mgrStart=r; break; }
+ }
+
  for(let r=0;r<g.length;r++){
   if(!/주차/.test(xsCell(g,r,1)))continue;
+  const isMgr = r>mgrStart;
   const dateRow=r+1;
   // 이 주차 블록의 날짜들
   const dates={};
@@ -1389,6 +1397,27 @@ function xsParse(sheetName){
   for(let rr=dateRow+1;rr<end;rr++){
    const tLabel=xsCell(g,rr,1);
    const wTime=xsTime(tLabel);
+
+   // 매니저 근무표: '승준5' 처럼 이름+시간이 한 칸에 들어있음
+   if(isMgr){
+    if(!wTime)continue;
+    Object.keys(XS_DATECOL).forEach(day=>{
+     if(!dates[day])return;
+     const c0=XS_DATECOL[day];
+     const cols=(day==='토')?[c0,c0+1]:[c0,c0+1,c0+2];
+     cols.forEach(c=>{
+      const v=xsCell(g,rr,c); if(!v)return;
+      const m=v.match(/^([가-힣]{2,4})\s*(\d+(?:\.\d+)?)$/);
+      if(m&&!XS_NOTNAME.includes(m[1])){
+       XS_MGR.push({name:m[1],date:dates[day],time:wTime,hours:parseFloat(m[2])});
+      }else if(xsIsCoachName(v)){
+       XS_WARN.push({date:dates[day],time:wTime,text:v,why:'매니저 근무시간이 안 적혀 있음'});
+      }
+     });
+    });
+    continue;
+   }
+
    // 평일
    if(wTime){
     Object.keys(XS_DAYCOLS).forEach(day=>{
@@ -1419,6 +1448,9 @@ function xsParse(sheetName){
  const seen=new Set();
  XS_ROWS=XS_ROWS.filter(x=>{const k=x.coach+'|'+x.date+'|'+x.time;if(seen.has(k))return false;seen.add(k);return true;});
  XS_ROWS.sort((a,b)=>(a.date+a.time+a.coach).localeCompare(b.date+b.time+b.coach));
+ const seenM=new Set();
+ XS_MGR=XS_MGR.filter(x=>{const k=x.name+'|'+x.date+'|'+x.time;if(seenM.has(k))return false;seenM.add(k);return true;});
+ XS_MGR.sort((a,b)=>(a.date+a.time+a.name).localeCompare(b.date+b.time+b.name));
  xsPreview();
 }
 let XS_SATTIME;
@@ -1466,7 +1498,26 @@ function xsPreview(){
     </div></div>`;
   }).join('')
   +`</div>
-  <button class="btn-save" style="margin-top:10px;width:100%;padding:12px;border-radius:12px;border:none;background:#3f7fd4;color:#fff;font-weight:800;font-size:15px" onclick="xsSave()">이 내용으로 저장하기 (${XS_ROWS.length}건)</button>`;
+  <button class="btn-save" style="margin-top:10px;width:100%;padding:12px;border-radius:12px;border:none;background:#3f7fd4;color:#fff;font-weight:800;font-size:15px" onclick="xsSave()">코치 근무 저장하기 (${XS_ROWS.length}건)</button>`;
+
+ // ===== 매니저 근무(시간제) 별도 섹션 =====
+ if(XS_MGR.length){
+  const byName={}; XS_MGR.forEach(x=>{ byName[x.name]=(byName[x.name]||0)+x.hours; });
+  const mdates=[...new Set(XS_MGR.map(x=>x.date))].sort();
+  h+=`<div class="carecard" style="margin-top:14px;border-color:#7a5aa0">
+   <b>🧑‍💼 매니저 근무 (시간제)</b>
+   <div style="font-size:12px;color:var(--dim);margin-top:4px">${XS_MGR.length}건 · ${mdates.length}일 · 코치 근무와 따로 저장돼요</div>
+   <div style="margin-top:8px;font-size:13px">
+    ${Object.entries(byName).sort((a,b)=>b[1]-a[1]).map(([n,hr])=>
+      `<span style="display:inline-block;background:#16223a;border:1px solid var(--line);border-radius:99px;padding:3px 11px;margin:3px">${esc(n)} <b>${hr}시간</b>${STAFF_LIST.includes(n)?'':' <span style="color:#e0954f" title="직원 명단에 없음">⚠</span>'}</span>`).join('')}
+   </div>
+   ${Object.keys(byName).some(n=>!STAFF_LIST.includes(n))?'<div style="font-size:11px;color:#e0954f;margin-top:6px">⚠ 표시된 사람은 직원 명단에 없어요. 저장 시 자동으로 매니저로 추가돼요.</div>':''}
+   <div style="margin-top:8px;max-height:180px;overflow:auto;font-size:12px">
+    ${XS_MGR.map(x=>`<div style="padding:3px 0;border-bottom:1px solid var(--line)">${x.date.slice(5).replace('-','/')} ${x.time} · <b>${esc(x.name)}</b> ${x.hours}시간</div>`).join('')}
+   </div>
+   <button class="btn-msave" style="margin-top:10px;width:100%;padding:11px;border-radius:12px;border:none;background:#7a5aa0;color:#fff;font-weight:800;font-size:14px" onclick="xsSaveMgr()">매니저 근무 저장하기 (${XS_MGR.length}건)</button>
+  </div>`;
+ }
  box.innerHTML=h;
 }
 
@@ -1505,6 +1556,35 @@ function xsFixWarn(i){
  XS_ROWS.sort((a,b)=>(a.date+a.time+a.coach).localeCompare(b.date+b.time+b.coach));
  xsPreview();
 }
+// 매니저 근무 저장 + 직원 명단에 없으면 매니저로 자동 등록
+async function xsSaveMgr(){
+ if(!XS_MGR.length)return;
+ const dates=[...new Set(XS_MGR.map(x=>x.date))].sort();
+ const names=[...new Set(XS_MGR.map(x=>x.name))];
+ const missing=names.filter(n=>!STAFF_LIST.includes(n));
+ if(!confirm(`매니저 근무를 저장할까요?\n\n기간: ${dates[0]} ~ ${dates[dates.length-1]}\n건수: ${XS_MGR.length}건`
+  +(missing.length?`\n\n직원 명단에 없는 사람: ${missing.join(', ')}\n→ 매니저로 자동 등록됩니다.`:'')))return;
+ const btn=document.querySelector('.btn-msave'); if(btn){btn.disabled=true;btn.textContent='저장 중…';}
+ try{
+  for(const n of missing){
+   try{ await sb.from('staff_list').insert({name:n,active:true,role:'매니저'}); }catch(_e){}
+  }
+  const{error:delErr}=await sb.from('manager_hours').delete()
+   .gte('work_date',dates[0]).lte('work_date',dates[dates.length-1]);
+  if(delErr)throw delErr;
+  for(let i=0;i<XS_MGR.length;i+=200){
+   const chunk=XS_MGR.slice(i,i+200).map(x=>({staff_name:x.name,work_date:x.date,start_time:x.time,hours:x.hours}));
+   const{error}=await sb.from('manager_hours').insert(chunk);
+   if(error)throw error;
+  }
+  await loadStaffList();
+  alert(`매니저 근무 ${XS_MGR.length}건 저장 완료!`);
+  if(btn){btn.disabled=false;btn.textContent='저장 완료 ✓';}
+ }catch(e){
+  alert('저장 실패: '+e.message+(String(e.message).includes('manager_hours')?'\n\nschedule_tables.sql을 먼저 실행해주세요.':''));
+  if(btn){btn.disabled=false;btn.textContent='다시 저장 시도';}
+ }
+}
 async function xsSave(){
  if(!XS_ROWS.length)return;
  const dates=[...new Set(XS_ROWS.map(x=>x.date))].sort();
@@ -1524,7 +1604,7 @@ async function xsSave(){
   alert(`저장 완료! ${XS_ROWS.length}건이 등록됐어요.`);
   if(btn){btn.disabled=false;btn.textContent='저장 완료 ✓';}
  }catch(e){
-  alert('저장 실패: '+e.message);
+  alert('저장 실패: '+e.message+(String(e.message).includes('coach_schedule')?'\n\nschedule_tables.sql을 Supabase에서 먼저 실행해주세요.':''));
   if(btn){btn.disabled=false;btn.textContent='다시 저장 시도';}
  }
 }
@@ -1539,17 +1619,18 @@ async function renderCoachMgr(){
  if(!CM_YM)CM_YM=today.slice(0,7);
  const from=CM_YM+'-01';
  const to=CM_YM+'-31';
- let staff=[],links=[],sched=[],quiz=[],act=[];
+ let staff=[],links=[],sched=[],quiz=[],act=[],mhrs=[];
  try{
   const r=await Promise.all([
    sb.from('staff_list').select('id,name,phone,active,role').order('active',{ascending:false}).order('created_at'),
    sb.from('coach_links').select('coach_name,token,active'),
    sb.from('coach_schedule').select('coach_name,work_date,work_time').gte('work_date',from).lte('work_date',to),
    sb.from('quiz_sessions').select('coach_name,reward,play_date').gte('play_date',from).lte('play_date',to),
-   sb.from('coach_activity').select('token,event_type,created_at').order('created_at',{ascending:false}).limit(3000)
+   sb.from('coach_activity').select('token,event_type,created_at').order('created_at',{ascending:false}).limit(3000),
+   sb.from('manager_hours').select('staff_name,work_date,hours').gte('work_date',from).lte('work_date',to)
   ]);
   if(r[0].error)throw r[0].error;
-  staff=r[0].data||[]; links=r[1].data||[]; sched=r[2].data||[]; quiz=r[3].data||[]; act=r[4].data||[];
+  staff=r[0].data||[]; links=r[1].data||[]; sched=r[2].data||[]; quiz=r[3].data||[]; act=r[4].data||[]; mhrs=(r[5]&&r[5].data)||[];
  }catch(e){
   box.innerHTML=`<div style="padding:16px"><div class="carecard" style="border-color:#e0563a"><b>불러오기 실패</b><br><span style="font-size:12px">${esc(e.message||String(e))}</span><div style="margin-top:8px;font-size:12px;color:var(--dim)">staff_phone.sql을 Supabase에서 먼저 실행하셨는지 확인해주세요.</div></div></div>`;
   return;
@@ -1568,6 +1649,9 @@ async function renderCoachMgr(){
   if(new Date(s.work_date+'T00:00:00').getDay()===6)stat[c].sat++;
  });
  const cash={}; quiz.forEach(q=>{cash[q.coach_name]=(cash[q.coach_name]||0)+(q.reward||0);});
+ const mstat={}; mhrs.forEach(m=>{ const n=m.staff_name; if(!mstat[n])mstat[n]={hours:0,days:new Set()};
+  mstat[n].hours+=Number(m.hours||0); mstat[n].days.add(m.work_date); });
+ window._MSTAT=mstat;
 
  // staff_list에 없는데 예전 링크만 있는 코치도 목록에 보이도록 합침
  const known=new Set(staff.map(s=>norm(s.name)));
@@ -1601,6 +1685,8 @@ async function renderCoachMgr(){
 
 function cmCard(s,st,cash,token,actBy){
  const times=st?st.times:0, days=st?st.days.size:0, sat=st?st.sat:0;
+ const ms=(window._MSTAT||{})[s.name];
+ const isMgr=((s.role||'코치')!=='코치');
  const link=token?`${QUIZ_URL}?t=${token}`:'';
  const a=(token&&actBy&&actBy[token])?actBy[token]:null;
  const actTxt=a?`접속 ${a.n}회 · 최근 ${String(a.last).slice(5,10)}`:'접속 기록 없음';
@@ -1612,8 +1698,11 @@ function cmCard(s,st,cash,token,actBy){
      ${['코치','매니저','대표'].map(r=>`<option value="${r}"${(s.role||'코치')===r?' selected':''}>${r}</option>`).join('')}
     </select>`:''}
    <div style="margin-left:auto;text-align:right">
-    <div style="font-weight:900;font-size:17px">${times}<span style="font-size:11px;font-weight:400;color:var(--dim)">타임</span></div>
-    <div style="font-size:10px;color:var(--dim)">${days}일 근무${sat?` · 토 ${sat}회`:''}</div>
+    ${(isMgr&&ms)
+      ?`<div style="font-weight:900;font-size:17px">${ms.hours}<span style="font-size:11px;font-weight:400;color:var(--dim)">시간</span></div>
+        <div style="font-size:10px;color:var(--dim)">${ms.days.size}일 근무</div>`
+      :`<div style="font-weight:900;font-size:17px">${times}<span style="font-size:11px;font-weight:400;color:var(--dim)">타임</span></div>
+        <div style="font-size:10px;color:var(--dim)">${days}일 근무${sat?` · 토 ${sat}회`:''}</div>`}
    </div>
   </div>
   <div style="display:flex;gap:6px;margin-top:7px;align-items:center">
