@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#0d1420">
-<title>코치캐시 (데모) · 이름 맞히기</title>
+<title>코치캐시 · 이름 맞히기</title>
 <style>
 :root{
   --bg:#0d1420; --card:#16203200; --line:#22304a; --txt:#e8eef7; --dim:#8d9bb2;
@@ -153,9 +153,13 @@ body{
 <script>
 const SB_URL='https://mvgbwsbvngdnxdndwimb.supabase.co';
 const SB_KEY='sb_publishable_ZRHS4-UR7Q07Fmtc_P-19g_fVlIc85X';
-const sb=supabase.createClient(SB_URL,SB_KEY);
+// 본앱(f45app)과 동일하게 x-app-token 헤더를 붙여야 RLS를 통과함.
+// 이게 없으면 에러 없이 조용히 0건이 돌아와서 "사진 등록된 회원 0명"으로 보임.
+const APP_TOKEN=new URLSearchParams(location.search).get('key')||'f45sujong-2026';
+const sb=supabase.createClient(SB_URL,SB_KEY,{global:{headers:{'x-app-token':APP_TOKEN}}});
 
-let QN=10;
+let QN=10;                  // 문항 수 (시작화면에서 선택)
+let TOKEN='',COACH='';
 let POOL=[],ALLNAMES=[],SCOPE='',QUIZ=[],IDX=0,CORRECT=0,STREAK=0,BEST=0,WRONGS=[],LOCK=false;
 
 const $=id=>document.getElementById(id);
@@ -164,9 +168,9 @@ function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;',
 function buzz(ms){try{navigator.vibrate&&navigator.vibrate(ms);}catch(e){}}
 function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
 function photoOf(m){return m.photo_url||m.glofox_photo||'';}
-function kstDate(d){return d.toLocaleDateString('sv-SE',{timeZone:'Asia/Seoul'});}
-function kstHour(iso){return +new Date(iso).toLocaleTimeString('en-GB',{timeZone:'Asia/Seoul',hour:'2-digit',hour12:false});}
+function todayKst(){return new Date().toLocaleDateString('sv-SE',{timeZone:'Asia/Seoul'});}
 
+// ===== 초기화 =====
 // Supabase는 한 번에 최대 1000행만 주므로 나눠서 전부 받아옴 (이거 없으면 앞쪽 1000명만 읽혀서 사진 있는 회원이 0명으로 나옴)
 let DIAG={total:0,withPhoto:0,named:0};
 async function fetchPhotoMembers(){
@@ -188,40 +192,71 @@ async function fetchPhotoMembers(){
 }
 
 (async function init(){
- $('startMsg').textContent='어제 저녁 수업 참석자를 불러오는 중…';
- let all=[];
- try{ all=await fetchPhotoMembers(); }
- catch(e){ $('startMsg').textContent='회원 정보를 못 불러왔어요: '+e.message; return; }
- ALLNAMES=all;
+ TOKEN=new URLSearchParams(location.search).get('t')||'';
+ if(!TOKEN){$('startMsg').textContent='링크가 올바르지 않아요. 관리자에게 문의해주세요.';return;}
+ try{
+  const{data,error}=await sb.from('coach_links').select('coach_name,active').eq('token',TOKEN).maybeSingle();
+  if(error||!data||!data.active){$('startMsg').textContent='만료되었거나 사용할 수 없는 링크예요.';return;}
+  COACH=data.coach_name;
+ }catch(e){$('startMsg').textContent='접속 오류: '+e.message;return;}
 
- // 어제부터 최대 7일 거슬러 올라가며 "저녁(17시 이후) 수업 참석자"가 있는 날 찾기
- let found=null;
- for(let back=1;back<=7&&!found;back++){
-  const d=new Date(); d.setDate(d.getDate()-back);
-  const day=kstDate(d);
+ // 오늘 이 코치가 담당한 수업 시간 확인 (coach_schedule)
+ let myTimes=[];
+ try{
+  const{data}=await sb.from('coach_schedule').select('work_time')
+   .eq('coach_name',COACH).eq('work_date',todayKst());
+  myTimes=(data||[]).map(r=>String(r.work_time).slice(0,5));
+ }catch(e){}
+
+ // 그 시간 수업에 실제 출석한 회원만 대상으로
+ let uids=[];
+ if(myTimes.length){
   try{
+   const from=todayKst()+'T00:00:00', to=todayKst()+'T23:59:59';
    const{data}=await sb.from('attendance').select('glofox_user_id,class_time')
-    .eq('attended',true).gte('class_time',day+'T00:00:00').lte('class_time',day+'T23:59:59').limit(500);
-   const uids=[...new Set((data||[]).filter(a=>kstHour(a.class_time)>=17).map(a=>a.glofox_user_id))];
-   const pool=all.filter(m=>uids.includes(m.uid));
-   if(pool.length>=6) found={day,pool};
+    .eq('attended',true).gte('class_time',from).lte('class_time',to).limit(500);
+   uids=(data||[]).filter(a=>{
+    const hhmm=new Date(a.class_time).toLocaleTimeString('ko-KR',{timeZone:'Asia/Seoul',hour:'2-digit',minute:'2-digit',hour12:false});
+    return myTimes.includes(hhmm);
+   }).map(a=>a.glofox_user_id);
+   uids=[...new Set(uids)];
   }catch(e){}
  }
 
- if(found){ POOL=found.pool; SCOPE=`${found.day.slice(5).replace('-','/')} 저녁 수업 참석자`; }
- else { POOL=all; SCOPE='전체 회원(저녁 참석자 데이터 부족)'; }
+ // 회원 정보 불러오기
+ let all=[];
+ try{ all=await fetchPhotoMembers(); }
+ catch(e){$('startMsg').textContent='회원 정보를 못 불러왔어요: '+e.message;return;}
 
- if(POOL.length<6){ $('startMsg').innerHTML=`퀴즈를 만들 수 없어요 (대상 ${POOL.length}명)<br><span style="font-size:12px">전체 ${DIAG.total}명 · 사진있음 ${DIAG.withPhoto}명 · 출제가능 ${DIAG.named}명</span>`; return; }
+ const todayOnly=all.filter(m=>uids.includes(m.uid));
+ SCOPE = todayOnly.length>=6 ? '오늘 내 수업' : '전체 회원';
+ POOL  = todayOnly.length>=6 ? todayOnly : all;
+ // 보기(오답 선택지)는 항상 전체에서 뽑아야 난이도가 유지됨
+ ALLNAMES = all;
+
+ if(POOL.length<6){$('startMsg').textContent=`사진 등록된 회원이 ${POOL.length}명뿐이라 아직 퀴즈를 만들 수 없어요. (최소 6명 필요)`;return;}
 
  QN=Math.min(15,POOL.length);
- $('startMsg').innerHTML=`<b>데모 모드</b> · 출제 범위: <b style="color:var(--acc)">${esc(SCOPE)}</b> (${POOL.length}명)`
-  +`<div style="margin-top:12px;font-size:13px">문항 수 선택</div>`
-  +`<div id="qnSel" style="display:flex;gap:6px;justify-content:center;margin-top:6px;flex-wrap:wrap"></div>`;
+ $('startMsg').innerHTML=`<b>${esc(COACH)}</b> 코치님, 오늘도 고생하셨어요!<br>출제 범위: <b style="color:var(--acc)">${SCOPE}</b> (${POOL.length}명)`
+  +(SCOPE==='전체 회원'?'<br><span style="font-size:12px">오늘 수업 출석자가 적어서 전체 회원에서 냅니다</span>':'')
+  +`<div style="margin-top:12px;font-size:13px">문항 수 선택</div><div id="qnSel" style="display:flex;gap:6px;justify-content:center;margin-top:6px;flex-wrap:wrap"></div>`;
  renderQnSel();
  $('startBtn').style.display='inline-block';
- $('myCash').innerHTML='<span style="font-size:12px">데모라 실제로 적립되지 않아요</span>';
+ loadMyCash();
 })();
 
+async function loadMyCash(){
+ try{
+  const{data}=await sb.from('quiz_sessions').select('reward,play_date').eq('token',TOKEN);
+  const rows=data||[];
+  const total=rows.reduce((s,r)=>s+(r.reward||0),0);
+  const didToday=rows.some(r=>r.play_date===todayKst());
+  $('myCash').innerHTML=`누적 코치캐시 <b style="color:var(--gold);font-size:19px">${total.toLocaleString()}원</b>`
+   +(didToday?'<br><span style="font-size:12px">오늘은 이미 참여하셨어요 (연습은 계속 가능해요)</span>':'');
+ }catch(e){}
+}
+
+// ===== 게임 시작 =====
 function renderQnSel(){
  const opts=[10,15,20,POOL.length].filter((v,i,a)=>v<=POOL.length&&a.indexOf(v)===i).sort((a,b)=>a-b);
  $('qnSel').innerHTML=opts.map(n=>{
@@ -230,7 +265,6 @@ function renderQnSel(){
  }).join('')
  + (POOL.length>15?`<div style="width:100%;font-size:12px;color:#ffd166;margin-top:6px">전체(${POOL.length}문항) 완주하면 <b>+500원</b> 추가 적립!</div>`:'');
 }
-
 function startGame(){
  const picks=shuffle(POOL.slice()).slice(0,QN);
  QUIZ=picks.map(ans=>{
@@ -248,14 +282,17 @@ function renderQ(){
  $('qn').textContent=`${IDX+1}/${QN}`;
  $('barfill').style.width=((IDX)/QN*100)+'%';
  $('streak').textContent=STREAK>=2?`🔥${STREAK}`:'';
+
+ // 카드 스택 (현재 + 뒤 2장)
  let html='';
  for(let k=2;k>=0;k--){
   const qq=QUIZ[IDX+k]; if(!qq)continue;
   const cls=k===0?'card':(k===1?'card behind1':'card behind2');
   const id=k===0?'id="curcard"':'';
-  html+=`<div class="${cls}" ${id}><img src="${esc(qq.ans.photo)}" alt="" onerror="this.outerHTML='<div class=\'initial\'>${esc((qq.ans.name||'?').slice(0,1))}</div>'"><div class="flash"></div></div>`;
+  html+=`<div class="${cls}" ${id}><img src="${esc(qq.ans.photo)}" alt="" onerror="this.outerHTML='<div class=\\'initial\\'>${esc((qq.ans.name||'?').slice(0,1))}</div>'"><div class="flash"></div></div>`;
  }
  $('stage').innerHTML=html;
+
  $('choices').innerHTML=q.choices.map((c,i)=>
   `<button class="ch" data-i="${i}" onclick="answer(${i})">${esc(c.name)}</button>`).join('');
 }
@@ -263,26 +300,41 @@ function renderQ(){
 function answer(i){
  if(LOCK)return; LOCK=true;
  const q=QUIZ[IDX];
- const ok=q.choices[i].uid===q.ans.uid;
+ const picked=q.choices[i];
+ const ok=picked.uid===q.ans.uid;
  const btns=[...document.querySelectorAll('.ch')];
  const card=$('curcard');
+
  btns.forEach((b,bi)=>{
   const c=q.choices[bi];
   if(c.uid===q.ans.uid)b.classList.add('ok');
   else if(bi===i)b.classList.add('no');
   else b.classList.add('dim');
  });
- if(ok){CORRECT++;STREAK++;BEST=Math.max(BEST,STREAK);card&&card.classList.add('correct');buzz(18);}
- else{STREAK=0;WRONGS.push(q.ans);card&&card.classList.add('wrong');buzz([40,50,40]);}
+
+ if(ok){
+  CORRECT++;STREAK++;BEST=Math.max(BEST,STREAK);
+  card&&card.classList.add('correct');
+  buzz(18);
+ }else{
+  STREAK=0;WRONGS.push(q.ans);
+  card&&card.classList.add('wrong');
+  buzz([40,50,40]);
+ }
  $('barfill').style.width=((IDX+1)/QN*100)+'%';
- setTimeout(()=>{IDX++;LOCK=false;if(IDX>=QN)finish();else renderQ();},ok?520:1050);
+
+ setTimeout(()=>{
+  IDX++;LOCK=false;
+  if(IDX>=QN)finish(); else renderQ();
+ },ok?520:1050);
 }
 
+// ===== 결과 =====
 function rewardFor(acc){ if(acc>=100)return 3000; if(acc>=60)return 2000; return 1000; }
 // 전체 문항 완주 시 보너스 (풀이 15명 넘을 때만 의미있음)
 function fullBonus(){ return (POOL.length>15 && QN===POOL.length) ? 500 : 0; }
 
-function finish(){
+async function finish(){
  const acc=Math.round(CORRECT/QN*100);
  const bonus=fullBonus();
  const reward=rewardFor(acc)+bonus;
@@ -291,12 +343,30 @@ function finish(){
  $('doneScore').textContent=`${CORRECT} / ${QN}`;
  $('doneAcc').innerHTML=`정답률 <b>${acc}%</b>${BEST>=3?` · 최고 연속 🔥${BEST}`:''}`;
  $('doneCash').innerHTML=`+${reward.toLocaleString()}원`+(bonus?`<div style="font-size:13px;color:var(--grn);font-weight:700">🔥 끝까지 도전 보너스 +${bonus}원 포함</div>`:'');
+
  if(acc>=100){confetti();buzz([30,40,30,40,60]);}
+
  if(WRONGS.length){
   $('doneWrong').innerHTML='<div class="sub" style="margin-bottom:6px">이 분들 이름 한 번 더!</div>'
    +WRONGS.map(w=>`<span class="pill">${esc(w.name)}</span>`).join('');
  }
- $('doneNote').innerHTML='<b>데모 모드</b>라 실제로 적립되지는 않아요.';
+
+ // 하루 1회만 적립 (unique index로 중복은 DB가 막아줌)
+ try{
+  const{error}=await sb.from('quiz_sessions').insert({
+   token:TOKEN,coach_name:COACH,play_date:todayKst(),
+   total:QN,correct:CORRECT,accuracy:acc,reward
+  });
+  if(error&&error.code==='23505'){
+   $('doneNote').textContent='오늘은 이미 적립하셨어요. 이번 판은 연습으로 기록됐어요!';
+  }else if(error){
+   $('doneNote').textContent='기록 저장에 실패했어요. 관리자에게 알려주세요.';
+  }else{
+   $('doneNote').textContent='코치캐시에 적립됐어요!';
+  }
+ }catch(e){ $('doneNote').textContent='기록 저장 오류'; }
+
+ try{await sb.from('coach_activity').insert({token:TOKEN,coach_name:COACH,event_type:'quiz_play'});}catch(e){}
 }
 
 function confetti(){
