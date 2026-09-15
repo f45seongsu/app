@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#0d1420">
+<title>코치캐시 (데모) · 이름 맞히기</title>
+<style>
+:root{
+  --bg:#0d1420; --card:#16203200; --line:#22304a; --txt:#e8eef7; --dim:#8d9bb2;
+  --grn:#4ee88a; --red:#ff5c5c; --acc:#5aa0e0; --gold:#ffd166;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;margin:0;overscroll-behavior:none}
+body{
+  background:radial-gradient(1200px 600px at 50% -10%,#1b2942 0%,var(--bg) 55%);
+  color:var(--txt);
+  font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sans KR",sans-serif;
+  display:flex;flex-direction:column;
+  padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  user-select:none;
+}
+
+/* ===== 공통 화면 ===== */
+.screen{flex:1;display:none;flex-direction:column;animation:fadeIn .35s ease both}
+.screen.on{display:flex}
+@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+
+.center{margin:auto;text-align:center;padding:24px}
+.btn{
+  border:none;border-radius:16px;padding:16px 22px;font-size:16px;font-weight:800;
+  background:linear-gradient(135deg,#3f7fd4,#5aa0e0);color:#fff;
+  box-shadow:0 8px 22px rgba(63,127,212,.35);
+  transition:transform .12s cubic-bezier(.2,.9,.3,1.3),box-shadow .2s;
+  cursor:pointer;
+}
+.btn:active{transform:scale(.94);box-shadow:0 3px 10px rgba(63,127,212,.3)}
+.btn.gold{background:linear-gradient(135deg,#e8a93a,#ffd166);color:#2a1d00;box-shadow:0 8px 22px rgba(255,209,102,.3)}
+.btn.ghost{background:#1a2740;color:var(--txt);box-shadow:none;border:1px solid var(--line)}
+
+/* ===== 상단 HUD ===== */
+#hud{display:flex;align-items:center;gap:10px;padding:12px 16px 6px}
+#bar{flex:1;height:8px;background:#1a2740;border-radius:99px;overflow:hidden}
+#barfill{height:100%;width:0;background:linear-gradient(90deg,var(--acc),var(--grn));border-radius:99px;transition:width .45s cubic-bezier(.2,.9,.3,1)}
+#qn{font-size:12px;color:var(--dim);font-variant-numeric:tabular-nums;min-width:44px;text-align:right}
+#streak{font-size:13px;font-weight:800;color:var(--gold);min-width:40px}
+
+/* ===== 카드 ===== */
+#stage{flex:1;position:relative;display:flex;align-items:center;justify-content:center;padding:6px 18px}
+.card{
+  position:absolute;width:min(78vw,300px);aspect-ratio:3/4;border-radius:26px;overflow:hidden;
+  background:#101a2b;border:1px solid var(--line);
+  box-shadow:0 24px 60px rgba(0,0,0,.55);
+  will-change:transform,opacity;
+}
+.card img{width:100%;height:100%;object-fit:cover;pointer-events:none}
+.card .initial{width:100%;height:100%;display:flex;align-items:center;justify-content:center;
+  font-size:76px;font-weight:900;color:#43608c;background:linear-gradient(160deg,#16223a,#0f1828)}
+
+/* 뒤에 쌓인 카드(깊이감) */
+.card.behind1{transform:scale(.94) translateY(14px);opacity:.55;filter:blur(1px)}
+.card.behind2{transform:scale(.88) translateY(28px);opacity:.3;filter:blur(2px)}
+
+/* 정답/오답 연출 */
+@keyframes flyRight{to{transform:translateX(130%) rotate(18deg);opacity:0}}
+@keyframes shake{
+  0%,100%{transform:translateX(0)}
+  15%{transform:translateX(-14px) rotate(-3deg)}
+  30%{transform:translateX(12px) rotate(3deg)}
+  45%{transform:translateX(-9px) rotate(-2deg)}
+  60%{transform:translateX(7px) rotate(1.5deg)}
+  80%{transform:translateX(-3px)}
+}
+.card.correct{animation:flyRight .42s cubic-bezier(.4,0,.6,1) forwards}
+.card.wrong{animation:shake .5s cubic-bezier(.36,.07,.19,.97)}
+.card .flash{position:absolute;inset:0;opacity:0;pointer-events:none;transition:opacity .18s}
+.card.correct .flash{background:radial-gradient(circle,rgba(78,232,138,.45),transparent 70%);opacity:1}
+.card.wrong .flash{background:radial-gradient(circle,rgba(255,92,92,.4),transparent 70%);opacity:1}
+
+/* ===== 보기 버튼 ===== */
+#choices{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:14px 16px calc(18px + env(safe-area-inset-bottom))}
+.ch{
+  border:1px solid var(--line);background:#16223a;color:var(--txt);
+  border-radius:16px;padding:16px 10px;font-size:16px;font-weight:700;
+  transition:transform .12s cubic-bezier(.2,.9,.3,1.3),background .2s,border-color .2s;
+  cursor:pointer;
+}
+.ch:active{transform:scale(.95)}
+.ch:nth-child(5){grid-column:1/-1}
+.ch.ok{background:rgba(78,232,138,.18);border-color:var(--grn);color:var(--grn)}
+.ch.no{background:rgba(255,92,92,.15);border-color:var(--red);color:var(--red)}
+.ch.dim{opacity:.35}
+
+/* ===== 결과 ===== */
+.bigscore{font-size:60px;font-weight:900;letter-spacing:-2px;line-height:1}
+.cashline{font-size:34px;font-weight:900;color:var(--gold);margin-top:6px}
+.sub{color:var(--dim);font-size:14px;line-height:1.7}
+.pill{display:inline-block;background:#16223a;border:1px solid var(--line);border-radius:99px;padding:6px 14px;font-size:13px;margin:4px}
+@keyframes pop{0%{transform:scale(.6);opacity:0}70%{transform:scale(1.08)}100%{transform:scale(1);opacity:1}}
+.pop{animation:pop .5s cubic-bezier(.2,.9,.3,1.3) both}
+
+/* 종이꽃가루 */
+.confetti{position:fixed;top:-12px;width:9px;height:14px;opacity:.95;pointer-events:none;z-index:99;border-radius:2px}
+@keyframes fall{to{transform:translateY(105vh) rotate(720deg);opacity:0}}
+</style>
+</head>
+<body>
+
+<!-- 시작 -->
+<div id="sc-start" class="screen on">
+ <div class="center">
+  <div style="font-size:52px" class="pop">🧠</div>
+  <h1 style="margin:10px 0 4px;font-size:26px">코치캐시</h1>
+  <div class="sub">회원 얼굴 보고 이름 맞히기<br>오늘 참여하면 캐시가 쌓여요</div>
+  <div style="margin:18px 0">
+   <span class="pill">참여만 해도 <b style="color:var(--gold)">1,000원</b></span>
+   <span class="pill">60% 이상 <b style="color:var(--gold)">2,000원</b></span>
+   <span class="pill">만점 <b style="color:var(--gold)">3,000원</b></span>
+  </div>
+  <div id="startMsg" class="sub" style="margin-bottom:16px">준비 중…</div>
+  <button id="startBtn" class="btn gold" style="display:none" onclick="startGame()">시작하기</button>
+  <div id="myCash" class="sub" style="margin-top:18px"></div>
+ </div>
+</div>
+
+<!-- 게임 -->
+<div id="sc-play" class="screen">
+ <div id="hud">
+  <div id="streak"></div>
+  <div id="bar"><div id="barfill"></div></div>
+  <div id="qn"></div>
+ </div>
+ <div id="stage"></div>
+ <div id="choices"></div>
+</div>
+
+<!-- 결과 -->
+<div id="sc-done" class="screen">
+ <div class="center">
+  <div id="doneEmoji" style="font-size:54px" class="pop"></div>
+  <div id="doneScore" class="bigscore pop"></div>
+  <div id="doneAcc" class="sub" style="margin-top:6px"></div>
+  <div id="doneCash" class="cashline pop"></div>
+  <div id="doneNote" class="sub" style="margin-top:10px"></div>
+  <div id="doneWrong" style="margin-top:14px"></div>
+  <div style="margin-top:22px;display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
+   <button class="btn ghost" onclick="location.reload()">다시 하기</button>
+  </div>
+ </div>
+</div>
+
+<script>
+const QN=10;
+let COACH='데모';
+let POOL=[],QUIZ=[],IDX=0,CORRECT=0,STREAK=0,BEST=0,WRONGS=[],LOCK=false;
+let DEMO_CASH=0;
+
+const $=id=>document.getElementById(id);
+function show(id){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('on'));$(id).classList.add('on');}
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function buzz(ms){try{navigator.vibrate&&navigator.vibrate(ms);}catch(e){}}
+function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
+
+// ===== 데모용 가짜 회원 (실제 DB 안 씀) =====
+const DEMO_NAMES=['김재희','임재성','정고운','류승규','정한솔','김정아','박찬재','손서영','이정진','김민채',
+ '김윤진','이기찬','임재찬','강순조','손주희','김근모','고병찬','구지훈','손화랑','송병훈'];
+const DEMO_COLORS=['#2d4a7a','#7a2d4a','#2d7a52','#7a5a2d','#5a2d7a','#2d6a7a','#7a2d2d','#3a7a2d'];
+
+(function init(){
+ POOL=DEMO_NAMES.map((n,i)=>({uid:'demo'+i,name:n,color:DEMO_COLORS[i%DEMO_COLORS.length],photo:''}));
+ $('startMsg').innerHTML='<b>데모 모드</b>입니다. 실제 회원 사진 대신 이름 카드로 보여요.<br>흐름과 느낌만 확인해보세요!';
+ $('startBtn').style.display='inline-block';
+ $('myCash').innerHTML='누적 코치캐시 <b style="color:var(--gold);font-size:19px">0원</b><br><span style="font-size:12px">데모라 실제로 적립되지 않아요</span>';
+})();
+
+function startGame(){
+ const picks=shuffle(POOL.slice()).slice(0,QN);
+ QUIZ=picks.map(ans=>{
+  const others=shuffle(POOL.filter(p=>p.uid!==ans.uid)).slice(0,4);
+  return{ans,choices:shuffle([ans,...others])};
+ });
+ IDX=0;CORRECT=0;STREAK=0;BEST=0;WRONGS=[];LOCK=false;
+ show('sc-play');
+ renderQ();
+}
+
+function renderQ(){
+ const q=QUIZ[IDX];
+ $('qn').textContent=`${IDX+1}/${QN}`;
+ $('barfill').style.width=((IDX)/QN*100)+'%';
+ $('streak').textContent=STREAK>=2?`🔥${STREAK}`:'';
+ let html='';
+ for(let k=2;k>=0;k--){
+  const qq=QUIZ[IDX+k]; if(!qq)continue;
+  const cls=k===0?'card':(k===1?'card behind1':'card behind2');
+  const id=k===0?'id="curcard"':'';
+  html+=`<div class="${cls}" ${id}><div class="initial" style="background:linear-gradient(160deg,${qq.ans.color},#0f1828)">${esc(qq.ans.name.slice(0,1))}</div><div class="flash"></div></div>`;
+ }
+ $('stage').innerHTML=html;
+ $('choices').innerHTML=q.choices.map((c,i)=>
+  `<button class="ch" data-i="${i}" onclick="answer(${i})">${esc(c.name)}</button>`).join('');
+}
+
+function answer(i){
+ if(LOCK)return; LOCK=true;
+ const q=QUIZ[IDX];
+ const ok=q.choices[i].uid===q.ans.uid;
+ const btns=[...document.querySelectorAll('.ch')];
+ const card=$('curcard');
+ btns.forEach((b,bi)=>{
+  const c=q.choices[bi];
+  if(c.uid===q.ans.uid)b.classList.add('ok');
+  else if(bi===i)b.classList.add('no');
+  else b.classList.add('dim');
+ });
+ if(ok){CORRECT++;STREAK++;BEST=Math.max(BEST,STREAK);card&&card.classList.add('correct');buzz(18);}
+ else{STREAK=0;WRONGS.push(q.ans);card&&card.classList.add('wrong');buzz([40,50,40]);}
+ $('barfill').style.width=((IDX+1)/QN*100)+'%';
+ setTimeout(()=>{IDX++;LOCK=false;if(IDX>=QN)finish();else renderQ();},ok?520:1050);
+}
+
+function rewardFor(acc){ if(acc>=100)return 3000; if(acc>=60)return 2000; return 1000; }
+
+function finish(){
+ const acc=Math.round(CORRECT/QN*100);
+ const reward=rewardFor(acc);
+ show('sc-done');
+ $('doneEmoji').textContent=acc>=100?'🏆':(acc>=60?'👏':'💪');
+ $('doneScore').textContent=`${CORRECT} / ${QN}`;
+ $('doneAcc').innerHTML=`정답률 <b>${acc}%</b>${BEST>=3?` · 최고 연속 🔥${BEST}`:''}`;
+ $('doneCash').textContent=`+${reward.toLocaleString()}원`;
+ if(acc>=100){confetti();buzz([30,40,30,40,60]);}
+ if(WRONGS.length){
+  $('doneWrong').innerHTML='<div class="sub" style="margin-bottom:6px">이 분들 이름 한 번 더!</div>'
+   +WRONGS.map(w=>`<span class="pill">${esc(w.name)}</span>`).join('');
+ }
+ $('doneNote').innerHTML='<b>데모 모드</b>라 실제로 적립되지는 않아요.';
+}
+
+function confetti(){
+ const cols=['#4ee88a','#ffd166','#5aa0e0','#ff7ab6','#b07cff'];
+ for(let i=0;i<60;i++){
+  const d=document.createElement('div');
+  d.className='confetti';
+  d.style.left=Math.random()*100+'vw';
+  d.style.background=cols[i%cols.length];
+  d.style.animation=`fall ${1.6+Math.random()*1.4}s linear ${Math.random()*.5}s forwards`;
+  document.body.appendChild(d);
+  setTimeout(()=>d.remove(),3600);
+ }
+}
+</script>
+</body>
+</html>
