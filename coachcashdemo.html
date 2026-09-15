@@ -168,21 +168,23 @@ function kstDate(d){return d.toLocaleDateString('sv-SE',{timeZone:'Asia/Seoul'})
 function kstHour(iso){return +new Date(iso).toLocaleTimeString('en-GB',{timeZone:'Asia/Seoul',hour:'2-digit',hour12:false});}
 
 // Supabase는 한 번에 최대 1000행만 주므로 나눠서 전부 받아옴 (이거 없으면 앞쪽 1000명만 읽혀서 사진 있는 회원이 0명으로 나옴)
+let DIAG={total:0,withPhoto:0,named:0};
 async function fetchPhotoMembers(){
+ // 본앱(loadData)과 동일하게 people 전체를 1000행씩 나눠 받아옴 (서버측 필터는 쓰지 않음)
  let out=[],from=0;
  while(true){
-  const{data,error}=await sb.from('people')
-   .select('glofox_user_id,name,name_override,photo_url,glofox_photo,stage')
-   .not('glofox_user_id','is',null)
-   .or('photo_url.not.is.null,glofox_photo.not.is.null')
-   .range(from,from+999);
+  const{data,error}=await sb.from('people').select('*').range(from,from+999);
   if(error)throw error;
   out=out.concat(data||[]);
   if(!data||data.length<1000)break;
   from+=1000;
  }
- return out.map(m=>({uid:m.glofox_user_id,name:(m.name_override||m.name||'').trim(),photo:photoOf(m),stage:m.stage}))
-  .filter(m=>m.name&&m.photo&&m.stage!=='리드');
+ DIAG.total=out.length;
+ const mapped=out.map(m=>({uid:m.glofox_user_id,name:(m.name_override||m.name||'').trim(),photo:photoOf(m),stage:m.stage}));
+ DIAG.withPhoto=mapped.filter(m=>m.photo).length;
+ const res=mapped.filter(m=>m.uid&&m.name&&m.photo&&m.stage!=='리드');
+ DIAG.named=res.length;
+ return res;
 }
 
 (async function init(){
@@ -209,7 +211,7 @@ async function fetchPhotoMembers(){
  if(found){ POOL=found.pool; SCOPE=`${found.day.slice(5).replace('-','/')} 저녁 수업 참석자`; }
  else { POOL=all; SCOPE='전체 회원(저녁 참석자 데이터 부족)'; }
 
- if(POOL.length<6){ $('startMsg').textContent=`사진 등록된 회원이 ${POOL.length}명뿐이라 퀴즈를 만들 수 없어요.`; return; }
+ if(POOL.length<6){ $('startMsg').innerHTML=`퀴즈를 만들 수 없어요 (대상 ${POOL.length}명)<br><span style="font-size:12px">전체 ${DIAG.total}명 · 사진있음 ${DIAG.withPhoto}명 · 출제가능 ${DIAG.named}명</span>`; return; }
 
  QN=Math.min(15,POOL.length);
  $('startMsg').innerHTML=`<b>데모 모드</b> · 출제 범위: <b style="color:var(--acc)">${esc(SCOPE)}</b> (${POOL.length}명)`
