@@ -90,6 +90,11 @@ body{
 .ch.ok{background:rgba(78,232,138,.18);border-color:var(--grn);color:var(--grn)}
 .ch.no{background:rgba(255,92,92,.15);border-color:var(--red);color:var(--red)}
 .ch.dim{opacity:.35}
+.chsel{border:1px solid var(--line);background:#16223a;color:var(--txt);border-radius:16px;font-weight:700;cursor:pointer}
+.chsel:active{transform:scale(.95)}
+#choices .chskip{grid-column:1/-1;border:1px dashed var(--line);background:transparent;color:var(--dim);
+ border-radius:14px;padding:11px;font-size:13px;font-weight:600;cursor:pointer}
+#choices .chskip:active{transform:scale(.97)}
 
 /* ===== 결과 ===== */
 .bigscore{font-size:60px;font-weight:900;letter-spacing:-2px;line-height:1}
@@ -262,7 +267,7 @@ function renderQnSel(){
  const opts=[10,15,20,POOL.length].filter((v,i,a)=>v<=POOL.length&&a.indexOf(v)===i).sort((a,b)=>a-b);
  $('qnSel').innerHTML=opts.map(n=>{
   const full=(n===POOL.length&&POOL.length>15);
-  return `<button class="ch" style="padding:8px 14px;font-size:14px;${QN===n?'border-color:var(--acc);color:var(--acc)':''}${full?';border-color:#ffd166':''}" onclick="QN=${n};renderQnSel()">${full?`🔥 끝까지 ${n}`:n+'문항'}</button>`;
+  return `<button class="chsel" style="padding:8px 14px;font-size:14px;${QN===n?'border-color:var(--acc);color:var(--acc)':''}${full?';border-color:#ffd166':''}" onclick="QN=${n};renderQnSel()">${full?`🔥 끝까지 ${n}`:n+'문항'}</button>`;
  }).join('')
  + (POOL.length>15?`<div style="width:100%;font-size:12px;color:#ffd166;margin-top:6px">전체(${POOL.length}문항) 완주하면 <b>+500원</b> 추가 적립!</div>`:'');
 }
@@ -278,16 +283,16 @@ function startGame(){
  renderQ();
 }
 
-const LIMIT=5; // 문제당 제한시간(초) - 찾아보고 답하는 걸 막기 위함
+const LIMIT=7, SHOW_FROM=5; // 실제 7초, 화면에는 5초로 보이게(마지막 2초는 여유시간)
 let TID=null,TLEFT=0;
 function stopTimer(){ if(TID){clearInterval(TID);TID=null;} }
 function startTimer(){
  stopTimer(); TLEFT=LIMIT;
- const el=$('tmr'); if(el){el.textContent=TLEFT;el.style.color='var(--dim)';}
+ const el=$('tmr'); if(el){el.textContent=SHOW_FROM;el.style.color='var(--dim)';}
  TID=setInterval(()=>{
   TLEFT--;
   const e2=$('tmr');
-  if(e2){ e2.textContent=Math.max(0,TLEFT); e2.style.color=TLEFT<=2?'var(--red)':'var(--dim)'; }
+  if(e2){ e2.textContent=Math.max(0,Math.min(SHOW_FROM,TLEFT-(LIMIT-SHOW_FROM))); e2.style.color=TLEFT<=3?'var(--red)':'var(--dim)'; }
   if(TLEFT<=0){ stopTimer(); if(!LOCK) answer(-1); }
  },1000);
 }
@@ -308,7 +313,8 @@ function renderQ(){
  $('stage').innerHTML=html;
 
  $('choices').innerHTML=q.choices.map((c,i)=>
-  `<button class="ch" data-i="${i}" onclick="answer(${i})">${esc(c.name)}</button>`).join('');
+  `<button class="ch" data-i="${i}" onclick="answer(${i})">${esc(c.name)}</button>`).join('')
+  +`<button class="chskip" onclick="answer(-2)">🤷 도저히 모르겠어요 (넘기기)</button>`;
  startTimer();
 }
 
@@ -319,7 +325,7 @@ function answer(i){
   const q=QUIZ[IDX];
   const timeout=(i<0);
   const ok=!timeout && q.choices[i] && q.choices[i].uid===q.ans.uid;
-  document.querySelectorAll('.ch').forEach((b,bi)=>{
+  document.querySelectorAll('#choices .ch').forEach((b,bi)=>{
    const c=q.choices[bi];
    if(c&&c.uid===q.ans.uid)b.classList.add('ok');
    else if(bi===i)b.classList.add('no');
