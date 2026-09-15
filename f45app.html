@@ -208,7 +208,7 @@ body{padding-bottom:76px}
   <button onclick="showView('tshirt')">🎽 마일스톤 티셔츠</button>
 
   <h3 style="margin-top:10px">코치 · 근무</h3>
-  <button onclick="if(checkAdminPw())showView('coachmgr')">👥 코치 관리</button>
+  <button onclick="if(checkAdminPw())showView('coachmgr')">👥 직원 관리</button>
   <button onclick="if(checkAdminPw())showView('xlsxsched')">📊 근무표 엑셀 업로드</button>
   <button onclick="if(checkAdminPw())showView('schedule')">📅 스케줄표 직접 입력</button>
   <button onclick="if(checkAdminPw())showView('coachcash')">💰 코치캐시 정산</button>
@@ -257,7 +257,7 @@ function showView(v){window.CURVIEW=v;VIEW=v;
  // 화면 목록을 손으로 적어두면 새 메뉴를 추가할 때마다 빠뜨리기 쉬움 → 실제 존재하는 .view를 전부 훑음
  document.querySelectorAll('.view').forEach(el=>{el.style.display=(el.id==='view-'+v?'':'none');});
  document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('on',b.dataset.v===v));
- const T={att:'수업 출결',risk:'이탈 위험군',expire:'만료 임박',search:'회원 검색',trial:'트라이얼 현황',pass:'횟수권 관리',tshirt:'마일스톤 티셔츠',handoff:'인수인계 관리',leads:'리드 관리',photo:'사진 입력 (수업별)',birthday:'생일 예정자',report:'리포트',heatmap:'출석 히트맵',tasks:'할 일 보드',coachcash:'코치캐시 정산',xlsxsched:'근무표 엑셀 업로드',coachmgr:'코치 관리',coach:'코치 링크 관리',memberall:'회원 전체보기',dashboard:'대시보드',schedule:'스케줄표 입력'};
+ const T={att:'수업 출결',risk:'이탈 위험군',expire:'만료 임박',search:'회원 검색',trial:'트라이얼 현황',pass:'횟수권 관리',tshirt:'마일스톤 티셔츠',handoff:'인수인계 관리',leads:'리드 관리',photo:'사진 입력 (수업별)',birthday:'생일 예정자',report:'리포트',heatmap:'출석 히트맵',tasks:'할 일 보드',coachcash:'코치캐시 정산',xlsxsched:'근무표 엑셀 업로드',coachmgr:'직원 관리',coach:'코치 링크 관리',memberall:'회원 전체보기',dashboard:'대시보드',schedule:'스케줄표 입력'};
  document.getElementById('vtitle').textContent=T[v]||'';
  document.getElementById('sub').style.display=(v==='att'?'':'none');
  document.getElementById('drawer').style.display='none';
@@ -1542,7 +1542,7 @@ async function renderCoachMgr(){
  let staff=[],links=[],sched=[],quiz=[],act=[];
  try{
   const r=await Promise.all([
-   sb.from('staff_list').select('id,name,phone,active').order('active',{ascending:false}).order('created_at'),
+   sb.from('staff_list').select('id,name,phone,active,role').order('active',{ascending:false}).order('created_at'),
    sb.from('coach_links').select('coach_name,token,active'),
    sb.from('coach_schedule').select('coach_name,work_date,work_time').gte('work_date',from).lte('work_date',to),
    sb.from('quiz_sessions').select('coach_name,reward,play_date').gte('play_date',from).lte('play_date',to),
@@ -1584,10 +1584,17 @@ async function renderCoachMgr(){
    <button class="mini" onclick="cmSmsAll()">📱 전체에게 퀴즈 링크 발송</button>
   </div></div>`;
 
- h+=actv.map(s=>cmCard(s,stat[s.name],cash[s.name]||0,tokenOf[norm(s.name)],actBy)).join('');
+ const ROLES=['대표','매니저','코치'];
+ const grid=arr=>`<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:0 10px">${arr.map(s=>cmCard(s,stat[s.name],cash[s.name]||0,tokenOf[norm(s.name)],actBy)).join('')}</div>`;
+ ROLES.forEach(r=>{
+  const g=actv.filter(s=>(s.role||'코치')===r);
+  if(g.length){ h+=`<div class="listhead" style="margin-top:8px">${r} ${g.length}명</div>`+grid(g); }
+ });
+ const etc=actv.filter(s=>!ROLES.includes(s.role||'코치'));
+ if(etc.length){ h+=`<div class="listhead" style="margin-top:8px">기타</div>`+grid(etc); }
  if(inact.length){
   h+=`<div class="listhead" style="margin-top:10px">퇴사/비활성 ${inact.length}명</div>`;
-  h+=inact.map(s=>cmCard(s,stat[s.name],cash[s.name]||0,tokenOf[norm(s.name)],actBy)).join('');
+  h+=grid(inact);
  }
  box.innerHTML=h;
 }
@@ -1597,10 +1604,13 @@ function cmCard(s,st,cash,token,actBy){
  const link=token?`${QUIZ_URL}?t=${token}`:'';
  const a=(token&&actBy&&actBy[token])?actBy[token]:null;
  const actTxt=a?`접속 ${a.n}회 · 최근 ${String(a.last).slice(5,10)}`:'접속 기록 없음';
- return `<div class="carecard" style="margin:0 10px 8px;${s.active?'':'opacity:.55'}">
+ return `<div class="carecard" style="margin:0;${s.active?'':'opacity:.55'}">
   <div style="display:flex;align-items:center;gap:8px">
    <b style="font-size:15px">${esc(s.name)}</b>
-   ${!s.active?'<span style="font-size:10px;color:var(--dim)">퇴사/비활성</span>':''}
+   ${!s.active?'<span style="font-size:10px;color:var(--dim)">퇴사</span>':''}
+   ${s.id?`<select onchange="cmSetRole(${s.id},this.value)" style="font-size:10px;padding:1px 3px">
+     ${['코치','매니저','대표'].map(r=>`<option value="${r}"${(s.role||'코치')===r?' selected':''}>${r}</option>`).join('')}
+    </select>`:''}
    <div style="margin-left:auto;text-align:right">
     <div style="font-weight:900;font-size:17px">${times}<span style="font-size:11px;font-weight:400;color:var(--dim)">타임</span></div>
     <div style="font-size:10px;color:var(--dim)">${days}일 근무${sat?` · 토 ${sat}회`:''}</div>
@@ -1675,6 +1685,13 @@ async function cmToggleActive(id,toActive,name){
  }catch(e){alert('오류: '+e.message);}
 }
 
+async function cmSetRole(id,role){
+ try{
+  const{error}=await sb.from('staff_list').update({role}).eq('id',id);
+  if(error){alert('역할 변경 실패: '+error.message+'\n\nstaff_role.sql을 먼저 실행하셨는지 확인해주세요.');return;}
+  renderCoachMgr();
+ }catch(e){alert('오류: '+e.message);}
+}
 async function cmSavePhone(id,val){
  try{
   const{error}=await sb.from('staff_list').update({phone:val.trim()||null}).eq('id',id);
