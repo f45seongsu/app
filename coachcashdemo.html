@@ -115,7 +115,7 @@ body{
   <div style="margin:18px 0">
    <span class="pill">참여만 해도 <b style="color:var(--gold)">1,000원</b></span>
    <span class="pill">60% 이상 <b style="color:var(--gold)">2,000원</b></span>
-   <span class="pill">만점 <b style="color:var(--gold)">3,000원</b></span>
+   <span class="pill">만점 <b style="color:var(--gold)">3,000원</b></span><div style="font-size:12px;color:var(--dim);margin-top:8px">문제당 5초 · 시간 지나면 오답 처리돼요</div>
   </div>
   <div id="startMsg" class="sub" style="margin-bottom:16px">준비 중…</div>
   <button id="startBtn" class="btn gold" style="display:none" onclick="startGame()">시작하기</button>
@@ -129,6 +129,7 @@ body{
   <div id="streak"></div>
   <div id="bar"><div id="barfill"></div></div>
   <div id="qn"></div>
+  <div id="tmr" style="font-size:15px;font-weight:900;min-width:30px;text-align:right"></div>
  </div>
  <div id="stage"></div>
  <div id="choices"></div>
@@ -246,6 +247,19 @@ function startGame(){
  renderQ();
 }
 
+const LIMIT=5; // 문제당 제한시간(초) - 찾아보고 답하는 걸 막기 위함
+let TID=null,TLEFT=0;
+function stopTimer(){ if(TID){clearInterval(TID);TID=null;} }
+function startTimer(){
+ stopTimer(); TLEFT=LIMIT;
+ const el=$('tmr'); if(el){el.textContent=TLEFT;el.style.color='var(--dim)';}
+ TID=setInterval(()=>{
+  TLEFT--;
+  const e2=$('tmr');
+  if(e2){ e2.textContent=Math.max(0,TLEFT); e2.style.color=TLEFT<=2?'var(--red)':'var(--dim)'; }
+  if(TLEFT<=0){ stopTimer(); if(!LOCK) answer(-1); }
+ },1000);
+}
 function renderQ(){
  const q=QUIZ[IDX];
  $('qn').textContent=`${IDX+1}/${QN}`;
@@ -256,29 +270,37 @@ function renderQ(){
   const qq=QUIZ[IDX+k]; if(!qq)continue;
   const cls=k===0?'card':(k===1?'card behind1':'card behind2');
   const id=k===0?'id="curcard"':'';
-  html+=`<div class="${cls}" ${id}><img src="${esc(qq.ans.photo)}" alt="" onerror="this.outerHTML='<div class=\'initial\'>${esc((qq.ans.name||'?').slice(0,1))}</div>'"><div class="flash"></div></div>`;
+  html+=`<div class="${cls}" ${id}><img src="${esc(qq.ans.photo)}" alt="" onerror="this.style.visibility='hidden'"><div class="flash"></div></div>`;
  }
  $('stage').innerHTML=html;
  $('choices').innerHTML=q.choices.map((c,i)=>
   `<button class="ch" data-i="${i}" onclick="answer(${i})">${esc(c.name)}</button>`).join('');
+ startTimer();
 }
 
 function answer(i){
- if(LOCK)return; LOCK=true;
- const q=QUIZ[IDX];
- const ok=q.choices[i].uid===q.ans.uid;
- const btns=[...document.querySelectorAll('.ch')];
- const card=$('curcard');
- btns.forEach((b,bi)=>{
-  const c=q.choices[bi];
-  if(c.uid===q.ans.uid)b.classList.add('ok');
-  else if(bi===i)b.classList.add('no');
-  else b.classList.add('dim');
- });
- if(ok){CORRECT++;STREAK++;BEST=Math.max(BEST,STREAK);card&&card.classList.add('correct');buzz(18);}
- else{STREAK=0;WRONGS.push(q.ans);card&&card.classList.add('wrong');buzz([40,50,40]);}
- $('barfill').style.width=((IDX+1)/QN*100)+'%';
- setTimeout(()=>{IDX++;LOCK=false;if(IDX>=QN)finish();else renderQ();},ok?520:1050);
+ if(LOCK)return; LOCK=true; stopTimer();
+ const el=$('tmr'); if(el)el.textContent='';
+ try{
+  const q=QUIZ[IDX];
+  const timeout=(i<0);
+  const ok=!timeout && q.choices[i] && q.choices[i].uid===q.ans.uid;
+  document.querySelectorAll('.ch').forEach((b,bi)=>{
+   const c=q.choices[bi];
+   if(c&&c.uid===q.ans.uid)b.classList.add('ok');
+   else if(bi===i)b.classList.add('no');
+   else b.classList.add('dim');
+  });
+  const card=$('curcard');
+  if(ok){CORRECT++;STREAK++;BEST=Math.max(BEST,STREAK);card&&card.classList.add('correct');buzz(18);}
+  else{STREAK=0;WRONGS.push(q.ans);card&&card.classList.add('wrong');buzz([40,50,40]);}
+  $('barfill').style.width=((IDX+1)/QN*100)+'%';
+  setTimeout(()=>{ IDX++; LOCK=false; if(IDX>=QN)finish(); else renderQ(); }, ok?520:1050);
+ }catch(e){
+  // 어떤 이유로든 오류가 나도 게임이 멈추지 않게 다음 문제로 넘어감
+  console.error('answer error',e);
+  setTimeout(()=>{ IDX++; LOCK=false; if(IDX>=QN)finish(); else renderQ(); },400);
+ }
 }
 
 function rewardFor(acc){ if(acc>=100)return 3000; if(acc>=60)return 2000; return 1000; }
@@ -286,6 +308,7 @@ function rewardFor(acc){ if(acc>=100)return 3000; if(acc>=60)return 2000; return
 function fullBonus(){ return (POOL.length>15 && QN===POOL.length) ? 500 : 0; }
 
 function finish(){
+ stopTimer(); const te=$('tmr'); if(te)te.textContent='';
  const acc=Math.round(CORRECT/QN*100);
  const bonus=fullBonus();
  const reward=rewardFor(acc)+bonus;
