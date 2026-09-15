@@ -254,9 +254,10 @@ function badgeOf(m){if(m.stage==='트라이얼')return '트라이얼';if(m.pass_
 let VIEW='att';
 function toggleDrawer(){const d=document.getElementById('drawer');d.style.display=d.style.display==='none'?'block':'none';}
 function showView(v){window.CURVIEW=v;VIEW=v;
- ['att','risk','expire','search','trial','pass','photo','birthday','tshirt','handoff','leads','report','coach','aiconfig','memberall','dashboard','schedule'].forEach(x=>{const el=document.getElementById('view-'+x);if(el)el.style.display=(x===v?'':'none');});
+ // 화면 목록을 손으로 적어두면 새 메뉴를 추가할 때마다 빠뜨리기 쉬움 → 실제 존재하는 .view를 전부 훑음
+ document.querySelectorAll('.view').forEach(el=>{el.style.display=(el.id==='view-'+v?'':'none');});
  document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('on',b.dataset.v===v));
- const T={att:'수업 출결',risk:'이탈 위험군',expire:'만료 임박',search:'회원 검색',trial:'트라이얼 현황',pass:'횟수권 관리',tshirt:'마일스톤 티셔츠',handoff:'인수인계 관리',leads:'리드 관리',photo:'사진 입력 (수업별)',birthday:'생일 예정자',report:'리포트',heatmap:'출석 히트맵',tasks:'할 일 보드',coachcash:'코치캐시 정산',xlsxsched:'근무표 엑셀 업로드',coachmgr:'코치 관리',coaches:'코치 관리',coach:'코치 링크 관리',memberall:'회원 전체보기',dashboard:'대시보드',schedule:'스케줄표 입력'};
+ const T={att:'수업 출결',risk:'이탈 위험군',expire:'만료 임박',search:'회원 검색',trial:'트라이얼 현황',pass:'횟수권 관리',tshirt:'마일스톤 티셔츠',handoff:'인수인계 관리',leads:'리드 관리',photo:'사진 입력 (수업별)',birthday:'생일 예정자',report:'리포트',heatmap:'출석 히트맵',tasks:'할 일 보드',coachcash:'코치캐시 정산',xlsxsched:'근무표 엑셀 업로드',coachmgr:'코치 관리',coach:'코치 링크 관리',memberall:'회원 전체보기',dashboard:'대시보드',schedule:'스케줄표 입력'};
  document.getElementById('vtitle').textContent=T[v]||'';
  document.getElementById('sub').style.display=(v==='att'?'':'none');
  document.getElementById('drawer').style.display='none';
