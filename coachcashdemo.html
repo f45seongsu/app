@@ -149,34 +149,76 @@ body{
  </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
-const QN=10;
-let COACH='데모';
-let POOL=[],QUIZ=[],IDX=0,CORRECT=0,STREAK=0,BEST=0,WRONGS=[],LOCK=false;
-let DEMO_CASH=0;
+const SB_URL='https://mvgbwsbvngdnxdndwimb.supabase.co';
+const SB_KEY='sb_publishable_ZRHS4-UR7Q07Fmtc_P-19g_fVlIc85X';
+const sb=supabase.createClient(SB_URL,SB_KEY);
+
+let QN=10;
+let POOL=[],ALLNAMES=[],SCOPE='',QUIZ=[],IDX=0,CORRECT=0,STREAK=0,BEST=0,WRONGS=[],LOCK=false;
 
 const $=id=>document.getElementById(id);
 function show(id){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('on'));$(id).classList.add('on');}
 function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 function buzz(ms){try{navigator.vibrate&&navigator.vibrate(ms);}catch(e){}}
 function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
+function photoOf(m){return m.photo_url||m.glofox_photo||'';}
+function kstDate(d){return d.toLocaleDateString('sv-SE',{timeZone:'Asia/Seoul'});}
+function kstHour(iso){return +new Date(iso).toLocaleTimeString('en-GB',{timeZone:'Asia/Seoul',hour:'2-digit',hour12:false});}
 
-// ===== 데모용 가짜 회원 (실제 DB 안 씀) =====
-const DEMO_NAMES=['김재희','임재성','정고운','류승규','정한솔','김정아','박찬재','손서영','이정진','김민채',
- '김윤진','이기찬','임재찬','강순조','손주희','김근모','고병찬','구지훈','손화랑','송병훈'];
-const DEMO_COLORS=['#2d4a7a','#7a2d4a','#2d7a52','#7a5a2d','#5a2d7a','#2d6a7a','#7a2d2d','#3a7a2d'];
+(async function init(){
+ $('startMsg').textContent='어제 저녁 수업 참석자를 불러오는 중…';
+ let all=[];
+ try{
+  const{data,error}=await sb.from('people')
+   .select('glofox_user_id,name,name_override,photo_url,glofox_photo,stage')
+   .not('glofox_user_id','is',null).limit(3000);
+  if(error)throw error;
+  all=(data||[]).map(m=>({uid:m.glofox_user_id,name:(m.name_override||m.name||'').trim(),photo:photoOf(m),stage:m.stage}))
+   .filter(m=>m.name&&m.photo&&m.stage!=='리드');
+ }catch(e){ $('startMsg').textContent='회원 정보를 못 불러왔어요: '+e.message; return; }
+ ALLNAMES=all;
 
-(function init(){
- POOL=DEMO_NAMES.map((n,i)=>({uid:'demo'+i,name:n,color:DEMO_COLORS[i%DEMO_COLORS.length],photo:''}));
- $('startMsg').innerHTML='<b>데모 모드</b>입니다. 실제 회원 사진 대신 이름 카드로 보여요.<br>흐름과 느낌만 확인해보세요!';
+ // 어제부터 최대 7일 거슬러 올라가며 "저녁(17시 이후) 수업 참석자"가 있는 날 찾기
+ let found=null;
+ for(let back=1;back<=7&&!found;back++){
+  const d=new Date(); d.setDate(d.getDate()-back);
+  const day=kstDate(d);
+  try{
+   const{data}=await sb.from('attendance').select('glofox_user_id,class_time')
+    .eq('attended',true).gte('class_time',day+'T00:00:00').lte('class_time',day+'T23:59:59').limit(500);
+   const uids=[...new Set((data||[]).filter(a=>kstHour(a.class_time)>=17).map(a=>a.glofox_user_id))];
+   const pool=all.filter(m=>uids.includes(m.uid));
+   if(pool.length>=6) found={day,pool};
+  }catch(e){}
+ }
+
+ if(found){ POOL=found.pool; SCOPE=`${found.day.slice(5).replace('-','/')} 저녁 수업 참석자`; }
+ else { POOL=all; SCOPE='전체 회원(저녁 참석자 데이터 부족)'; }
+
+ if(POOL.length<6){ $('startMsg').textContent=`사진 등록된 회원이 ${POOL.length}명뿐이라 퀴즈를 만들 수 없어요.`; return; }
+
+ QN=Math.min(10,POOL.length);
+ $('startMsg').innerHTML=`<b>데모 모드</b> · 출제 범위: <b style="color:var(--acc)">${esc(SCOPE)}</b> (${POOL.length}명)`
+  +`<div style="margin-top:12px;font-size:13px">문항 수 선택</div>`
+  +`<div id="qnSel" style="display:flex;gap:6px;justify-content:center;margin-top:6px;flex-wrap:wrap"></div>`;
+ renderQnSel();
  $('startBtn').style.display='inline-block';
- $('myCash').innerHTML='누적 코치캐시 <b style="color:var(--gold);font-size:19px">0원</b><br><span style="font-size:12px">데모라 실제로 적립되지 않아요</span>';
+ $('myCash').innerHTML='<span style="font-size:12px">데모라 실제로 적립되지 않아요</span>';
 })();
+
+function renderQnSel(){
+ const opts=[10,20,POOL.length].filter((v,i,a)=>v<=POOL.length&&a.indexOf(v)===i);
+ $('qnSel').innerHTML=opts.map(n=>
+  `<button class="ch" style="padding:8px 14px;font-size:14px;${QN===n?'border-color:var(--acc);color:var(--acc)':''}" onclick="QN=${n};renderQnSel()">${n===POOL.length?`전체 ${n}`:n}문항</button>`).join('');
+}
 
 function startGame(){
  const picks=shuffle(POOL.slice()).slice(0,QN);
  QUIZ=picks.map(ans=>{
-  const others=shuffle(POOL.filter(p=>p.uid!==ans.uid)).slice(0,4);
+  const src=(ALLNAMES.length?ALLNAMES:POOL);
+  const others=shuffle(src.filter(p=>p.uid!==ans.uid&&p.name!==ans.name)).slice(0,4);
   return{ans,choices:shuffle([ans,...others])};
  });
  IDX=0;CORRECT=0;STREAK=0;BEST=0;WRONGS=[];LOCK=false;
@@ -194,7 +236,7 @@ function renderQ(){
   const qq=QUIZ[IDX+k]; if(!qq)continue;
   const cls=k===0?'card':(k===1?'card behind1':'card behind2');
   const id=k===0?'id="curcard"':'';
-  html+=`<div class="${cls}" ${id}><div class="initial" style="background:linear-gradient(160deg,${qq.ans.color},#0f1828)">${esc(qq.ans.name.slice(0,1))}</div><div class="flash"></div></div>`;
+  html+=`<div class="${cls}" ${id}><img src="${esc(qq.ans.photo)}" alt="" onerror="this.outerHTML='<div class=\'initial\'>${esc((qq.ans.name||'?').slice(0,1))}</div>'"><div class="flash"></div></div>`;
  }
  $('stage').innerHTML=html;
  $('choices').innerHTML=q.choices.map((c,i)=>
