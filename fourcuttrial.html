@@ -6,17 +6,24 @@
 <title>F45 SEONGSU Photo Booth</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Noto+Sans+KR:wght@400;500;700;900&display=swap" rel="stylesheet">
 <style>
+  /*
+    브랜드 컬러/폰트는 F45 성수 기존 마케팅 자산 기준으로 맞춤 (navy #211551 / red #D6001C).
+    한글 서체는 실제로는 Pretendard를 쓰시는데, 구글폰트가 아니라서 이 미리보기(Claude 아티팩트)의
+    외부 리소스 제한상 못 불러와요. Noto Sans KR로 임시 대체해뒀고, 실서버(깃허브페이지 등)에
+    올리실 땐 Pretendard 폰트 파일 링크로 한 줄만 바꿔주시면 됩니다 (아래 --font-kr 참고 주석).
+  */
   :root {
-    --navy: #14163b;
-    --navy-deep: #0b0c26;
-    --red: #d5352a;
+    --navy: #211551;
+    --navy-deep: #150d38;
+    --red: #d6001c;
     --white: #ffffff;
     --off-white: #f2f1ec;
     --ink: #16171c;
     --muted: #6b6d78;
-    --line: rgba(20,22,59,0.12);
+    --line: rgba(33,21,81,0.14);
+    --radius: 4px; /* 브랜드가 각진 스타일이라 라운드는 최소한으로 */
   }
 
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -27,7 +34,7 @@
   }
 
   body {
-    font-family: 'Inter', sans-serif;
+    font-family: 'Noto Sans KR', sans-serif;
     background: var(--navy-deep);
     color: var(--ink);
     display: flex;
@@ -62,7 +69,7 @@
     background: var(--red);
   }
   .brand-mark {
-    font-family: 'Barlow Condensed', sans-serif;
+    font-family: 'Bebas Neue', sans-serif; letter-spacing: 0.5px;
     font-weight: 800;
     font-size: 30px;
     letter-spacing: 0.5px;
@@ -70,7 +77,7 @@
     line-height: 1;
   }
   .brand-sub {
-    font-family: 'Barlow Condensed', sans-serif;
+    font-family: 'Bebas Neue', sans-serif; letter-spacing: 0.5px;
     font-weight: 600;
     font-size: 13px;
     letter-spacing: 4px;
@@ -91,7 +98,7 @@
   /* ===== Screen 1: name select ===== */
   #screen-name { padding: 24px 24px 20px; }
   .prompt-title {
-    font-family: 'Barlow Condensed', sans-serif;
+    font-family: 'Bebas Neue', sans-serif; letter-spacing: 0.5px;
     font-weight: 700;
     font-size: 26px;
     color: var(--navy);
@@ -108,7 +115,7 @@
     gap: 10px;
     background: var(--white);
     border: 1.5px solid var(--line);
-    border-radius: 12px;
+    border-radius: 4px;
     padding: 13px 16px;
     margin-bottom: 16px;
     flex-shrink: 0;
@@ -116,7 +123,7 @@
   .search-box input {
     border: none;
     outline: none;
-    font-family: 'Inter', sans-serif;
+    font-family: 'Noto Sans KR', sans-serif;
     font-size: 16px;
     width: 100%;
     background: transparent;
@@ -143,7 +150,7 @@
   .chip {
     background: var(--white);
     border: 1.5px solid var(--line);
-    border-radius: 10px;
+    border-radius: 4px;
     padding: 10px 4px;
     text-align: center;
     cursor: pointer;
@@ -190,9 +197,9 @@
     width: 100%;
     background: transparent;
     border: 1.5px dashed var(--line);
-    border-radius: 10px;
+    border-radius: 4px;
     padding: 12px;
-    font-family: 'Inter', sans-serif;
+    font-family: 'Noto Sans KR', sans-serif;
     font-size: 14px;
     font-weight: 600;
     color: var(--muted);
@@ -206,7 +213,7 @@
     margin-top: 10px;
     background: var(--white);
     border: 1.5px solid var(--line);
-    border-radius: 12px;
+    border-radius: 4px;
     padding: 14px;
     flex-shrink: 0;
     gap: 8px;
@@ -215,9 +222,9 @@
   .manual-form.open { display: flex; }
   .manual-form input {
     border: 1.5px solid var(--line);
-    border-radius: 9px;
+    border-radius: 3px;
     padding: 11px 13px;
-    font-family: 'Inter', sans-serif;
+    font-family: 'Noto Sans KR', sans-serif;
     font-size: 15px;
     outline: none;
     color: var(--ink);
@@ -228,9 +235,9 @@
     background: var(--navy);
     color: white;
     border: none;
-    border-radius: 9px;
+    border-radius: 3px;
     padding: 11px;
-    font-family: 'Barlow Condensed', sans-serif;
+    font-family: 'Bebas Neue', sans-serif; letter-spacing: 0.5px;
     font-weight: 700;
     font-size: 16px;
     cursor: pointer;
@@ -255,7 +262,7 @@
     gap: 6px;
     background: var(--navy);
     color: white;
-    border-radius: 999px;
+    border-radius: 4px;
     padding: 6px 8px 6px 12px;
     font-size: 13px;
     font-weight: 600;
@@ -276,9 +283,9 @@
     background: var(--red);
     color: var(--white);
     border: none;
-    border-radius: 14px;
+    border-radius: 4px;
     padding: 18px;
-    font-family: 'Barlow Condensed', sans-serif;
+    font-family: 'Bebas Neue', sans-serif; letter-spacing: 0.5px;
     font-weight: 700;
     font-size: 20px;
     letter-spacing: 0.5px;
@@ -318,7 +325,7 @@
   }
   .shot-name {
     color: white;
-    font-family: 'Barlow Condensed', sans-serif;
+    font-family: 'Bebas Neue', sans-serif; letter-spacing: 0.5px;
     font-size: 19px;
     font-weight: 700;
     max-width: 320px;
@@ -338,7 +345,7 @@
   /* ===== Screen 2.5: 8컷 중 4컷 선택 ===== */
   #screen-pick { padding: 22px 22px 20px; }
   .pick-title {
-    font-family: 'Barlow Condensed', sans-serif;
+    font-family: 'Bebas Neue', sans-serif; letter-spacing: 0.5px;
     font-weight: 700;
     font-size: 24px;
     color: var(--navy);
@@ -360,7 +367,7 @@
   }
   .pick-thumb {
     position: relative;
-    border-radius: 10px;
+    border-radius: 4px;
     overflow: hidden;
     border: 3px solid transparent;
     cursor: pointer;
@@ -378,7 +385,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    font-family: 'Barlow Condensed', sans-serif;
+    font-family: 'Bebas Neue', sans-serif; letter-spacing: 0.5px;
     font-weight: 700;
     font-size: 14px;
   }
@@ -388,7 +395,7 @@
     position: absolute;
     top: 50%; left: 50%;
     transform: translate(-50%, -50%);
-    font-family: 'Barlow Condensed', sans-serif;
+    font-family: 'Bebas Neue', sans-serif; letter-spacing: 0.5px;
     font-weight: 800;
     font-size: 130px;
     color: white;
@@ -424,7 +431,7 @@
   /* ===== Screen 3: review ===== */
   #screen-review { padding: 24px; align-items: center; }
   .review-title {
-    font-family: 'Barlow Condensed', sans-serif;
+    font-family: 'Bebas Neue', sans-serif; letter-spacing: 0.5px;
     font-weight: 700;
     font-size: 24px;
     color: var(--navy);
@@ -456,9 +463,9 @@
     flex: 1;
     background: var(--white);
     border: 1.5px solid var(--line);
-    border-radius: 14px;
+    border-radius: 4px;
     color: var(--navy);
-    font-family: 'Barlow Condensed', sans-serif;
+    font-family: 'Bebas Neue', sans-serif; letter-spacing: 0.5px;
     font-weight: 700;
     font-size: 17px;
     cursor: pointer;
@@ -483,7 +490,7 @@
   }
   .done-icon svg { width: 34px; height: 34px; }
   .done-title {
-    font-family: 'Barlow Condensed', sans-serif;
+    font-family: 'Bebas Neue', sans-serif; letter-spacing: 0.5px;
     font-weight: 700;
     font-size: 26px;
     color: var(--navy);
@@ -517,7 +524,7 @@
     padding: 14px 16px;
     background: #fdf2f1;
     border: 1.5px solid var(--red);
-    border-radius: 12px;
+    border-radius: 4px;
     color: var(--red);
     font-size: 14px;
     line-height: 1.5;
@@ -845,12 +852,15 @@ async function beginCaptureSequence() {
   await captureShot();
   document.getElementById('cam-hint').textContent = `1/${SHOT_COUNT}컷 · 계속 갈게요!`;
 
-  // 나머지 컷: 버스트로 빠르게 (카운트다운 없이 짧은 텀으로 연속 촬영)
+  // 나머지 컷: 카운트다운 없이 찍지만, 포즈 바꿀 시간은 충분히 줌 (기존 0.85초 → 1.8초)
   for (let i = 1; i < SHOT_COUNT; i++) {
-    await sleep(850);
+    document.getElementById('cam-hint').textContent = "다음 포즈 준비...";
+    await sleep(1300);
+    document.getElementById('cam-hint').textContent = "찰칵!";
     await captureShot();
     document.getElementById('cam-hint').textContent =
-      (i < SHOT_COUNT - 1) ? `${i + 1}/${SHOT_COUNT}컷 · 계속 포즈!` : "촬영 완료!";
+      (i < SHOT_COUNT - 1) ? `${i + 1}/${SHOT_COUNT}컷 완료` : "촬영 완료!";
+    await sleep(500);
   }
 
   await sleep(400);
@@ -1040,35 +1050,45 @@ function roundRectClip(ctx, x, y, w, h, r) {
 }
 
 function drawOverlay(ctx, W, H, pad, gridBottomY) {
-  const footerTop = gridBottomY + 8;
+  const footerTop = gridBottomY + 10;
   const footerH = H - footerTop - pad * 0.4;
 
-  const markR = footerH * 0.42;
-  const markCx = pad + markR;
-  const markCy = footerTop + footerH / 2;
-  ctx.fillStyle = "#14163b";
-  ctx.beginPath();
-  ctx.arc(markCx, markCy, markR, 0, Math.PI * 2);
+  // 운동 마크: 작은 배지로 축소 (전에는 세로 절반을 차지할 만큼 컸음)
+  const markSize = 30;
+  const markX = pad;
+  const markY = footerTop + (footerH - markSize) / 2;
+  ctx.fillStyle = "#211551";
+  roundRectPath(ctx, markX, markY, markSize, markSize, 5);
   ctx.fill();
-  ctx.font = `${markR * 1.1}px sans-serif`;
+  ctx.font = `${markSize * 0.6}px sans-serif`;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.fillText("🔥", markCx, markCy + 2);
+  ctx.fillText("🔥", markX + markSize / 2, markY + markSize / 2 + 1);
 
-  const textX = markCx + markR + 16;
+  const textX = markX + markSize + 12;
   ctx.textAlign = "left";
-  ctx.fillStyle = "#14163b";
-  ctx.font = "700 26px 'Barlow Condensed', sans-serif";
-  ctx.fillText("F45 SEONGSU", textX, footerTop + footerH * 0.42);
+  ctx.fillStyle = "#211551";
+  ctx.font = "20px 'Bebas Neue', sans-serif";
+  ctx.fillText("F45 SEONGSU", textX, footerTop + footerH * 0.4);
 
   const todayStr = new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit' });
   const clsLabel = state.selected.length ? state.selected[0].cls : "";
   ctx.fillStyle = "#6b6d78";
-  ctx.font = "500 16px 'Inter', sans-serif";
+  ctx.font = "500 13px 'Noto Sans KR', sans-serif";
   ctx.fillText(todayStr + "  ·  " + clsLabel, textX, footerTop + footerH * 0.72);
 
-  ctx.fillStyle = "#d5352a";
-  ctx.fillRect(0, H - 6, W, 6);
+  ctx.fillStyle = "#d6001c";
+  ctx.fillRect(0, H - 5, W, 5);
+}
+
+function roundRectPath(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
 }
 
 document.getElementById('btn-retake').addEventListener('click', startCameraFlow);
