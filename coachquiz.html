@@ -288,8 +288,18 @@ async function pickWho(name){
 
  if(POOL.length<6){ $('startMsg').innerHTML=`퀴즈를 만들 수 없어요 (대상 ${POOL.length}명)`; return; }
 
+ // 오답노트에 쌓인 사람 확인
+ WRONGPOOL=[];
+ try{
+  const{data}=await sb.from('quiz_wrong').select('member_uid,wrong_count')
+   .eq('staff_name',name).eq('cleared',false);
+  const ids=new Set((data||[]).map(r=>r.member_uid));
+  WRONGPOOL=ALLPEOPLE.filter(m=>ids.has(m.uid));
+ }catch(e){}
+
  QN=Math.min(20,POOL.length);
  $('startMsg').innerHTML=`출제 범위: <b style="color:var(--acc)">${esc(SCOPE)}</b> (${POOL.length}명)`
+  +(WRONGPOOL.length>=4?`<div style="margin-top:10px"><button class="chsel" style="padding:9px 15px;font-size:14px;border-color:#ff7979;color:#ff7979" onclick="startWrongMode()">📕 오답노트 다시 풀기 (${WRONGPOOL.length}명)</button></div>`:'')
   +`<div style="margin-top:12px;font-size:13px">문항 수 선택</div><div id="qnSel" style="display:flex;gap:6px;justify-content:center;margin-top:6px;flex-wrap:wrap"></div>`;
  renderQnSel();
  $('startBtn').style.display='inline-block';
@@ -334,6 +344,15 @@ function weightedPick(arr,n){
  return out;
 }
 
+let WRONGPOOL=[];
+// 오답노트 모드: 전에 틀렸던 사람들만 다시 출제
+function startWrongMode(){
+ if(WRONGPOOL.length<4){alert('오답노트에 쌓인 회원이 아직 적어요.');return;}
+ POOL=WRONGPOOL.slice();
+ SCOPE='오답노트';
+ QN=Math.min(20,POOL.length);
+ startGame();
+}
 function startGame(){
  const picks=weightedPick(POOL,QN);
  const src=(ALLNAMES.length?ALLNAMES:POOL);
@@ -441,6 +460,22 @@ function nextQ(){
  if(IDX>=QN)finish(); else renderQ();
 }
 
+// 오답노트 기록: 틀린 사람은 쌓고, 맞힌 사람은 해제
+async function saveWrongNotes(){
+ try{
+  for(const w of WRONGS){
+   const{data:ex}=await sb.from('quiz_wrong').select('id,wrong_count')
+     .eq('staff_name',COACH).eq('member_uid',w.uid).maybeSingle();
+   if(ex) await sb.from('quiz_wrong').update({wrong_count:(ex.wrong_count||1)+1,last_wrong:new Date().toISOString(),cleared:false}).eq('id',ex.id);
+   else   await sb.from('quiz_wrong').insert({staff_name:COACH,member_uid:w.uid,member_name:w.name});
+  }
+  // 이번에 맞힌 사람은 오답노트에서 해제
+  const wrongIds=new Set(WRONGS.map(w=>w.uid));
+  const solved=QUIZ.map(q=>q.ans).filter(a=>!wrongIds.has(a.uid)).map(a=>a.uid);
+  if(solved.length) await sb.from('quiz_wrong').update({cleared:true}).eq('staff_name',COACH).in('member_uid',solved);
+ }catch(e){ console.warn('오답노트 저장 실패',e); }
+}
+
 // 메모를 f45app과 같은 곳(memo_log)에 저장 → 회원 상세에서 바로 보임
 async function saveMemo(person,text){
  try{
@@ -490,6 +525,7 @@ async function finish(){
   }
  }catch(e){ $('doneNote').textContent='기록 저장 오류'; }
 
+ saveWrongNotes();
  try{await sb.from('coach_activity').insert({token:COACH,coach_name:COACH,event_type:'quiz_play'});}catch(e){}
 }
 
