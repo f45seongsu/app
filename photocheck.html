@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="ko"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>회원 사진 점검</title>
+<style>
+body{background:#0d1420;color:#e8eef7;font-family:-apple-system,"Apple SD Gothic Neo","Noto Sans KR",sans-serif;margin:0;padding:16px}
+h1{font-size:19px;margin:0 0 4px}
+.sub{color:#8d9bb2;font-size:13px;line-height:1.7}
+.box{background:#16223a;border:1px solid #22304a;border-radius:14px;padding:14px;margin-top:12px}
+.big{font-size:30px;font-weight:900}
+.ok{color:#4ee88a}.bad{color:#ff5c5c}.dim{color:#8d9bb2}
+button{background:#3f7fd4;border:none;color:#fff;border-radius:12px;padding:12px 18px;font-size:15px;font-weight:800;cursor:pointer}
+table{width:100%;border-collapse:collapse;font-size:12px;margin-top:8px}
+td,th{padding:5px 4px;border-bottom:1px solid #22304a;text-align:left}
+#bar{height:8px;background:#1a2740;border-radius:99px;overflow:hidden;margin-top:10px}
+#fill{height:100%;width:0;background:#5aa0e0;transition:width .2s}
+</style></head><body>
+
+<h1>회원 사진 점검</h1>
+<div class="sub">DB에 저장된 사진 주소가 <b>실제로 열리는지</b> 하나씩 불러와서 확인해요.<br>
+표본 200명만 확인하니 1~2분이면 끝나요.</div>
+
+<div class="box">
+ <button id="go" onclick="run()">점검 시작</button>
+ <div id="bar"><div id="fill"></div></div>
+ <div id="prog" class="sub" style="margin-top:6px"></div>
+</div>
+
+<div id="out"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+const SB_URL='https://mvgbwsbvngdnxdndwimb.supabase.co';
+const SB_KEY='sb_publishable_ZRHS4-UR7Q07Fmtc_P-19g_fVlIc85X';
+const APP_TOKEN=new URLSearchParams(location.search).get('key')||'f45sujong-2026';
+const sb=supabase.createClient(SB_URL,SB_KEY,{global:{headers:{'x-app-token':APP_TOKEN}}});
+const $=i=>document.getElementById(i);
+
+function check(url,ms){
+ return new Promise(res=>{
+  if(!url){res(false);return;}
+  const img=new Image(); let done=false;
+  const t=setTimeout(()=>{if(!done){done=true;res(false);}},ms||6000);
+  img.onload=()=>{if(!done){done=true;clearTimeout(t);res(img.naturalWidth>0);}};
+  img.onerror=()=>{if(!done){done=true;clearTimeout(t);res(false);}};
+  img.src=url;
+ });
+}
+
+async function run(){
+ $('go').disabled=true; $('go').textContent='점검 중…';
+ $('out').innerHTML='';
+ let all=[],from=0;
+ try{
+  while(true){
+   const{data,error}=await sb.from('people').select('*').range(from,from+999);
+   if(error)throw error;
+   all=all.concat(data||[]);
+   if(!data||data.length<1000)break;
+   from+=1000;
+   $('prog').textContent=`회원 ${all.length}명 불러오는 중…`;
+  }
+ }catch(e){ $('out').innerHTML=`<div class="box"><b class="bad">불러오기 실패</b><br><span class="sub">${e.message}</span></div>`; $('go').disabled=false; $('go').textContent='다시 시도'; return; }
+
+ const withPU=all.filter(m=>m.photo_url);
+ const withGP=all.filter(m=>!m.photo_url&&m.glofox_photo);
+ const none=all.filter(m=>!m.photo_url&&!m.glofox_photo);
+
+ // 각 종류에서 표본 100명씩
+ const sample=(arr,n)=>arr.slice().sort(()=>Math.random()-.5).slice(0,n);
+ const sPU=sample(withPU,100), sGP=sample(withGP,100);
+ const targets=sPU.map(m=>({m,url:m.photo_url,kind:'직접등록'}))
+   .concat(sGP.map(m=>({m,url:m.glofox_photo,kind:'글로폭스'})));
+
+ let done=0, res={직접등록:{ok:0,no:0,fail:[]},글로폭스:{ok:0,no:0,fail:[]}};
+ for(let i=0;i<targets.length;i+=10){
+  const batch=targets.slice(i,i+10);
+  const oks=await Promise.all(batch.map(t=>check(t.url)));
+  batch.forEach((t,k)=>{
+   if(oks[k])res[t.kind].ok++;
+   else { res[t.kind].no++; if(res[t.kind].fail.length<5)res[t.kind].fail.push(t); }
+  });
+  done+=batch.length;
+  $('fill').style.width=(done/targets.length*100)+'%';
+  $('prog').textContent=`${done}/${targets.length} 확인`;
+ }
+
+ const pct=(o,n)=>((o+n)?Math.round(o/(o+n)*100):0);
+ $('out').innerHTML=`
+ <div class="box">
+  <b>전체 회원 ${all.length}명</b>
+  <table>
+   <tr><th>구분</th><th>인원</th></tr>
+   <tr><td>직접 등록 사진 있음</td><td>${withPU.length}명</td></tr>
+   <tr><td>글로폭스 사진만 있음</td><td>${withGP.length}명</td></tr>
+   <tr><td class="dim">사진 주소 없음</td><td class="dim">${none.length}명</td></tr>
+  </table>
+ </div>
+ <div class="box">
+  <b>실제로 열리는지 (표본 검사)</b>
+  <table>
+   <tr><th>구분</th><th>표본</th><th>열림</th><th>안열림</th><th>성공률</th></tr>
+   <tr><td>직접 등록</td><td>${sPU.length}</td><td class="ok">${res.직접등록.ok}</td><td class="bad">${res.직접등록.no}</td><td>${pct(res.직접등록.ok,res.직접등록.no)}%</td></tr>
+   <tr><td>글로폭스</td><td>${sGP.length}</td><td class="ok">${res.글로폭스.ok}</td><td class="bad">${res.글로폭스.no}</td><td>${pct(res.글로폭스.ok,res.글로폭스.no)}%</td></tr>
+  </table>
+ </div>
+ ${['직접등록','글로폭스'].filter(k=>res[k].fail.length).map(k=>`
+ <div class="box">
+  <b class="bad">${k} 실패 예시</b>
+  ${res[k].fail.map(t=>`<div style="margin-top:8px;font-size:12px;word-break:break-all">
+    <b>${(t.m.name_override||t.m.name||'?')}</b><br><span class="dim">${t.url}</span></div>`).join('')}
+ </div>`).join('')}
+ `;
+ $('go').disabled=false; $('go').textContent='다시 점검';
+}
+</script>
+</body></html>
