@@ -128,6 +128,7 @@ body{
   <h1 style="margin:10px 0 4px;font-size:26px">회원 이름 맞히기</h1>
   <div class="sub">회원 얼굴 보고 이름 맞히기<br>수업에서 만난 분들, 이름까지 기억해볼까요?</div>
   <div style="font-size:12px;color:var(--dim);margin:14px 0">문제당 5초 · 이름을 보고 잠깐 기억해보세요</div>
+  <div id="whoBox" style="margin-bottom:14px"></div>
   <div id="startMsg" class="sub" style="margin-bottom:16px">준비 중…</div>
   <button id="startBtn" class="btn gold" style="display:none" onclick="startGame()">시작하기</button>
   <div id="myCash" class="sub" style="margin-top:18px"></div>
@@ -189,6 +190,7 @@ function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;',
 function buzz(ms){try{navigator.vibrate&&navigator.vibrate(ms);}catch(e){}}
 function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
 function photoOf(m){return m.photo_url||m.glofox_photo||'';}
+function kstDate(d){return d.toLocaleDateString('sv-SE',{timeZone:'Asia/Seoul'});}
 function todayKst(){return new Date().toLocaleDateString('sv-SE',{timeZone:'Asia/Seoul'});}
 
 // ===== 초기화 =====
@@ -205,99 +207,94 @@ async function fetchPhotoMembers(){
   from+=1000;
  }
  DIAG.total=out.length;
- const mapped=out.map(m=>({uid:m.glofox_user_id,name:(m.name_override||m.name||'').trim(),photo:photoOf(m),stage:m.stage,gender:m.gender}));
+ const mapped=out.map(m=>({uid:m.glofox_user_id,name:(m.name_override||m.name||'').trim(),photo:photoOf(m),stage:m.stage,gender:m.gender,join_date:m.join_date}));
  DIAG.withPhoto=mapped.filter(m=>m.photo).length;
  const res=mapped.filter(m=>m.uid&&m.name&&m.photo&&m.stage!=='리드');
  DIAG.named=res.length;
  return res;
 }
 
-(async function init(){
- TOKEN=new URLSearchParams(location.search).get('t')||'';
- if(!TOKEN){$('startMsg').textContent='링크가 올바르지 않아요. 관리자에게 문의해주세요.';return;}
- try{
-  const{data,error}=await sb.from('coach_links').select('coach_name,active').eq('token',TOKEN).maybeSingle();
-  if(error||!data||!data.active){$('startMsg').textContent='만료되었거나 사용할 수 없는 링크예요.';return;}
-  COACH=data.coach_name;
- }catch(e){$('startMsg').textContent='접속 오류: '+e.message;return;}
+let ALLPEOPLE=[], STAFF=[];
 
- // 최근 60일간 실제로 출석한 회원 = 지금 다니는 사람들 (보기 이름을 여기서만 뽑음)
+(async function init(){
+ try{ ALLPEOPLE=await fetchPhotoMembers(); }
+ catch(e){ $('startMsg').textContent='회원 정보를 못 불러왔어요: '+e.message; return; }
+
+ try{
+  const{data,error}=await sb.from('staff_list').select('name,role,active').eq('active',true);
+  if(error)throw error;
+  STAFF=(data||[]).filter(s=>s.name);
+ }catch(e){ $('startMsg').textContent='직원 명단을 못 불러왔어요: '+e.message; return; }
+
+ if(!STAFF.length){ $('startMsg').textContent='등록된 직원이 없어요. 관리자에게 문의해주세요.'; return; }
+
+ const order={'대표':0,'매니저':1,'코치':2};
+ STAFF.sort((a,b)=>(order[a.role]??3)-(order[b.role]??3)||a.name.localeCompare(b.name));
+ $('whoBox').innerHTML='<div style="font-size:14px;margin-bottom:8px">본인 이름을 골라주세요</div>'
+  +'<div style="display:flex;gap:7px;justify-content:center;flex-wrap:wrap">'
+  +STAFF.map(s=>`<button class="chsel" style="padding:9px 16px;font-size:15px" onclick="pickWho('${esc(s.name)}')">${esc(s.name)}</button>`).join('')
+  +'</div>';
+ $('startMsg').textContent='';
+})();
+
+// 직원 선택 → 그 사람이 전날 근무한 수업에 온 회원들로 출제 범위 구성
+async function pickWho(name){
+ COACH=name;
+ $('whoBox').innerHTML=`<div style="font-size:15px"><b>${esc(name)}</b>님 <button class="chsel" style="padding:3px 9px;font-size:11px;margin-left:6px" onclick="location.reload()">변경</button></div>`;
+ $('startMsg').textContent='근무 기록을 확인하는 중…';
+ $('startBtn').style.display='none';
+
+ // 최근 60일 출석자 = 지금 다니는 회원 (보기 이름은 여기서만)
  const d60=new Date(); d60.setDate(d60.getDate()-60);
- let recentUids=new Set();
+ const recent=new Set();
  try{
   let f=0;
   while(true){
    const{data}=await sb.from('attendance').select('glofox_user_id')
     .eq('attended',true).gte('class_time',kstDate(d60)+'T00:00:00').range(f,f+999);
-   (data||[]).forEach(a=>recentUids.add(a.glofox_user_id));
-   if(!data||data.length<1000)break;
-   f+=1000;
+   (data||[]).forEach(a=>recent.add(a.glofox_user_id));
+   if(!data||data.length<1000)break; f+=1000;
   }
  }catch(e){}
- const activeMembers=all.filter(m=>recentUids.has(m.uid));
- // 보기(오답)는 최근 다니는 회원 중에서만 → 엉뚱한 옛날 회원 이름이 안 나옴
- ALLNAMES = activeMembers.length>=20 ? activeMembers : all;
+ const activeM=ALLPEOPLE.filter(m=>recent.has(m.uid));
+ ALLNAMES = activeM.length>=20 ? activeM : ALLPEOPLE;
 
- // 이 코치가 최근 30일간 근무한 시간대 찾기
- const d30=new Date(); d30.setDate(d30.getDate()-30);
- let shifts=[];
- try{
-  const{data}=await sb.from('coach_schedule').select('work_date,work_time')
-   .eq('coach_name',COACH).gte('work_date',kstDate(d30)).lte('work_date',kstDate(new Date()));
-  shifts=(data||[]).map(r=>r.work_date+' '+String(r.work_time).slice(0,5));
- }catch(e){}
-
- // 그 시간 수업에 실제 출석한 회원만 대상으로
- let mine=[];
- if(shifts.length){
-  const shiftSet=new Set(shifts);
+ // 전날(없으면 최근 7일) 근무한 시간대 찾기
+ let pool=[], usedDay='';
+ for(let back=1;back<=7&&!pool.length;back++){
+  const d=new Date(); d.setDate(d.getDate()-back);
+  const day=kstDate(d);
+  let times=[];
   try{
-   let f=0,rows=[];
-   while(true){
-    const{data}=await sb.from('attendance').select('glofox_user_id,class_time')
-     .eq('attended',true).gte('class_time',kstDate(d30)+'T00:00:00').range(f,f+999);
-    rows=rows.concat(data||[]);
-    if(!data||data.length<1000)break;
-    f+=1000;
-   }
-   const uids=new Set();
-   rows.forEach(a=>{
-    const dt=new Date(a.class_time);
-    const key=dt.toLocaleDateString('sv-SE',{timeZone:'Asia/Seoul'})+' '
-     +dt.toLocaleTimeString('en-GB',{timeZone:'Asia/Seoul',hour:'2-digit',minute:'2-digit',hour12:false});
-    if(shiftSet.has(key))uids.add(a.glofox_user_id);
-   });
-   mine=all.filter(m=>uids.has(m.uid));
+   const{data}=await sb.from('coach_schedule').select('work_time').eq('coach_name',name).eq('work_date',day);
+   times=(data||[]).map(r=>String(r.work_time).slice(0,5));
+  }catch(e){}
+  if(!times.length)continue;
+  try{
+   const{data}=await sb.from('attendance').select('glofox_user_id,class_time')
+    .eq('attended',true).gte('class_time',day+'T00:00:00').lte('class_time',day+'T23:59:59').limit(600);
+   const uids=new Set((data||[]).filter(a=>{
+    const hhmm=new Date(a.class_time).toLocaleTimeString('en-GB',{timeZone:'Asia/Seoul',hour:'2-digit',minute:'2-digit',hour12:false});
+    return times.includes(hhmm);
+   }).map(a=>a.glofox_user_id));
+   const p=ALLPEOPLE.filter(m=>uids.has(m.uid));
+   if(p.length>=6){ pool=p; usedDay=day; }
   }catch(e){}
  }
 
- if(mine.length>=6){ POOL=mine; SCOPE='내 수업에 온 회원 (최근 30일)'; }
- else if(activeMembers.length>=6){ POOL=activeMembers; SCOPE='최근 다니는 회원'; }
- else { POOL=all; SCOPE='전체 회원'; }
+ if(pool.length){ POOL=pool; SCOPE=`${usedDay.slice(5).replace('-','/')} 내 수업에 온 회원`; }
+ else if(activeM.length>=6){ POOL=activeM; SCOPE='최근 다니는 회원'; }
+ else { POOL=ALLPEOPLE; SCOPE='전체 회원'; }
 
- if(POOL.length<6){$('startMsg').textContent=`사진 등록된 회원이 ${POOL.length}명뿐이라 아직 퀴즈를 만들 수 없어요. (최소 6명 필요)`;return;}
+ if(POOL.length<6){ $('startMsg').innerHTML=`퀴즈를 만들 수 없어요 (대상 ${POOL.length}명)`; return; }
 
  QN=Math.min(20,POOL.length);
- $('startMsg').innerHTML=`<b>${esc(COACH)}</b> 코치님, 오늘도 고생하셨어요!<br>출제 범위: <b style="color:var(--acc)">${SCOPE}</b> (${POOL.length}명)`
-  +(SCOPE!=='내 수업에 온 회원 (최근 30일)'?'<br><span style="font-size:12px">근무 기록이 적어서 범위를 넓혔어요</span>':'')
+ $('startMsg').innerHTML=`출제 범위: <b style="color:var(--acc)">${esc(SCOPE)}</b> (${POOL.length}명)`
   +`<div style="margin-top:12px;font-size:13px">문항 수 선택</div><div id="qnSel" style="display:flex;gap:6px;justify-content:center;margin-top:6px;flex-wrap:wrap"></div>`;
  renderQnSel();
  $('startBtn').style.display='inline-block';
- loadMyCash();
-})();
-
-async function loadMyCash(){
- try{
-  const{data}=await sb.from('quiz_sessions').select('reward,play_date').eq('token',TOKEN);
-  const rows=data||[];
-  const total=rows.reduce((s,r)=>s+(r.reward||0),0);
-  const didToday=rows.some(r=>r.play_date===todayKst());
-  if(false)$('myCash').innerHTML=`누적 코치캐시 <b style="color:var(--gold);font-size:19px">${total.toLocaleString()}원</b>`
-   +(didToday?'<br><span style="font-size:12px">오늘은 이미 참여하셨어요 (연습은 계속 가능해요)</span>':'');
- }catch(e){}
 }
 
-// ===== 게임 시작 =====
 function renderQnSel(){
  const opts=[15,20,30,POOL.length].filter((v,k,a)=>v<=POOL.length&&a.indexOf(v)===k).sort((a,b)=>a-b);
  $('qnSel').innerHTML=opts.map(n=>{
@@ -307,34 +304,41 @@ function renderQnSel(){
 ;
 }
 
-// 최근에 나왔던 사람은 덜 나오게 (localStorage에 코치별로 기록)
-const RKEY='quizrecent_'+(typeof TOKEN!=='undefined'?TOKEN:'demo');
-function recentSeen(){ try{return JSON.parse(localStorage.getItem(RKEY)||'[]');}catch(e){return [];} }
-function pushSeen(uids){
- try{
-  const cur=recentSeen();
-  const next=uids.concat(cur).slice(0,120);   // 최근 120명까지만 기억
-  localStorage.setItem(RKEY,JSON.stringify(next));
- }catch(e){}
-}
 function genderOf(m){
  const g=String(m.gender||'').trim().toUpperCase();
  if(g.startsWith('F')||g.includes('여')) return 'F';
  if(g.startsWith('M')||g.includes('남')) return 'M';
  return '';
 }
+// 최근 등록·트라이얼 회원일수록 자주 나오게 (오래 다닌 분들은 이미 이름을 아니까)
+function weightOf(m){
+ let w=1;
+ if(String(m.stage||'')==='트라이얼') w=4;
+ if(m.join_date){
+  const days=(Date.now()-new Date(String(m.join_date).slice(0,10)+'T00:00:00').getTime())/86400000;
+  if(days<=30) w=Math.max(w,4);
+  else if(days<=90) w=Math.max(w,2.5);
+  else if(days<=180) w=Math.max(w,1.6);
+ }
+ return w;
+}
+// 가중치 랜덤 뽑기 (매번 완전히 새로 뽑음 - 이전 기록 참고 안 함)
+function weightedPick(arr,n){
+ const left=arr.slice(), out=[];
+ while(out.length<n && left.length){
+  let tot=0; const ws=left.map(m=>{const w=weightOf(m); tot+=w; return w;});
+  let r=Math.random()*tot, k=0;
+  while(k<ws.length && r>ws[k]){ r-=ws[k]; k++; }
+  out.push(left.splice(Math.min(k,left.length-1),1)[0]);
+ }
+ return out;
+}
 
 function startGame(){
- const seen=recentSeen();
- // 최근에 안 나온 사람 우선 → 그 안에서 무작위
- const fresh=shuffle(POOL.filter(p=>!seen.includes(p.uid)));
- const rest=shuffle(POOL.filter(p=>seen.includes(p.uid)));
- const picks=fresh.concat(rest).slice(0,QN);
-
+ const picks=weightedPick(POOL,QN);
  const src=(ALLNAMES.length?ALLNAMES:POOL);
  QUIZ=picks.map(ans=>{
   const g=genderOf(ans);
-  // 같은 성별에서 보기 뽑기 (성별 정보 없으면 전체에서)
   let cand=src.filter(p=>p.uid!==ans.uid&&p.name!==ans.name);
   if(g){
    const same=cand.filter(p=>genderOf(p)===g);
@@ -342,8 +346,7 @@ function startGame(){
   }
   return{ans,choices:shuffle([ans,...shuffle(cand).slice(0,4)])};
  });
- pushSeen(picks.map(p=>p.uid));
- IDX=0;CORRECT=0;STREAK=0;BEST=0;WRONGS=[];LOCK=false;
+ IDX=0;CORRECT=0;STREAK=0;BEST=0;WRONGS=[];LOCK=false;SKIPPED=0;
  show('sc-play');
  renderQ();
 }
@@ -475,7 +478,7 @@ async function finish(){
  // 하루 1회만 기록 (중복은 DB가 막아줌)
  try{
   const{error}=await sb.from('quiz_sessions').insert({
-   token:TOKEN,coach_name:COACH,play_date:todayKst(),
+   token:COACH,coach_name:COACH,play_date:todayKst(),
    total:QN,correct:CORRECT,accuracy:acc,reward
   });
   if(error&&error.code==='23505'){
@@ -487,7 +490,7 @@ async function finish(){
   }
  }catch(e){ $('doneNote').textContent='기록 저장 오류'; }
 
- try{await sb.from('coach_activity').insert({token:TOKEN,coach_name:COACH,event_type:'quiz_play'});}catch(e){}
+ try{await sb.from('coach_activity').insert({token:COACH,coach_name:COACH,event_type:'quiz_play'});}catch(e){}
 }
 
 function confetti(){
