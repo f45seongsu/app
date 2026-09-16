@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#0d1420">
+<title>회원 이름 맞히기</title>
+<style>
+:root{
+  --bg:#0d1420; --card:#16203200; --line:#22304a; --txt:#e8eef7; --dim:#8d9bb2;
+  --grn:#4ee88a; --red:#ff5c5c; --acc:#5aa0e0; --gold:#ffd166;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;margin:0;overscroll-behavior:none}
+body{
+  background:radial-gradient(1200px 600px at 50% -10%,#1b2942 0%,var(--bg) 55%);
+  color:var(--txt);
+  font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sans KR",sans-serif;
+  display:flex;flex-direction:column;
+  padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  user-select:none;
+}
+
+/* ===== 공통 화면 ===== */
+.screen{flex:1;display:none;flex-direction:column;animation:fadeIn .35s ease both}
+.screen.on{display:flex}
+@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+
+.center{margin:auto;text-align:center;padding:24px}
+.btn{
+  border:none;border-radius:16px;padding:16px 22px;font-size:16px;font-weight:800;
+  background:linear-gradient(135deg,#3f7fd4,#5aa0e0);color:#fff;
+  box-shadow:0 8px 22px rgba(63,127,212,.35);
+  transition:transform .12s cubic-bezier(.2,.9,.3,1.3),box-shadow .2s;
+  cursor:pointer;
+}
+.btn:active{transform:scale(.94);box-shadow:0 3px 10px rgba(63,127,212,.3)}
+.btn.gold{background:linear-gradient(135deg,#e8a93a,#ffd166);color:#2a1d00;box-shadow:0 8px 22px rgba(255,209,102,.3)}
+.btn.ghost{background:#1a2740;color:var(--txt);box-shadow:none;border:1px solid var(--line)}
+
+/* ===== 상단 HUD ===== */
+#hud{display:flex;align-items:center;gap:10px;padding:12px 16px 6px}
+#bar{flex:1;height:8px;background:#1a2740;border-radius:99px;overflow:hidden}
+#barfill{height:100%;width:0;background:linear-gradient(90deg,var(--acc),var(--grn));border-radius:99px;transition:width .45s cubic-bezier(.2,.9,.3,1)}
+#qn{font-size:12px;color:var(--dim);font-variant-numeric:tabular-nums;min-width:44px;text-align:right}
+#streak{font-size:13px;font-weight:800;color:var(--gold);min-width:40px}
+
+/* ===== 카드 ===== */
+#stage{flex:1;position:relative;display:flex;align-items:center;justify-content:center;padding:6px 18px}
+.card{
+  position:absolute;width:min(78vw,300px);aspect-ratio:3/4;border-radius:26px;overflow:hidden;
+  background:#101a2b;border:1px solid var(--line);
+  box-shadow:0 24px 60px rgba(0,0,0,.55);
+  will-change:transform,opacity;
+}
+.card img{width:100%;height:100%;object-fit:cover;pointer-events:none}
+.card .initial{width:100%;height:100%;display:flex;align-items:center;justify-content:center;
+  font-size:76px;font-weight:900;color:#43608c;background:linear-gradient(160deg,#16223a,#0f1828)}
+
+/* 뒤에 쌓인 카드(깊이감) */
+.card.behind1{transform:scale(.94) translateY(14px);opacity:.55;filter:blur(1px)}
+.card.behind2{transform:scale(.88) translateY(28px);opacity:.3;filter:blur(2px)}
+
+/* 정답/오답 연출 */
+@keyframes flyRight{to{transform:translateX(130%) rotate(18deg);opacity:0}}
+@keyframes shake{
+  0%,100%{transform:translateX(0)}
+  15%{transform:translateX(-14px) rotate(-3deg)}
+  30%{transform:translateX(12px) rotate(3deg)}
+  45%{transform:translateX(-9px) rotate(-2deg)}
+  60%{transform:translateX(7px) rotate(1.5deg)}
+  80%{transform:translateX(-3px)}
+}
+.card.correct{animation:flyRight .42s cubic-bezier(.4,0,.6,1) forwards}
+.card.wrong{animation:shake .5s cubic-bezier(.36,.07,.19,.97)}
+.card .flash{position:absolute;inset:0;opacity:0;pointer-events:none;transition:opacity .18s}
+.card.correct .flash{background:radial-gradient(circle,rgba(78,232,138,.45),transparent 70%);opacity:1}
+.card.wrong .flash{background:radial-gradient(circle,rgba(255,92,92,.4),transparent 70%);opacity:1}
+
+/* ===== 보기 버튼 ===== */
+#choices{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:14px 16px calc(18px + env(safe-area-inset-bottom))}
+.ch{
+  border:1px solid var(--line);background:#16223a;color:var(--txt);
+  border-radius:16px;padding:16px 10px;font-size:16px;font-weight:700;
+  transition:transform .12s cubic-bezier(.2,.9,.3,1.3),background .2s,border-color .2s;
+  cursor:pointer;
+}
+.ch:active{transform:scale(.95)}
+.ch:nth-child(5){grid-column:1/-1}
+.ch.ok{background:rgba(78,232,138,.18);border-color:var(--grn);color:var(--grn)}
+.ch.no{background:rgba(255,92,92,.15);border-color:var(--red);color:var(--red)}
+.ch.dim{opacity:.35}
+.chsel{border:1px solid var(--line);background:#16223a;color:var(--txt);border-radius:16px;font-weight:700;cursor:pointer}
+.chsel:active{transform:scale(.95)}
+#choices .chskip{grid-column:1/-1;border:1px dashed var(--line);background:transparent;color:var(--dim);
+ border-radius:14px;padding:11px;font-size:13px;font-weight:600;cursor:pointer}
+#choices .chskip:active{transform:scale(.97)}
+
+/* ===== 결과 ===== */
+.bigscore{font-size:60px;font-weight:900;letter-spacing:-2px;line-height:1}
+.cashline{font-size:34px;font-weight:900;color:var(--gold);margin-top:6px}
+.sub{color:var(--dim);font-size:14px;line-height:1.7}
+.pill{display:inline-block;background:#16223a;border:1px solid var(--line);border-radius:99px;padding:6px 14px;font-size:13px;margin:4px}
+@keyframes pop{0%{transform:scale(.6);opacity:0}70%{transform:scale(1.08)}100%{transform:scale(1);opacity:1}}
+.pop{animation:pop .5s cubic-bezier(.2,.9,.3,1.3) both}
+
+/* 정답 공개 패널 */
+#reveal{display:none;padding:14px 16px calc(18px + env(safe-area-inset-bottom));animation:fadeIn .25s ease both}
+#reveal.on{display:block}
+#rvName{font-size:27px;font-weight:900;text-align:center}
+#rvSub{font-size:13px;color:var(--dim);text-align:center;margin-top:3px}
+#rvMemo{width:100%;margin-top:11px;background:#16223a;border:1px solid var(--line);color:var(--txt);
+ border-radius:14px;padding:11px;font-size:14px;font-family:inherit;resize:none}
+#rvMemo:focus{outline:none;border-color:var(--acc)}
+#rvHint{font-size:11px;color:var(--dim);text-align:center;margin-top:7px;min-height:14px}
+
+/* 종이꽃가루 */
+.confetti{position:fixed;top:-12px;width:9px;height:14px;opacity:.95;pointer-events:none;z-index:99;border-radius:2px}
+@keyframes fall{to{transform:translateY(105vh) rotate(720deg);opacity:0}}
+</style>
+</head>
+<body>
+
+<!-- 시작 -->
+<div id="sc-start" class="screen on">
+ <div class="center">
+  <div style="font-size:52px" class="pop">🧠</div>
+  <h1 style="margin:10px 0 4px;font-size:26px">회원 이름 맞히기</h1>
+  <div class="sub">회원 얼굴 보고 이름 맞히기<br>수업에서 만난 분들, 이름까지 기억해볼까요?</div>
+  <div style="font-size:12px;color:var(--dim);margin:14px 0">문제당 5초 · 이름을 보고 잠깐 기억해보세요</div>
+  <div id="startMsg" class="sub" style="margin-bottom:16px">준비 중…</div>
+  <button id="startBtn" class="btn gold" style="display:none" onclick="startGame()">시작하기</button>
+  <div id="myCash" class="sub" style="margin-top:18px"></div>
+ </div>
+</div>
+
+<!-- 게임 -->
+<div id="sc-play" class="screen">
+ <div id="hud">
+  <div id="streak"></div>
+  <div id="bar"><div id="barfill"></div></div>
+  <div id="qn"></div>
+  <div id="tmr" style="font-size:15px;font-weight:900;min-width:30px;text-align:right"></div>
+ </div>
+ <div id="stage"></div>
+ <div id="choices"></div>
+ <div id="reveal">
+  <div id="rvName"></div>
+  <div id="rvSub"></div>
+  <textarea id="rvMemo" rows="2" placeholder="근무 중 알게 된 정보가 있나요? (예: 무릎 재활 중, 개발자, 강아지 키움)"></textarea>
+  <div style="display:flex;gap:8px;margin-top:8px">
+   <button id="rvNext" class="btn" style="flex:1;padding:13px;font-size:15px" onclick="nextQ()">다음 →</button>
+  </div>
+  <div id="rvHint"></div>
+ </div>
+</div>
+
+<!-- 결과 -->
+<div id="sc-done" class="screen">
+ <div class="center">
+  <div id="doneEmoji" style="font-size:54px" class="pop"></div>
+  <div id="doneScore" class="bigscore pop"></div>
+  <div id="doneAcc" class="sub" style="margin-top:6px"></div>
+  <div id="doneCash" class="cashline pop"></div>
+  <div id="doneNote" class="sub" style="margin-top:10px"></div>
+  <div id="doneWrong" style="margin-top:14px"></div>
+  <div style="margin-top:22px;display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
+   <button class="btn ghost" onclick="location.reload()">다시 하기</button>
+  </div>
+ </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+const SB_URL='https://mvgbwsbvngdnxdndwimb.supabase.co';
+const SB_KEY='sb_publishable_ZRHS4-UR7Q07Fmtc_P-19g_fVlIc85X';
+// 본앱(f45app)과 동일하게 x-app-token 헤더를 붙여야 RLS를 통과함.
+// 이게 없으면 에러 없이 조용히 0건이 돌아와서 "사진 등록된 회원 0명"으로 보임.
+const APP_TOKEN=new URLSearchParams(location.search).get('key')||'f45sujong-2026';
+const sb=supabase.createClient(SB_URL,SB_KEY,{global:{headers:{'x-app-token':APP_TOKEN}}});
+
+let QN=10;                  // 문항 수 (시작화면에서 선택)
+let TOKEN='',COACH='';
+let POOL=[],ALLNAMES=[],SCOPE='',QUIZ=[],IDX=0,CORRECT=0,STREAK=0,BEST=0,WRONGS=[],LOCK=false,SKIPPED=0,CURPERSON=null;
+
+const $=id=>document.getElementById(id);
+function show(id){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('on'));$(id).classList.add('on');}
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function buzz(ms){try{navigator.vibrate&&navigator.vibrate(ms);}catch(e){}}
+function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
+function photoOf(m){return m.photo_url||m.glofox_photo||'';}
+function todayKst(){return new Date().toLocaleDateString('sv-SE',{timeZone:'Asia/Seoul'});}
+
+// ===== 초기화 =====
+// Supabase는 한 번에 최대 1000행만 주므로 나눠서 전부 받아옴 (이거 없으면 앞쪽 1000명만 읽혀서 사진 있는 회원이 0명으로 나옴)
+let DIAG={total:0,withPhoto:0,named:0};
+async function fetchPhotoMembers(){
+ // 본앱(loadData)과 동일하게 people 전체를 1000행씩 나눠 받아옴 (서버측 필터는 쓰지 않음)
+ let out=[],from=0;
+ while(true){
+  const{data,error}=await sb.from('people').select('*').range(from,from+999);
+  if(error)throw error;
+  out=out.concat(data||[]);
+  if(!data||data.length<1000)break;
+  from+=1000;
+ }
+ DIAG.total=out.length;
+ const mapped=out.map(m=>({uid:m.glofox_user_id,name:(m.name_override||m.name||'').trim(),photo:photoOf(m),stage:m.stage,gender:m.gender}));
+ DIAG.withPhoto=mapped.filter(m=>m.photo).length;
+ const res=mapped.filter(m=>m.uid&&m.name&&m.photo&&m.stage!=='리드');
+ DIAG.named=res.length;
+ return res;
+}
+
+(async function init(){
+ TOKEN=new URLSearchParams(location.search).get('t')||'';
+ if(!TOKEN){$('startMsg').textContent='링크가 올바르지 않아요. 관리자에게 문의해주세요.';return;}
+ try{
+  const{data,error}=await sb.from('coach_links').select('coach_name,active').eq('token',TOKEN).maybeSingle();
+  if(error||!data||!data.active){$('startMsg').textContent='만료되었거나 사용할 수 없는 링크예요.';return;}
+  COACH=data.coach_name;
+ }catch(e){$('startMsg').textContent='접속 오류: '+e.message;return;}
+
+ // 최근 60일간 실제로 출석한 회원 = 지금 다니는 사람들 (보기 이름을 여기서만 뽑음)
+ const d60=new Date(); d60.setDate(d60.getDate()-60);
+ let recentUids=new Set();
+ try{
+  let f=0;
+  while(true){
+   const{data}=await sb.from('attendance').select('glofox_user_id')
+    .eq('attended',true).gte('class_time',kstDate(d60)+'T00:00:00').range(f,f+999);
+   (data||[]).forEach(a=>recentUids.add(a.glofox_user_id));
+   if(!data||data.length<1000)break;
+   f+=1000;
+  }
+ }catch(e){}
+ const activeMembers=all.filter(m=>recentUids.has(m.uid));
+ // 보기(오답)는 최근 다니는 회원 중에서만 → 엉뚱한 옛날 회원 이름이 안 나옴
+ ALLNAMES = activeMembers.length>=20 ? activeMembers : all;
+
+ // 이 코치가 최근 30일간 근무한 시간대 찾기
+ const d30=new Date(); d30.setDate(d30.getDate()-30);
+ let shifts=[];
+ try{
+  const{data}=await sb.from('coach_schedule').select('work_date,work_time')
+   .eq('coach_name',COACH).gte('work_date',kstDate(d30)).lte('work_date',kstDate(new Date()));
+  shifts=(data||[]).map(r=>r.work_date+' '+String(r.work_time).slice(0,5));
+ }catch(e){}
+
+ // 그 시간 수업에 실제 출석한 회원만 대상으로
+ let mine=[];
+ if(shifts.length){
+  const shiftSet=new Set(shifts);
+  try{
+   let f=0,rows=[];
+   while(true){
+    const{data}=await sb.from('attendance').select('glofox_user_id,class_time')
+     .eq('attended',true).gte('class_time',kstDate(d30)+'T00:00:00').range(f,f+999);
+    rows=rows.concat(data||[]);
+    if(!data||data.length<1000)break;
+    f+=1000;
+   }
+   const uids=new Set();
+   rows.forEach(a=>{
+    const dt=new Date(a.class_time);
+    const key=dt.toLocaleDateString('sv-SE',{timeZone:'Asia/Seoul'})+' '
+     +dt.toLocaleTimeString('en-GB',{timeZone:'Asia/Seoul',hour:'2-digit',minute:'2-digit',hour12:false});
+    if(shiftSet.has(key))uids.add(a.glofox_user_id);
+   });
+   mine=all.filter(m=>uids.has(m.uid));
+  }catch(e){}
+ }
+
+ if(mine.length>=6){ POOL=mine; SCOPE='내 수업에 온 회원 (최근 30일)'; }
+ else if(activeMembers.length>=6){ POOL=activeMembers; SCOPE='최근 다니는 회원'; }
+ else { POOL=all; SCOPE='전체 회원'; }
+
+ if(POOL.length<6){$('startMsg').textContent=`사진 등록된 회원이 ${POOL.length}명뿐이라 아직 퀴즈를 만들 수 없어요. (최소 6명 필요)`;return;}
+
+ QN=Math.min(20,POOL.length);
+ $('startMsg').innerHTML=`<b>${esc(COACH)}</b> 코치님, 오늘도 고생하셨어요!<br>출제 범위: <b style="color:var(--acc)">${SCOPE}</b> (${POOL.length}명)`
+  +(SCOPE!=='내 수업에 온 회원 (최근 30일)'?'<br><span style="font-size:12px">근무 기록이 적어서 범위를 넓혔어요</span>':'')
+  +`<div style="margin-top:12px;font-size:13px">문항 수 선택</div><div id="qnSel" style="display:flex;gap:6px;justify-content:center;margin-top:6px;flex-wrap:wrap"></div>`;
+ renderQnSel();
+ $('startBtn').style.display='inline-block';
+ loadMyCash();
+})();
+
+async function loadMyCash(){
+ try{
+  const{data}=await sb.from('quiz_sessions').select('reward,play_date').eq('token',TOKEN);
+  const rows=data||[];
+  const total=rows.reduce((s,r)=>s+(r.reward||0),0);
+  const didToday=rows.some(r=>r.play_date===todayKst());
+  if(false)$('myCash').innerHTML=`누적 코치캐시 <b style="color:var(--gold);font-size:19px">${total.toLocaleString()}원</b>`
+   +(didToday?'<br><span style="font-size:12px">오늘은 이미 참여하셨어요 (연습은 계속 가능해요)</span>':'');
+ }catch(e){}
+}
+
+// ===== 게임 시작 =====
+function renderQnSel(){
+ const opts=[15,20,30,POOL.length].filter((v,k,a)=>v<=POOL.length&&a.indexOf(v)===k).sort((a,b)=>a-b);
+ $('qnSel').innerHTML=opts.map(n=>{
+  const full=(n===POOL.length&&POOL.length>20);
+  return `<button class="chsel" style="padding:8px 14px;font-size:14px;${QN===n?'border-color:var(--acc);color:var(--acc)':''}${full?';border-color:#ffd166':''}" onclick="QN=${n};renderQnSel()">${full?`🔥 끝까지 ${n}`:n+'문항'}</button>`;
+ }).join('')
+;
+}
+
+// 최근에 나왔던 사람은 덜 나오게 (localStorage에 코치별로 기록)
+const RKEY='quizrecent_'+(typeof TOKEN!=='undefined'?TOKEN:'demo');
+function recentSeen(){ try{return JSON.parse(localStorage.getItem(RKEY)||'[]');}catch(e){return [];} }
+function pushSeen(uids){
+ try{
+  const cur=recentSeen();
+  const next=uids.concat(cur).slice(0,120);   // 최근 120명까지만 기억
+  localStorage.setItem(RKEY,JSON.stringify(next));
+ }catch(e){}
+}
+function genderOf(m){
+ const g=String(m.gender||'').trim().toUpperCase();
+ if(g.startsWith('F')||g.includes('여')) return 'F';
+ if(g.startsWith('M')||g.includes('남')) return 'M';
+ return '';
+}
+
+function startGame(){
+ const seen=recentSeen();
+ // 최근에 안 나온 사람 우선 → 그 안에서 무작위
+ const fresh=shuffle(POOL.filter(p=>!seen.includes(p.uid)));
+ const rest=shuffle(POOL.filter(p=>seen.includes(p.uid)));
+ const picks=fresh.concat(rest).slice(0,QN);
+
+ const src=(ALLNAMES.length?ALLNAMES:POOL);
+ QUIZ=picks.map(ans=>{
+  const g=genderOf(ans);
+  // 같은 성별에서 보기 뽑기 (성별 정보 없으면 전체에서)
+  let cand=src.filter(p=>p.uid!==ans.uid&&p.name!==ans.name);
+  if(g){
+   const same=cand.filter(p=>genderOf(p)===g);
+   if(same.length>=4)cand=same;
+  }
+  return{ans,choices:shuffle([ans,...shuffle(cand).slice(0,4)])};
+ });
+ pushSeen(picks.map(p=>p.uid));
+ IDX=0;CORRECT=0;STREAK=0;BEST=0;WRONGS=[];LOCK=false;
+ show('sc-play');
+ renderQ();
+}
+
+const LIMIT=7, SHOW_FROM=5; // 실제 7초, 화면에는 5초로 보이게(마지막 2초는 여유시간)
+let TID=null,TLEFT=0,AID=null;
+function stopTimer(){ if(TID){clearInterval(TID);TID=null;} }
+function stopAuto(){ if(AID){clearTimeout(AID);AID=null;} }
+function startTimer(){
+ stopTimer(); TLEFT=LIMIT;
+ const el=$('tmr'); if(el){el.textContent=SHOW_FROM;el.style.color='var(--dim)';}
+ TID=setInterval(()=>{
+  TLEFT--;
+  const e2=$('tmr');
+  if(e2){ e2.textContent=Math.max(0,Math.min(SHOW_FROM,TLEFT-(LIMIT-SHOW_FROM))); e2.style.color=TLEFT<=3?'var(--red)':'var(--dim)'; }
+  if(TLEFT<=0){ stopTimer(); if(!LOCK) answer(-1); }
+ },1000);
+}
+
+function renderQ(){
+ stopAuto();
+ $('reveal').classList.remove('on');
+ $('choices').style.display='';
+ const q=QUIZ[IDX];
+ $('qn').textContent=`${IDX+1}/${QN}`;
+ $('barfill').style.width=((IDX)/QN*100)+'%';
+ $('streak').textContent=STREAK>=2?`🔥${STREAK}`:'';
+ let html='';
+ for(let k=2;k>=0;k--){
+  const qq=QUIZ[IDX+k]; if(!qq)continue;
+  const cls=k===0?'card':(k===1?'card behind1':'card behind2');
+  const id=k===0?'id="curcard"':'';
+  html+=`<div class="${cls}" ${id}><img src="${esc(qq.ans.photo)}" alt="" onerror="this.style.visibility='hidden'"><div class="flash"></div></div>`;
+ }
+ $('stage').innerHTML=html;
+ $('choices').innerHTML=q.choices.map((c,i)=>
+  `<button class="ch" data-i="${i}" onclick="answer(${i})">${esc(c.name)}</button>`).join('')
+  +`<button class="chskip" onclick="answer(-2)">🤷 이 분은 잘 알아요 · 넘기기</button>`;
+ startTimer();
+}
+
+function answer(i){
+ if(LOCK)return; LOCK=true; stopTimer();
+ const el=$('tmr'); if(el)el.textContent='';
+ try{
+  const q=QUIZ[IDX];
+  const skipped=(i===-2), timeout=(i===-1);
+  const ok=(!skipped&&!timeout&&q.choices[i]&&q.choices[i].uid===q.ans.uid);
+  document.querySelectorAll('#choices .ch').forEach((b,bi)=>{
+   const c=q.choices[bi];
+   if(c&&c.uid===q.ans.uid)b.classList.add('ok');
+   else if(bi===i)b.classList.add('no');
+   else b.classList.add('dim');
+  });
+  const card=$('curcard');
+  if(ok){CORRECT++;STREAK++;BEST=Math.max(BEST,STREAK);buzz(18);}
+  else if(!skipped){STREAK=0;WRONGS.push(q.ans);card&&card.classList.add('wrong');buzz([40,50,40]);}
+  if(skipped){SKIPPED++;}
+  $('barfill').style.width=((IDX+1)/QN*100)+'%';
+  // 잠깐 멈춰서 이름을 눈에 익히는 시간 (정답 공개 + 메모)
+  setTimeout(()=>showReveal(q.ans,ok,skipped,timeout), ok?420:820);
+ }catch(e){
+  console.error('answer error',e);
+  setTimeout(()=>nextQ(),400);
+ }
+}
+
+// 정답 공개 패널: 이름을 크게 보여주고 메모를 남길 수 있게
+function showReveal(person,ok,skipped,timeout){
+ CURPERSON=person;
+ $('choices').style.display='none';
+ $('rvName').textContent=person.name;
+ $('rvName').style.color= ok?'var(--grn)':(skipped?'var(--dim)':'var(--red)');
+ $('rvSub').textContent= ok?'정답이에요!':(skipped?'넘어갔어요':(timeout?'시간이 지났어요':'다시 한 번 기억해봐요'));
+ const memo=$('rvMemo'); memo.value='';
+ $('rvHint').textContent='';
+ $('reveal').classList.add('on');
+ // 메모를 쓰기 시작하면 자동 넘김 취소
+ memo.onfocus=()=>{ stopAuto(); $('rvHint').textContent='메모를 저장하려면 다음 버튼을 눌러주세요'; };
+ stopAuto();
+ AID=setTimeout(()=>nextQ(), ok?2200:3200);   // 가만히 두면 잠시 뒤 자동으로 넘어감
+}
+
+function nextQ(){
+ stopAuto();
+ const memo=$('rvMemo');
+ const txt=(memo&&memo.value||'').trim();
+ if(txt&&CURPERSON) saveMemo(CURPERSON,txt);
+ if(memo)memo.value='';
+ CURPERSON=null;
+ IDX++; LOCK=false;
+ if(IDX>=QN)finish(); else renderQ();
+}
+
+// 메모를 f45app과 같은 곳(memo_log)에 저장 → 회원 상세에서 바로 보임
+async function saveMemo(person,text){
+ try{
+  const{error}=await sb.from('memo_log').insert({
+   glofox_user_id:person.uid, coach_name:COACH||'코치',
+   content:'[퀴즈] '+text
+  });
+  const hint=$('rvHint');
+  if(error){ if(hint)hint.textContent='메모 저장 실패: '+error.message; }
+ }catch(e){ }
+}
+
+function rewardFor(acc){ if(acc>=100)return 3000; if(acc>=60)return 2000; return 1000; }
+// 전체 문항 완주 시 보너스 (풀이 15명 넘을 때만 의미있음)
+function fullBonus(){ return (POOL.length>15 && QN===POOL.length) ? 500 : 0; }
+
+async function finish(){
+ stopTimer(); stopAuto(); $('reveal').classList.remove('on'); $('choices').style.display=''; const te=$('tmr'); if(te)te.textContent='';
+ const acc=Math.round(CORRECT/QN*100);
+ const bonus=fullBonus();
+ const reward=rewardFor(acc)+bonus;
+ show('sc-done');
+ $('doneEmoji').textContent=acc>=100?'🏆':(acc>=60?'👏':'💪');
+ $('doneScore').textContent=`${CORRECT} / ${QN}`;
+ $('doneAcc').innerHTML=`정답률 <b>${acc}%</b>${BEST>=3?` · 최고 연속 🔥${BEST}`:''}`;
+ $('doneCash').innerHTML='';
+
+ if(acc>=100){confetti();buzz([30,40,30,40,60]);}
+
+ if(WRONGS.length){
+  $('doneWrong').innerHTML='<div class="sub" style="margin-bottom:6px">이 분들 이름 한 번 더!</div>'
+   +WRONGS.map(w=>`<span class="pill">${esc(w.name)}</span>`).join('');
+ }
+
+ // 하루 1회만 기록 (중복은 DB가 막아줌)
+ try{
+  const{error}=await sb.from('quiz_sessions').insert({
+   token:TOKEN,coach_name:COACH,play_date:todayKst(),
+   total:QN,correct:CORRECT,accuracy:acc,reward
+  });
+  if(error&&error.code==='23505'){
+   $('doneNote').textContent='오늘 기록은 이미 남아 있어요.';
+  }else if(error){
+   $('doneNote').textContent='기록 저장에 실패했어요. 관리자에게 알려주세요.';
+  }else{
+   $('doneNote').textContent='오늘도 수고하셨습니다!';
+  }
+ }catch(e){ $('doneNote').textContent='기록 저장 오류'; }
+
+ try{await sb.from('coach_activity').insert({token:TOKEN,coach_name:COACH,event_type:'quiz_play'});}catch(e){}
+}
+
+function confetti(){
+ const cols=['#4ee88a','#ffd166','#5aa0e0','#ff7ab6','#b07cff'];
+ for(let i=0;i<60;i++){
+  const d=document.createElement('div');
+  d.className='confetti';
+  d.style.left=Math.random()*100+'vw';
+  d.style.background=cols[i%cols.length];
+  d.style.animation=`fall ${1.6+Math.random()*1.4}s linear ${Math.random()*.5}s forwards`;
+  document.body.appendChild(d);
+  setTimeout(()=>d.remove(),3600);
+ }
+}
+</script>
+</body>
+</html>
