@@ -1828,22 +1828,20 @@ async function cmSmsAll(){
  }catch(e){alert('오류: '+e.message);}
 }
 
-// ===== 스케줄표 보기 (월별 한눈에 + 코치별 고유색) =====
+// ===== 스케줄표 보기 (엑셀과 같은 형태: 주차별로 아래로, 가로=요일 / 세로=시간) =====
 let SV_YM='';
-// 엑셀 근무표 색을 참고한 기본 팔레트. 코치 이름을 탭하면 색을 바꿀 수 있고 기기에 저장됨.
 const SV_PALETTE=['#f0932b','#22d3ee','#e056fd','#f6e58d','#7ed6df','#ff7979','#badc58','#e17055','#a29bfe','#55efc4'];
 function svColors(){ try{return JSON.parse(localStorage.getItem('svcolors')||'{}');}catch(e){return {};} }
-function svSaveColor(name,c){ const m=svColors(); m[name]=c; try{localStorage.setItem('svcolors',JSON.stringify(m));}catch(e){} renderSchedView(); }
-function svColorOf(name,idx){ const m=svColors(); return m[name]||SV_PALETTE[idx%SV_PALETTE.length]; }
-function svPickColor(name){
- const cur=svColorOf(name,0);
- const c=prompt(`${name} 코치 색상 (예: #f0932b)`,cur);
- if(c&&/^#[0-9a-fA-F]{6}$/.test(c.trim())) svSaveColor(name,c.trim());
- else if(c) alert('#RRGGBB 형식으로 입력해주세요 (예: #f0932b)');
+function svSaveColor(n,c){ const m=svColors(); m[n]=c; try{localStorage.setItem('svcolors',JSON.stringify(m));}catch(e){} renderSchedView(); }
+function svColorOf(n,i){ const m=svColors(); return m[n]||SV_PALETTE[i%SV_PALETTE.length]; }
+function svPickColor(n){
+ const c=prompt(`${n} 색상 (예: #f0932b)`,svColorOf(n,0));
+ if(c&&/^#[0-9a-fA-F]{6}$/.test(c.trim())) svSaveColor(n,c.trim());
+ else if(c) alert('#RRGGBB 형식으로 입력해주세요');
 }
-function svShiftMonth(n){
+function svShiftMonth(k){
  const [y,m]=SV_YM.split('-').map(Number);
- const d=new Date(y,m-1+n,1);
+ const d=new Date(y,m-1+k,1);
  SV_YM=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
  renderSchedView();
 }
@@ -1851,15 +1849,14 @@ async function renderSchedView(){
  const box=document.getElementById('view-schedview');
  if(!SV_YM)SV_YM=today.slice(0,7);
  box.innerHTML='<div class="center">불러오는 중…</div>';
- const from=SV_YM+'-01';
  const [yy,mm]=SV_YM.split('-').map(Number);
  const lastDay=new Date(yy,mm,0).getDate();
- const to=`${SV_YM}-${String(lastDay).padStart(2,'0')}`;
+ const from=`${SV_YM}-01`, to=`${SV_YM}-${String(lastDay).padStart(2,'0')}`;
  let rows=[],mrows=[];
  try{
   const r=await Promise.all([
    sb.from('coach_schedule').select('coach_name,work_date,work_time').gte('work_date',from).lte('work_date',to),
-   sb.from('manager_hours').select('staff_name,work_date,hours').gte('work_date',from).lte('work_date',to)
+   sb.from('manager_hours').select('staff_name,work_date,start_time,hours').gte('work_date',from).lte('work_date',to)
   ]);
   if(r[0].error)throw r[0].error;
   rows=r[0].data||[]; mrows=(r[1]&&r[1].data)||[];
@@ -1876,52 +1873,76 @@ async function renderSchedView(){
    <button class="mini" onclick="SV_YM=today.slice(0,7);renderSchedView()">이번달</button>
   </div></div>`;
 
- if(!rows.length){
+ if(!rows.length&&!mrows.length){
   box.innerHTML=h+'<div class="center">이 달에 저장된 근무표가 없어요.<br><span style="font-size:12px;color:var(--dim)">📊 근무표 엑셀 업로드에서 먼저 저장해주세요.</span></div>';
   return;
  }
 
- const times=[...new Set(rows.map(r=>String(r.work_time).slice(0,5)))].sort();
- const cell={};
- rows.forEach(r=>{ const k=r.work_date+'|'+String(r.work_time).slice(0,5); (cell[k]=cell[k]||[]).push(r.coach_name); });
+ // 코치 / 매니저 각각 색
  const cnt={}; rows.forEach(r=>cnt[r.coach_name]=(cnt[r.coach_name]||0)+1);
  const names=Object.keys(cnt).sort((a,b)=>cnt[b]-cnt[a]);
- const colorIdx={}; names.forEach((n,k)=>colorIdx[n]=k);
- const col=n=>svColorOf(n,colorIdx[n]||0);
- const DOW=['일','월','화','수','목','금','토'];
+ const cIdx={}; names.forEach((n,k)=>cIdx[n]=k);
+ const col=n=>svColorOf(n,cIdx[n]||0);
+ const mh={}; mrows.forEach(m=>mh[m.staff_name]=(mh[m.staff_name]||0)+Number(m.hours||0));
 
- // 코치 색상 범례 (탭하면 색 변경)
  h+=`<div style="padding:0 12px 8px;font-size:12px">
-  <b>코치</b> <span style="color:var(--dim);font-size:11px">· 이름을 누르면 색을 바꿀 수 있어요</span>
+  <b>코치</b> <span style="color:var(--dim);font-size:11px">· 이름을 누르면 색 변경</span>
   <div style="margin-top:5px">${names.map(n=>
-   `<span onclick="svPickColor('${esc(n)}')" style="display:inline-block;background:${col(n)};color:#16213a;font-weight:700;border-radius:99px;padding:3px 11px;margin:2px;cursor:pointer">${esc(n)} ${cnt[n]}</span>`).join('')}</div></div>`;
+   `<span onclick="svPickColor('${esc(n)}')" style="display:inline-block;background:${col(n)};color:#16213a;font-weight:700;border-radius:99px;padding:3px 11px;margin:2px;cursor:pointer">${esc(n)} ${cnt[n]}</span>`).join('')}</div>
+  ${Object.keys(mh).length?`<div style="margin-top:7px"><b>매니저</b><div style="margin-top:4px">${Object.entries(mh).sort((a,b)=>b[1]-a[1]).map(([n,v])=>
+   `<span style="display:inline-block;background:#2b2247;border:1px solid #6c5ce7;color:#cdc2ff;border-radius:99px;padding:3px 10px;margin:2px">${esc(n)} ${v}시간</span>`).join('')}</div></div>`:''}
+ </div>`;
 
- h+=`<div style="overflow-x:auto;padding:0 8px 12px"><table style="border-collapse:collapse;font-size:11px;width:100%">
-  <tr><th style="padding:5px 4px;color:var(--dim);position:sticky;left:0;background:var(--bg)">날짜</th>
-   ${times.map(t=>`<th style="padding:5px 3px;color:var(--dim);white-space:nowrap">${t}</th>`).join('')}</tr>`;
+ // 코치 시간 + 매니저 시간을 한 표에 (시간 순)
+ const cTimes=[...new Set(rows.map(r=>String(r.work_time).slice(0,5)))];
+ const mTimes=[...new Set(mrows.map(r=>String(r.start_time||'').slice(0,5)).filter(Boolean))];
+ const times=[...new Set(cTimes.concat(mTimes))].sort();
+ const cell={}, mcell={};
+ rows.forEach(r=>{ const k=r.work_date+'|'+String(r.work_time).slice(0,5); (cell[k]=cell[k]||[]).push(r.coach_name); });
+ mrows.forEach(r=>{ const k=r.work_date+'|'+String(r.start_time||'').slice(0,5); (mcell[k]=mcell[k]||[]).push(r); });
+
+ // 주차 나누기 (월요일 시작)
+ const DOW=['월','화','수','목','금','토','일'];
+ const weeks=[]; let cur=[];
  for(let d=1;d<=lastDay;d++){
   const ds=`${SV_YM}-${String(d).padStart(2,'0')}`;
-  const dow=new Date(ds+'T00:00:00').getDay();
-  const isToday=(ds===today);
-  const dimSun=(dow===0);
-  h+=`<tr style="${dimSun?'opacity:.45':''}">
-   <td style="padding:4px 5px;white-space:nowrap;border-top:1px solid var(--line);position:sticky;left:0;background:var(--bg);
-     color:${isToday?'var(--acc)':(dow===0?'#e0563a':(dow===6?'#5aa0e0':'var(--dim)'))};font-weight:${isToday?'800':'600'}">${d}(${DOW[dow]})</td>`;
-  times.forEach(t=>{
-   const who=cell[ds+'|'+t]||[];
-   h+=`<td style="padding:2px;border-top:1px solid var(--line);text-align:center;vertical-align:top;min-width:52px">
-    ${who.map(n=>`<div style="background:${col(n)};color:#16213a;border-radius:5px;padding:1px 3px;margin:1px 0;font-weight:700;white-space:nowrap">${esc(n)}</div>`).join('')||'<span style="color:#22304a">·</span>'}</td>`;
-  });
-  h+='</tr>';
+  const k=(new Date(ds+'T00:00:00').getDay()+6)%7;   // 월=0
+  if(!cur.length){ for(let p=0;p<k;p++)cur.push(null); }
+  cur.push(ds);
+  if(k===6){ weeks.push(cur); cur=[]; }
  }
- h+='</table></div>';
+ if(cur.length){ while(cur.length<7)cur.push(null); weeks.push(cur); }
 
- if(mrows.length){
-  const mh={}; mrows.forEach(m=>mh[m.staff_name]=(mh[m.staff_name]||0)+Number(m.hours||0));
-  h+=`<div style="padding:0 12px 16px;font-size:12px">
-   <b>매니저</b><div style="margin-top:5px">${Object.entries(mh).sort((a,b)=>b[1]-a[1]).map(([n,v])=>
-    `<span style="display:inline-block;background:#231c3a;border:1px solid var(--line);border-radius:99px;padding:3px 10px;margin:2px">${esc(n)} ${v}시간</span>`).join('')}</div></div>`;
- }
+ h+='<div style="padding:0 8px 14px">';
+ weeks.forEach((wk,wi)=>{
+  h+=`<div style="margin-bottom:14px;overflow-x:auto">
+   <div style="font-size:12px;color:var(--dim);margin-bottom:3px">${wi+1}주차</div>
+   <table style="border-collapse:collapse;font-size:11px;width:100%">
+   <tr><th style="padding:4px 3px;color:var(--dim);min-width:40px"></th>
+   ${wk.map((ds,di)=>{
+     if(!ds)return `<th style="padding:4px 2px"></th>`;
+     const isT=(ds===today);
+     const c=di===6?'#e0563a':(di===5?'#5aa0e0':'var(--dim)');
+     return `<th style="padding:4px 2px;white-space:nowrap;color:${isT?'var(--acc)':c};font-weight:${isT?'800':'600'}">${DOW[di]}<br><span style="font-size:10px">${+ds.slice(8)}</span></th>`;
+   }).join('')}</tr>`;
+  times.forEach(t=>{
+   // 이 주에 아무 내용 없는 시간대는 건너뜀
+   const any=wk.some(ds=>ds&&((cell[ds+'|'+t]||[]).length||(mcell[ds+'|'+t]||[]).length));
+   if(!any)return;
+   h+=`<tr><td style="padding:3px 4px;color:var(--dim);white-space:nowrap;border-top:1px solid var(--line)">${t}</td>`;
+   wk.forEach(ds=>{
+    if(!ds){ h+='<td style="border-top:1px solid var(--line)"></td>'; return; }
+    const who=cell[ds+'|'+t]||[], mgrs=mcell[ds+'|'+t]||[];
+    h+=`<td style="padding:2px;border-top:1px solid var(--line);text-align:center;vertical-align:top;min-width:46px">
+     ${who.map(n=>`<div style="background:${col(n)};color:#16213a;border-radius:4px;padding:1px 2px;margin:1px 0;font-weight:700;white-space:nowrap">${esc(n)}</div>`).join('')}
+     ${mgrs.map(m=>`<div style="background:#2b2247;border:1px solid #6c5ce7;color:#cdc2ff;border-radius:4px;padding:1px 2px;margin:1px 0;white-space:nowrap">${esc(m.staff_name)} ${m.hours}h</div>`).join('')}
+     ${(!who.length&&!mgrs.length)?'<span style="color:#22304a">·</span>':''}</td>`;
+   });
+   h+='</tr>';
+  });
+  h+='</table></div>';
+ });
+ h+='</div>';
  box.innerHTML=h;
 }
 
