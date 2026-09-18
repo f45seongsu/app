@@ -211,6 +211,7 @@ body{padding-bottom:76px}
   <h3 style="margin-top:10px">코치 · 근무</h3>
   <button onclick="if(checkAdminPw())showView('coachmgr')">👥 직원 관리</button>
   <button onclick="showView('schedview')">🗓️ 스케줄표 보기</button>
+  <button onclick="if(checkAdminPw())syncHolds()">⏸ 홀딩 신청서 불러오기</button>
   <button onclick="if(checkAdminPw())showView('xlsxsched')">📊 근무표 엑셀 업로드</button>
   <button onclick="if(checkAdminPw())showView('schedule')">📅 스케줄표 직접 입력</button>
   <button onclick="if(checkAdminPw())showView('coachcash')">💰 코치캐시 정산</button>
@@ -249,6 +250,79 @@ let sb, MEMBERS={}, SESSIONS={}, DATES=[], sel='', today='', MEMO_BY_UID={};
 function esc(s){return (s||'').replace(/[<>&"]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]))}
 function initial(n){return (n||'?').trim().slice(-2)}
 function photoOf(m){return m.photo_url||m.glofox_photo||''}
+// 홀딩 등록/해제 (홀딩 중인 회원은 단체문자에서 자동 제외됨)
+// 구글폼 홀딩 신청 시트를 읽어서 일괄 반영
+async function syncHolds(){
+ if(!confirm('구글폼 홀딩 신청서를 불러와서 회원들 홀딩 기간을 갱신할까요?\n\n먼저 미리보기(저장 안 함)를 보여드려요.'))return;
+ try{
+  const{data,error}=await sb.functions.invoke('hold-sync',{body:{dry_run:true}});
+  if(error){alert('불러오기 실패: '+error.message);return;}
+  if(data?.error){alert(data.error);return;}
+  const ex=(data.적용예시||[]).map(x=>`· ${x.이름} ${x.시작||''}~${x.종료}`).join('\n');
+  if(!confirm(`신청 ${data.신청건수}건 중\n지난 홀딩 제외 ${data.지난홀딩_제외}건\n회원 못 찾음 ${data.회원못찾음}건\n\n➡ 적용 대상 ${data.적용대상}명\n\n${ex}\n\n이대로 저장할까요?`))return;
+  const r2=await sb.functions.invoke('hold-sync',{body:{dry_run:false}});
+  if(r2.error){alert('저장 실패: '+r2.error.message);return;}
+  alert(`✅ ${r2.data.저장됨}명 홀딩 정보 저장 완료!`);
+  loadData(true);
+ }catch(e){alert('오류: '+e.message);}
+}
+async function setHold(uid){
+ const m=MEMBERS[uid]||{};
+ const from=prompt('홀딩 시작일 (YYYY-MM-DD)', m.hold_from?String(m.hold_from).slice(0,10):today);
+ if(from===null)return;
+ const to=prompt('홀딩 종료일 (YYYY-MM-DD)', m.hold_until?String(m.hold_until).slice(0,10):'');
+ if(to===null)return;
+ if(!/^\d{4}-\d{2}-\d{2}$/.test(to)){alert('종료일을 YYYY-MM-DD 형식으로 입력해주세요');return;}
+ const memo=prompt('사유 (선택)', m.hold_memo||'')||null;
+ try{
+  const patch={hold_from:/^\d{4}-\d{2}-\d{2}$/.test(from)?from:null,hold_until:to,hold_memo:memo};
+  const{error}=await sb.from('people').update(patch).eq('glofox_user_id',uid);
+  if(error){alert('저장 실패: '+error.message+'\n\nhold_columns.sql을 먼저 실행하셨는지 확인해주세요.');return;}
+  Object.assign(MEMBERS[uid],patch);
+  const author=COACH||ACTIVE_STAFF||'미지정';
+  sb.from('memo_log').insert({glofox_user_id:uid,coach_name:author,content:`[홀딩] ${from||''}~${to}${memo?' · '+memo:''}`}).then(()=>{},()=>{});
+  open_(uid);
+ }catch(e){alert('오류: '+e.message);}
+}
+async function clearHold(uid){
+ if(!confirm('홀딩을 해제할까요?'))return;
+ try{
+  const{error}=await sb.from('people').update({hold_from:null,hold_until:null,hold_memo:null}).eq('glofox_user_id',uid);
+  if(error){alert('해제 실패: '+error.message);return;}
+  Object.assign(MEMBERS[uid],{hold_from:null,hold_until:null,hold_memo:null});
+  open_(uid);
+ }catch(e){alert('오류: '+e.message);}
+}
+// 홀딩(일시정지) 중인지 - 오늘이 hold_from~hold_until 사이면 홀딩
+function holdInfo(m){
+ if(!m||!m.hold_until)return null;
+ const to=String(m.hold_until).slice(0,10);
+ const from=m.hold_from?String(m.hold_from).slice(0,10):'';
+ if(to<today)return null;                     // 이미 끝난 홀딩
+ if(from&&from>today)return {future:true,from,to};   // 아직 시작 전
+ return {active:true,from,to};
+}
+function holdBadge(m){
+ const hi=holdInfo(m); if(!hi)return '';
+ const txt=(hi.from?hi.from.slice(5).replace('-','/'):'')+'~'+hi.to.slice(5).replace('-','/');
+ return `<span title="홀딩 ${txt}" style="background:#4a3a1c;border:1px solid #e0954f;color:#e0954f;border-radius:6px;padding:1px 5px;font-size:10px;margin-left:4px">⏸ 홀딩 ${txt}</span>`;
+}
+// 글로폭스가 이름을 first_name(이름) + last_name(성) 순서로 주는 탓에 '상연 문'처럼 보임.
+// 한국 이름 형태일 때만 '문상연'으로 되돌림. 영문/외국 이름은 그대로 둠.
+const KO_DOUBLE_SURNAME=['남궁','선우','황보','제갈','독고','사공','서문','司空'];
+function fixKoreanOrder(nm){
+ const s=String(nm||'').trim();
+ if(!s||s.indexOf(' ')<0)return s;
+ const parts=s.split(/\s+/);
+ if(parts.length!==2)return s;
+ const [a,b]=parts;
+ if(!/^[가-힣]+$/.test(a)||!/^[가-힣]+$/.test(b))return s;   // 한글 두 덩어리일 때만
+ if(b.length===1&&a.length>=2)return b+a;                    // '상연 문' -> '문상연'
+ if(KO_DOUBLE_SURNAME.includes(b)&&a.length>=1)return b+a;   // '민 남궁' -> '남궁민'
+ return s;
+}
+// 글로폭스 사진 주소는 대부분 깨져 있어서(다른 지점 경로) '사진 있음' 판정에서는 제외
+function hasRealPhoto(m){return !!(m&&m.photo_url)}
 function avatar(m,cls){const p=(window.HIDE_PHOTO?null:photoOf(m));const img=p?`<img src="${esc(p)}" onerror="this.style.display='none'">`:'';const bd=badgeOf(m);const ov=bd?`<span class="avbadge b-${bd}">${bd==='트라이얼'?'체험':'횟수'}</span>`:'';const vt=visitTotal(m);const r4=recent4wCount(m);const vc=freqColor4w(r4);const numOv=(vt!=null)?`<span class="avnum" style="background:${vc}" title="최근 4주 ${r4}회">${vt}</span>`:'';return `<span class="av">${esc(initial(m.name))}${img}${ov}${numOv}<span class="rd ${cls}"></span></span>`}
 function recent28(days){const t=new Date(today+'T00:00:00');const lim=new Date(t);lim.setDate(t.getDate()-28);return (days||[]).some(d=>new Date(d+'T00:00:00')>=lim)}
 function badgeOf(m){if(m.stage==='트라이얼')return '트라이얼';if(m.pass_remaining!=null)return '횟수권';if(m.stage==='과거회원')return recent28(m._days)?'횟수권':'만료';return ''}
@@ -343,7 +417,7 @@ function last2Times(m){const a=(m._att||[]).slice().sort();const out=a.slice(-2)
  return out.map(x=>x.slice(5).replace('-','/')).join(', ');}
 function renderMember(){
  let list=Object.values(MEMBERS).filter(m=>m.glofox_user_id&&['회원','과거회원','트라이얼'].includes(m.stage));
- if(!_memAll)list=list.filter(m=>!m.photo_url&&!m.glofox_photo); // 직접 사진 없고 글로폭스 사진도 없는 사람만
+ if(!_memAll)list=list.filter(m=>!m.photo_url); // 직접 사진 없고 글로폭스 사진도 없는 사람만
  list.sort((a,b)=>{const al=lastVisit(a)||'',bl=lastVisit(b)||'';return bl.localeCompare(al);});
  const box=document.getElementById('view-member');
  let h=`<div class="listhead">📷 ${_memAll?'전체':'사진 필요'} <b>${list.length}명</b> · 얼굴에 사진을 끌어다 놓거나 눌러 넣으세요 (최근 출석순, 리드·사진있는사람 제외) <button class="mini" style="margin-left:6px" onclick="_memAll=!_memAll;renderMember()">${_memAll?'사진필요만':'전체보기'}</button></div>`;
@@ -3129,7 +3203,7 @@ function maTemplateFallback(m, r14, situationHint){
  return `${nm}님, 오늘 하루 어떠셨어요? 시간 되실 때 F45에서 같이 운동해요 -F45 성수`;
 }
 // F45 성수 문자 톤 가이드 - 모든 AI 문구 생성에 공통 적용
-const MA_TONE_GUIDE = `[문체/톤 규칙 - 반드시 지킬 것] AI가 쓴 티 안 나는 자연스러운 실제 매니저 말투. 친절하되 지나치게 여성스럽거나 과장되지 않게, 남자답고 씩씩한 톤. "~했어요"체보다 "~습니다!"체 위주로 (예: "확인했습니다!", "뵙겠습니다!"). "계셨을까요?", "하셨을까요?" 같은 지나치게 공손하고 부자연스러운 표현 금지 - 대신 "어떠셨나요?", "편하게 알려주세요" 식으로. "ㅎㅎㅎ" 같은 과도하게 가벼운 표현 금지. 회원을 구박하거나 압박하거나 죄책감 느끼게 하는 표현 금지. 발신자는 "F45 성수"로, 개인 매니저 이름은 쓰지 않음. 부담스러운 영업 느낌보다 자연스러운 권유.`;
+const MA_TONE_GUIDE = `[문체/톤 규칙 - 반드시 지킬 것] 절대 쓰지 말 것: "활기차게", "힘차게", "화이팅", "파이팅", "언제나 응원", "함께 성장", "여정" 같은 광고문구 같은 표현. 판에 박힌 인사말 금지. AI가 쓴 티 안 나는 자연스러운 실제 매니저 말투. 친절하되 지나치게 여성스럽거나 과장되지 않게, 남자답고 씩씩한 톤. "~했어요"체보다 "~습니다!"체 위주로 (예: "확인했습니다!", "뵙겠습니다!"). "계셨을까요?", "하셨을까요?" 같은 지나치게 공손하고 부자연스러운 표현 금지 - 대신 "어떠셨나요?", "편하게 알려주세요" 식으로. "ㅎㅎㅎ" 같은 과도하게 가벼운 표현 금지. 회원을 구박하거나 압박하거나 죄책감 느끼게 하는 표현 금지. 발신자는 "F45 성수"로, 개인 매니저 이름은 쓰지 않음. 부담스러운 영업 느낌보다 자연스러운 권유.`;
 
 async function maGenerateOneText(uid, situationHint, customPrompt){
  const m=maByUid(uid); if(!m)return{text:'',usedFallback:true};
@@ -3149,6 +3223,12 @@ async function maGenerateOneText(uid, situationHint, customPrompt){
  if(r14<=1) detail+=' 최근 거의 안 나옴 - 부담없이 부드럽게 독려.';
  else if(r14>=6) detail+=' 꾸준히 잘 나옴 - 칭찬 위주.';
  else detail+=' 보통 수준 - 가볍게 안부+독려.';
+ // 멤버십 상태 / 홀딩 정보
+ if(m.membership) detail+=` 멤버십: ${m.membership}.`;
+ if(m.end_date) detail+=` 만료일 ${String(m.end_date).slice(0,10)}.`;
+ const _hi=holdInfo(m);
+ if(_hi) detail+=` [중요] 현재 홀딩(일시정지) 중 (${_hi.from||'?'}~${_hi.to}) - 운동하러 나오라는 독려는 절대 하지 말고, 복귀 시점을 부담없이 안내하는 톤으로.`;
+
  // 횟수권 잔여도 상황과 무관하게 항상 참고 정보로 (기계적 소진 재촉 금지, 자연스럽게만 참고)
  if(m.pass_remaining!=null && situationHint!=='pass'){
   detail+=` 참고: 현재 횟수권 잔여 ${m.pass_remaining}회 (직접 "OO회 남았다"고 재촉하듯 언급하지 말고, 필요하면 자연스러운 권유 톤에만 은근히 녹일 것).`;
@@ -3241,7 +3321,9 @@ function maBulkPlainList(containerId){
   <div style="background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:hidden">${rows}</div>`;
 }
 // 체크한 사람들 AI문구를 화면 최하단에 표(행) 형태로 한꺼번에 생성 - 각자 수정+복사+개별발송 가능
+const MA_LABELS={pass:'횟수권 만료 안내 문자 발송',winback:'재등록 유도 문자 발송',general:'출석 안부 문자 발송',custom:'맞춤 문자 발송'};
 async function maBulkGenerateCards(containerId, situationHint, btn){
+ MA_LAST_LABEL[containerId]=MA_LABELS[situationHint]||'안부 문자 발송';
  const uids=[...document.querySelectorAll('#'+containerId+' .ma-chk:checked')].map(el=>el.dataset.uid);
  if(!uids.length){alert('선택된 회원이 없어요.');return;}
  const cardBox=document.getElementById(containerId+'-aicards');
@@ -3277,6 +3359,7 @@ async function maBulkGenerateCards(containerId, situationHint, btn){
 // 체크한 사람들한테, 관리자가 직접 입력한 프롬프트 기준으로 각자 다른 문구 일괄생성
 // (마지막 1주일 출석횟수를 AI한테 가장 중요한 정보로 강조해서 넘김)
 async function maBulkCustomPrompt(containerId, btn){
+ try{ const _p=document.getElementById(containerId+'-prompt'); if(_p&&_p.value.trim())MA_LAST_LABEL[containerId]='맞춤 문자 발송: '+_p.value.trim().slice(0,20); }catch(e){}
  const promptInput=document.getElementById(containerId+'-customprompt');
  const customPrompt=(promptInput?.value||'').trim();
  if(!customPrompt){ alert('어떤 내용으로 문자를 만들지, 프롬프트를 먼저 입력해주세요.'); promptInput?.focus(); return; }
@@ -3326,22 +3409,36 @@ async function maAligoSendAll(containerId, btn){
  if(!cardBox)return;
  const textareas=[...cardBox.querySelectorAll('textarea[data-uid]')];
  if(!textareas.length){alert('생성된 문구가 없어요.');return;}
- const recipients=textareas.map(ta=>{
+
+ // 홀딩 중인 회원은 자동 제외
+ const held=[];
+ const picked=textareas.map(ta=>{
   const uid=ta.dataset.uid; const m=maByUid(uid);
-  return {phone:(m?.phone||'').replace(/[^0-9]/g,''), msg:ta.value.trim(), name:m?.name||''};
- }).filter(r=>r.phone && r.msg);
- if(!recipients.length){alert('보낼 수 있는 대상이 없어요 (번호 없음/문구 없음).');return;}
- if(recipients.length>500){alert(`한 번에 최대 500명까지 가능해요. 지금 ${recipients.length}명 선택돼있어요 - 나눠서 보내주세요.`);return;}
- if(!confirm(`⚠️ 정말 ${recipients.length}명에게 문자를 실제로 발송할까요?\n포인트가 차감되고, 발송 후 취소할 수 없어요.`)) return;
+  if(m&&holdInfo(m)){ held.push(m.name||uid); return null; }
+  return {uid, phone:(m?.phone||'').replace(/[^0-9]/g,''), msg:ta.value.trim(), name:m?.name||''};
+ }).filter(Boolean);
+ const recipients=picked.filter(r=>r.phone&&r.msg);
+
+ if(!recipients.length){alert('보낼 수 있는 대상이 없어요 (번호 없음/문구 없음/전원 홀딩).');return;}
+ if(recipients.length>500){alert(`한 번에 최대 500명까지 가능해요. 지금 ${recipients.length}명이에요 - 나눠서 보내주세요.`);return;}
+
+ const label=prompt('메모에 남길 요약을 확인해주세요 (발송 후 각 회원 기록에 저장돼요)',
+   MA_LAST_LABEL[containerId]||'안부 문자 발송');
+ if(label===null)return;
+
+ if(!confirm(`⚠️ 정말 ${recipients.length}명에게 문자를 발송할까요?\n포인트가 차감되고 취소할 수 없어요.`
+   +(held.length?`\n\n⏸ 홀딩 중이라 제외됨 (${held.length}명): ${held.slice(0,8).join(', ')}${held.length>8?' 외':''}`:''))) return;
+
  const origTxt=btn?btn.textContent:'';
  if(btn){btn.disabled=true;btn.textContent='발송 중…';}
  try{
-  const {data,error}=await sb.functions.invoke('aligo-sms',{body:{recipients}});
+  const {data,error}=await sb.functions.invoke('aligo-sms',{body:{recipients:recipients.map(({phone,msg,name})=>({phone,msg,name}))}});
   if(btn){btn.disabled=false;btn.textContent=origTxt;}
-  if(error){alert('발송 요청 실패: '+error.message+'\n(Edge Function이 배포됐는지, 환경변수가 설정됐는지 확인해주세요)');return;}
+  if(error){alert('발송 요청 실패: '+error.message);return;}
   if(data?.error){alert('발송 실패: '+data.error);return;}
   if(data?.result_code && data.result_code>0){
    alert(`✅ 발송 완료!\n성공 ${data.success_cnt}건 / 실패 ${data.error_cnt}건`);
+   maLogSent(recipients, label);   // 각 회원 메모에 자동 기록
   } else {
    alert('발송 실패: '+(data?.message||'알 수 없는 오류')+`\n(코드: ${data?.result_code})`);
   }
@@ -3350,6 +3447,22 @@ async function maAligoSendAll(containerId, btn){
   alert('오류: '+e.message);
  }
 }
+
+// 발송 내역을 회원별 메모에 자동 저장 (예: "[문자] 출석률 저조 안부문자 발송")
+let MA_LAST_LABEL={};
+async function maLogSent(recipients, label){
+ const author=COACH||ACTIVE_STAFF||'미지정';
+ const today2=new Date().toLocaleDateString('sv-SE',{timeZone:'Asia/Seoul'}).slice(5).replace('-','/');
+ const rows=recipients.map(r=>({glofox_user_id:r.uid,coach_name:author,content:`[${today2}] [문자] ${label}`}));
+ try{
+  for(let i=0;i<rows.length;i+=200){
+   await sb.from('memo_log').insert(rows.slice(i,i+200));
+  }
+  // 카드에도 최근 메모로 반영
+  recipients.forEach(r=>{ if(MEMBERS[r.uid])MEMBERS[r.uid].care_memo=`[문자] ${label} (${today2})`; });
+ }catch(e){ console.warn('발송 메모 저장 실패',e); }
+}
+
 function maShowAiModal(uid, text, usedFallback){
  const m=maByUid(uid);
  document.getElementById('sheet').innerHTML=`
@@ -3756,7 +3869,10 @@ async function loadData(manual){
   people=people.concat(data||[]);
   if(!data||data.length<1000)break; pf+=1000;
  }
- people.forEach(p=>{if(p.name_override)p.name=p.name_override;MEMBERS[p.glofox_user_id]=p});
+ people.forEach(p=>{
+  if(p.name_override)p.name=p.name_override;
+  else p.name=fixKoreanOrder(p.name);   // 글로폭스는 '상연 문'처럼 이름+성 순서로 줌 → '문상연'으로 복원
+  MEMBERS[p.glofox_user_id]=p});
  const since=new Date(today+'T00:00:00');since.setDate(since.getDate()-35);
  let all=[],from=0;
  while(true){
@@ -4028,7 +4144,7 @@ function renderDay(doScroll){const evs=(SESSIONS[sel]||[]).slice().sort((a,b)=>(
  SESSIONS[sel]=evs; let h='';const nowTs=new Date();
  // 그날 전체(모든 시간대) 선택 바
  if(evs.length){
-  const noPhotoN=evs.reduce((s,ev)=>s+ev.att.filter(a=>!a._dropin&&a.uid&&MEMBERS[a.uid]&&!photoOf(MEMBERS[a.uid])).length,0);
+  const noPhotoN=evs.reduce((s,ev)=>s+ev.att.filter(a=>!a._dropin&&a.uid&&MEMBERS[a.uid]&&!hasRealPhoto(MEMBERS[a.uid])).length,0);
   if(DAYSEL){
    h+=`<div class="selbar" style="margin:8px 10px 4px"><span class="selcnt">📅 ${sel.slice(5).replace('-','/')} 전체 · ${PICK.size}명 선택</span><button onclick="pickAllDay()">전체</button><button onclick="pickNoPhoto()">📷 사진없음</button><button onclick="pickNone()">해제</button><button class="pri" onclick="copyInsta()">@ 인스타복사</button><button class="pri" onclick="copyPhones()">번호복사</button><button onclick="smsOpen()">문자앱</button><button onclick="dayselOff()">완료</button></div>`;
   } else {
@@ -4062,7 +4178,7 @@ function renderDay(doScroll){const evs=(SESSIONS[sel]||[]).slice().sort((a,b)=>(
    const bc=buddyColors[a.uid];
    const bcStyle=bc?` style="background:${bc}"`:'';
    const bcTitle=bc?' title="🤝 함께 옴"':'';
-   h+=`<div class="chip s-${a._st} ${pk?'picked':''}"${bcStyle}${bcTitle} onclick="${click}" ${drop}>${avatar(m,a._st)}<span class="nmwrap"><span class="nm">${esc(m.name)}</span>${(()=>{const igShort=ig.length>8?ig.slice(0,8)+'..':ig;const igt=ig?`@${esc(igShort)}`:'';return igt?`<span class="submini">${igt}</span>`:'';})()}</span>${(!a._dropin&&!photoOf(m))?'<span title="사진 없음" style="margin-left:2px;font-size:10px;opacity:.85">📷</span>':''}${m.injury_note?'<span class="inj">⚠</span>':''}${isBdayToday(m)?'<span title="오늘 생일">🎂</span>':''}${a.booking_id?`<span title="예약 취소" style="margin-left:3px;color:#e0563a;font-size:10px" onclick="event.stopPropagation();cancelBooking('${a.uid}','${ev.event_id}','${a.booking_id}',this)">✕</span>`:''}<span class="ck">✓</span></div>`;});
+   h+=`<div class="chip s-${a._st} ${pk?'picked':''}"${bcStyle}${bcTitle} onclick="${click}" ${drop}>${avatar(m,a._st)}<span class="nmwrap"><span class="nm">${esc(m.name)}</span>${(()=>{const igShort=ig.length>8?ig.slice(0,8)+'..':ig;const igt=ig?`@${esc(igShort)}`:'';return igt?`<span class="submini">${igt}</span>`:'';})()}</span>${(!a._dropin&&!hasRealPhoto(m))?'<span title="사진 없음" style="margin-left:2px;font-size:10px;opacity:.85">📷</span>':''}${m.injury_note?'<span class="inj">⚠</span>':''}${isBdayToday(m)?'<span title="오늘 생일">🎂</span>':''}${a.booking_id?`<span title="예약 취소" style="margin-left:3px;color:#e0563a;font-size:10px" onclick="event.stopPropagation();cancelBooking('${a.uid}','${ev.event_id}','${a.booking_id}',this)">✕</span>`:''}<span class="ck">✓</span></div>`;});
   h+='</div>';
   if(on&&!DAYSEL){h+=`<div class="selbar"><span class="selcnt">${PICK.size}명 선택</span><button onclick="pickAll(${i})">전체</button><button onclick="pickNone()">해제</button><button class="pri" onclick="copyInsta()">@ 인스타복사</button><button class="pri" onclick="copyPhones()">번호복사</button><button onclick="smsOpen()">문자앱</button></div>`;}
   h+='</div>';});
@@ -4082,7 +4198,7 @@ function pickNoPhoto(){
  PICK.clear();
  (SESSIONS[sel]||[]).forEach(ev=>ev.att.forEach(a=>{
   const m=MEMBERS[a.uid];
-  if(!a._dropin&&a.uid&&m&&!photoOf(m))PICK.add(a.uid);
+  if(!a._dropin&&a.uid&&m&&!hasRealPhoto(m))PICK.add(a.uid);
  }));
  renderDay(false);
 }
@@ -4292,6 +4408,12 @@ async function open_(uid){
  <div class="mrow"><span class="mk">가입일</span>${esc(m.join_date)||'-'}</div>
  <div class="mrow"><span class="mk">만료일</span>${esc(m.end_date)||'-'}</div>
  <div class="mrow"><span class="mk">생년월일</span>${m.birth?esc((ageInfo(m.birth)||{}).disp||m.birth):'-'}${isBdayToday(m)?' 🎂 <b style="color:var(--red)">오늘 생일!</b>':''}</div>
+ <div class="mrow"><span class="mk">홀딩</span>
+  ${holdInfo(m)?holdBadge(m):'<span style="color:var(--dim)">없음</span>'}
+  <button class="mini" style="margin-left:6px;font-size:10px;padding:2px 7px" onclick="setHold('${uid}')">${m.hold_until?'수정':'등록'}</button>
+  ${m.hold_until?`<button class="mini" style="margin-left:4px;font-size:10px;padding:2px 7px;color:#e0563a" onclick="clearHold('${uid}')">해제</button>`:''}
+  ${m.hold_memo?`<div style="font-size:11px;color:var(--dim);margin-top:3px">${esc(m.hold_memo)}</div>`:''}
+ </div>
  ${passHTML}
  <label class="photobtn" for="d_photo" ondragover="dOverA(event)" ondragleave="dLeaveA(event)" ondrop="dropA(event,'${uid}')">📷 사진 추가 / 변경 (탭 또는 드래그)</label>
  <input type="file" id="d_photo" accept="image/*" style="display:none" onchange="upDetailPhoto('${uid}',this.files[0])">
