@@ -455,9 +455,9 @@ function ddaysAgo(n){const t=new Date(today+'T00:00:00');t.setDate(t.getDate()-n
 function lastVisit(m){const d=(m._days||[]).slice().sort();return d.length?d[d.length-1]:null;}
 function ddayOf(m){if(!m.end_date||m.end_date.length<10)return null;const t=new Date(today+'T00:00:00');const e=new Date(m.end_date.slice(0,10)+'T00:00:00');return Math.round((e-t)/86400000);}
 function msgFor(uid,type){const m=MEMBERS[uid]||{};const nm=m.name||'회원';
- if(type==='trial'){return `${nm}님, F45 성수 체험 어떠셨어요? 함께 운동해보니 정말 좋으셨죠! 지금 등록하시면 끊김 없이 이어가실 수 있어요. 궁금하신 점이나 등록 문의는 편하게 답장 주세요 -F45 성수`;}
+ if(type==='trial'){return `${nm}님, 안녕하세요! F45 성수입니다. 체험 수업은 어떠셨나요? 등록 관련해서 궁금하신 점 있으시면 편하게 답장 주세요!`;}
  if(type==='risk'){const lv=lastVisit(m);const disp=lv?lv.slice(5).replace('-','/'):'';
-  return `${nm}님! 요즘 F45에서 통 못 뵀네요 ${disp?'마지막 운동이 '+disp+'이었어요. ':''}이번 주에 다시 나오셔서 같이 땀 흘려요! 편하신 시간 말씀 주시면 예약 도와드릴게요 -F45 성수`;}
+  return `${nm}님, 안녕하세요! F45 성수입니다. 요즘 잘 지내고 계신가요? 한동안 못 뵌 것 같아 안부차 연락드렸습니다. 다시 오실 때 편하신 시간 알려주시면 예약 맞춰드리겠습니다!`;}
  const dd=ddayOf(m);const ed=m.end_date?m.end_date.slice(0,10):'';
  const when=dd===0?'오늘':(dd>0?`${dd}일 뒤(${ed})`:ed);
  return `${nm}님, 멤버십이 ${when} 만료 예정이에요. 끊김 없이 운동 이어가실 수 있게 재등록 안내드려요! 궁금하신 점 있으면 편하게 답장 주세요 -F45 성수`;}
@@ -880,7 +880,7 @@ function renderBirthday(){
 }
 let MILEDATA=null;
 function nextMile(t){if(t<45)return 45;return (Math.floor(t/100)+1)*100;}
-function msgMile(uid,nm){const m=MEMBERS[uid]||{};const n=m.name||'회원';return `${n}님, 곧 F45 성수 ${nm}회 출석 달성이에요! 꾸준함이 정말 대단하세요 함께 축하해요!`;}
+function msgMile(uid,nm){const m=MEMBERS[uid]||{};const n=m.name||'회원';return `${n}님, F45 성수 ${nm}회 출석이 곧 달성됩니다! 꾸준히 나와주셔서 감사합니다.`;}
 function smsMile(uid,nm){const m=MEMBERS[uid]||{};const ph=(m.phone||'').replace(/[^0-9]/g,'');if(!ph){alert('번호가 없어요.');return;}location.href='sms:'+ph+'&body='+encodeURIComponent(msgMile(uid,nm));}
 function copyMile(uid,nm){navigator.clipboard.writeText(msgMile(uid,nm));alert('축하 문구 복사됨');}
 async function renderMilestone(){
@@ -3220,14 +3220,16 @@ function maTemplateFallback(m, r14, situationHint){
   return `${nm}님, 횟수권이 ${expTxt}에 만료돼요! 아직 ${remain}회 남았으니, 이번 주부터 좀 더 자주 나오셔서 알차게 다 쓰고 가세요 -F45 성수`;
  }
  if(situationHint==='winback'){
-  return `${nm}님, 오랜만이에요! ${season.includes('선선')?'날씨도 선선해졌는데':'날씨 어떻든'} 예전처럼 다시 F45에서 땀 흘려보시는 거 어때요? 재등록 문의 편하게 주세요 -F45 성수`;
+  return `${nm}님, 오랜만입니다! F45 성수입니다. ${season.includes('선선')?'날씨가 선선해져서 ':''}문득 생각나 안부 여쭤봅니다. 다시 시작해보고 싶으실 때 편하게 연락 주세요!`;
  }
- if(r14<=1) return `${nm}님, 요즘 ${season.includes('선선')?'날씨도 선선해졌는데':'날씨 어떻든'} 통 못 뵀네요 이번 주에 다시 나오셔서 같이 땀 흘려요! -F45 성수`;
+ if(r14<=1) return `${nm}님, 안녕하세요! F45 성수입니다. 요즘 어떻게 지내고 계신가요? 편하신 시간에 들러주시면 반갑게 맞이하겠습니다!`;
  if(r14>=6) return `${nm}님, 요즘 정말 꾸준히 나오고 계시네요! 대단해요 그 페이스 계속 이어가봐요 -F45 성수`;
- return `${nm}님, 오늘 하루 어떠셨어요? 시간 되실 때 F45에서 같이 운동해요 -F45 성수`;
+ return `${nm}님, 안녕하세요! F45 성수입니다. 이번 주는 어떻게 보내고 계신가요? 편하신 시간에 뵙겠습니다!`;
 }
 // F45 성수 문자 톤 가이드 - 모든 AI 문구 생성에 공통 적용
-const MA_TONE_GUIDE = `[문체/톤 규칙 - 반드시 지킬 것] 절대 쓰지 말 것: "활기차게", "힘차게", "화이팅", "파이팅", "언제나 응원", "함께 성장", "여정" 같은 광고문구 같은 표현. 판에 박힌 인사말 금지. AI가 쓴 티 안 나는 자연스러운 실제 매니저 말투. 친절하되 지나치게 여성스럽거나 과장되지 않게, 남자답고 씩씩한 톤. "~했어요"체보다 "~습니다!"체 위주로 (예: "확인했습니다!", "뵙겠습니다!"). "계셨을까요?", "하셨을까요?" 같은 지나치게 공손하고 부자연스러운 표현 금지 - 대신 "어떠셨나요?", "편하게 알려주세요" 식으로. "ㅎㅎㅎ" 같은 과도하게 가벼운 표현 금지. 회원을 구박하거나 압박하거나 죄책감 느끼게 하는 표현 금지. 발신자는 "F45 성수"로, 개인 매니저 이름은 쓰지 않음. 부담스러운 영업 느낌보다 자연스러운 권유.`;
+const MA_TONE_GUIDE = `[문체/톤 규칙 - 반드시 지킬 것] 절대 쓰지 말 것: "활기차게", "힘차게", "화이팅", "파이팅", "언제나 응원", "함께 성장", "여정", "같이 땀 흘려요", "땀", "구슬땀", "열정", "불태", "뜨겁게" 같은 감성적·광고문구 같은 표현. 운동을 미화하는 수식어 금지. 
+[중요] 그렇다고 사무적·기계적으로 쓰지 말 것. "마지막 수업이 09/05였네요" 처럼 기록을 그대로 통보하듯 들이대는 표현 금지. 출석 기록은 톤을 정하는 참고용일 뿐, 문장에 날짜·횟수를 직접 나열하지 말 것(횟수권 만료일 안내처럼 꼭 필요한 경우만 예외). 
+안부를 먼저 자연스럽게 묻고, 권유는 마지막에 가볍게 한 문장으로. 상대가 부담 느끼지 않게 "요즘 어떻게 지내셨어요" 같은 열린 질문으로 시작하는 것도 좋음. 판에 박힌 인사말 금지. AI가 쓴 티 안 나는 자연스러운 실제 매니저 말투. 친절하되 지나치게 여성스럽거나 과장되지 않게, 남자답고 씩씩한 톤. "~했어요"체보다 "~습니다!"체 위주로 (예: "확인했습니다!", "뵙겠습니다!"). "계셨을까요?", "하셨을까요?" 같은 지나치게 공손하고 부자연스러운 표현 금지 - 대신 "어떠셨나요?", "편하게 알려주세요" 식으로. "ㅎㅎㅎ" 같은 과도하게 가벼운 표현 금지. 회원을 구박하거나 압박하거나 죄책감 느끼게 하는 표현 금지. 발신자는 "F45 성수"로, 개인 매니저 이름은 쓰지 않음. 부담스러운 영업 느낌보다 자연스러운 권유.`;
 
 async function maGenerateOneText(uid, situationHint, customPrompt){
  const m=maByUid(uid); if(!m)return{text:'',usedFallback:true};
@@ -3321,7 +3323,7 @@ async function maAiMsg(uid, btn, situationHint){
 // AI 없이, 똑같은 문구를 개별발송용 목록으로 즉석에서 생성 (단체방 안 생기게 한 명씩 보내는 용도)
 function maBulkPlainList(containerId){
  const uids=[...document.querySelectorAll('#'+containerId+' .ma-chk:checked')].map(el=>el.dataset.uid);
- if(!uids.length){alert('선택된 회원이 없어요.');return;}
+ if(!uids.length){alert('선택된 회원이 없어요.');window._busy=false;return;}
  const msg=prompt(`${uids.length}명에게 보낼 문구를 입력하세요.\n(발송 전 사람별로 각자 수정도 가능해요)`, '');
  if(msg===null) return;
  const cardBox=document.getElementById(containerId+'-aicards');
@@ -3347,11 +3349,38 @@ function maBulkPlainList(containerId){
 // 체크한 사람들 AI문구를 화면 최하단에 표(행) 형태로 한꺼번에 생성 - 각자 수정+복사+개별발송 가능
 const MA_LABELS={pass:'횟수권 만료 안내 문자 발송',winback:'재등록 유도 문자 발송',general:'출석 안부 문자 발송',custom:'맞춤 문자 발송'};
 async function maBulkGenerateCards(containerId, situationHint, btn){
+ try{ return await _maBulkGenerateCards(containerId, situationHint, btn); }
+ catch(e){ maShowGenError(containerId, e); }
+ finally{ window._busy=false; }
+}
+// 생성 중 오류가 나면 조용히 사라지지 않고 화면에 이유를 보여줌
+function maShowGenError(containerId, e){
+ const box=document.getElementById(containerId+'-aicards');
+ console.error('문구 생성 오류', e);
+ if(box){
+  box.style.display='';
+  box.innerHTML=`<div class="carecard" style="border-color:#e0563a">
+   <b style="color:#e0563a">문구 생성 중 오류가 났어요</b>
+   <div style="font-size:12px;margin-top:6px;word-break:break-all">${esc(String(e&&e.message||e))}</div>
+   <div style="font-size:11px;color:var(--dim);margin-top:8px">이 내용을 알려주시면 원인을 찾을 수 있어요.</div>
+  </div>`;
+ }
+}
+// 만들어둔 카드를 기억해뒀다가, 화면이 다시 그려져 사라지면 복구
+let MA_CARDS_HTML={};
+function maRestoreCards(){
+ Object.entries(MA_CARDS_HTML).forEach(([cid,html])=>{
+  const box=document.getElementById(cid+'-aicards');
+  if(box && !box.innerHTML.trim()){ box.style.display=''; box.innerHTML=html; }
+ });
+}
+async function _maBulkGenerateCards(containerId, situationHint, btn){
+ window._busy=true;   // 생성 중 자동 새로고침 방지
  MA_LAST_LABEL[containerId]=MA_LABELS[situationHint]||'안부 문자 발송';
  const uids=[...document.querySelectorAll('#'+containerId+' .ma-chk:checked')].map(el=>el.dataset.uid);
  if(!uids.length){alert('선택된 회원이 없어요.');return;}
  const cardBox=document.getElementById(containerId+'-aicards');
- if(!cardBox)return;
+ if(!cardBox)window._busy=false;return;
  cardBox.style.display='';
  cardBox.innerHTML=`<div class="wklab">🤖 AI 문구 생성 중… (0/${uids.length})</div>`;
  const origTxt=btn?btn.textContent:'';
@@ -3376,13 +3405,21 @@ async function maBulkGenerateCards(containerId, situationHint, btn){
   if(i<uids.length-1) await new Promise(r=>setTimeout(r,300));
  }
  if(btn) btn.textContent=origTxt;
- cardBox.innerHTML=`<div class="listhead">🤖 <b>생성된 문구</b> ${uids.length}건 · 각자 수정 후 개별 발송하세요</div>
+ window._busy=false;
+ MA_CARDS_HTML[containerId]=`<div class="listhead">🤖 <b>생성된 문구</b> ${uids.length}건 · 각자 수정 후 개별 발송하세요</div>
   <div style="margin-bottom:8px"><button class="mini" style="background:var(--red);border-color:var(--red)" onclick="maAligoSendAll('${containerId}',this)">🚀 전체 자동발송 (알리고)</button></div>
   <div style="background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:hidden">${rows}</div>`;
+ cardBox.innerHTML=MA_CARDS_HTML[containerId];
 }
 // 체크한 사람들한테, 관리자가 직접 입력한 프롬프트 기준으로 각자 다른 문구 일괄생성
 // (마지막 1주일 출석횟수를 AI한테 가장 중요한 정보로 강조해서 넘김)
 async function maBulkCustomPrompt(containerId, btn){
+ try{ return await _maBulkCustomPrompt(containerId, btn); }
+ catch(e){ maShowGenError(containerId, e); }
+ finally{ window._busy=false; }
+}
+async function _maBulkCustomPrompt(containerId, btn){
+ window._busy=true;   // 생성 중 자동 새로고침 방지
  try{ const _p=document.getElementById(containerId+'-prompt'); if(_p&&_p.value.trim())MA_LAST_LABEL[containerId]='맞춤 문자 발송: '+_p.value.trim().slice(0,20); }catch(e){}
  const promptInput=document.getElementById(containerId+'-customprompt');
  const customPrompt=(promptInput?.value||'').trim();
@@ -3416,9 +3453,11 @@ async function maBulkCustomPrompt(containerId, btn){
   if(i<uids.length-1) await new Promise(r=>setTimeout(r,300));
  }
  if(btn) btn.textContent=origTxt;
- cardBox.innerHTML=`<div class="listhead">✏️ <b>맞춤 문구</b> ${uids.length}건 · "${esc(customPrompt)}" 기준 · 각자 마지막주 출석 반영됨</div>
+ window._busy=false;
+ MA_CARDS_HTML[containerId]=`<div class="listhead">✏️ <b>맞춤 문구</b> ${uids.length}건 · "${esc(customPrompt)}" 기준 · 각자 마지막주 출석 반영됨</div>
   <div style="margin-bottom:8px"><button class="mini" style="background:var(--red);border-color:var(--red)" onclick="maAligoSendAll('${containerId}',this)">🚀 전체 자동발송 (알리고)</button></div>
   <div style="background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:hidden">${rows}</div>`;
+ cardBox.innerHTML=MA_CARDS_HTML[containerId];
 }
 function maSendCardSms(uid, boxId){
  const m=maByUid(uid); if(!m)return;
@@ -3429,6 +3468,7 @@ function maSendCardSms(uid, boxId){
 }
 // 알리고 send_mass Edge Function 호출 - 사람마다 다른(또는 같은) 내용을 진짜 자동으로 개별 발송
 async function maAligoSendAll(containerId, btn){
+ window._busy=true;
  const cardBox=document.getElementById(containerId+'-aicards');
  if(!cardBox)return;
  const textareas=[...cardBox.querySelectorAll('textarea[data-uid]')];
@@ -3443,12 +3483,12 @@ async function maAligoSendAll(containerId, btn){
  }).filter(Boolean);
  const recipients=picked.filter(r=>r.phone&&r.msg);
 
- if(!recipients.length){alert('보낼 수 있는 대상이 없어요 (번호 없음/문구 없음/전원 홀딩).');return;}
+ if(!recipients.length){window._busy=false;alert('보낼 수 있는 대상이 없어요 (번호 없음/문구 없음/전원 홀딩).');return;}
  if(recipients.length>500){alert(`한 번에 최대 500명까지 가능해요. 지금 ${recipients.length}명이에요 - 나눠서 보내주세요.`);return;}
 
  const label=prompt('메모에 남길 요약을 확인해주세요 (발송 후 각 회원 기록에 저장돼요)',
    MA_LAST_LABEL[containerId]||'안부 문자 발송');
- if(label===null)return;
+ if(label===null){window._busy=false;return;}
 
  if(!confirm(`⚠️ 정말 ${recipients.length}명에게 문자를 발송할까요?\n포인트가 차감되고 취소할 수 없어요.`
    +(held.length?`\n\n⏸ 홀딩 중이라 제외됨 (${held.length}명): ${held.slice(0,8).join(', ')}${held.length>8?' 외':''}`:''))) return;
@@ -3458,6 +3498,7 @@ async function maAligoSendAll(containerId, btn){
  try{
   const {data,error}=await sb.functions.invoke('aligo-sms',{body:{recipients:recipients.map(({phone,msg,name})=>({phone,msg,name}))}});
   if(btn){btn.disabled=false;btn.textContent=origTxt;}
+  window._busy=false;
   if(error){alert('발송 요청 실패: '+error.message);return;}
   if(data?.error){alert('발송 실패: '+data.error);return;}
   if(data?.result_code && data.result_code>0){
@@ -3468,6 +3509,7 @@ async function maAligoSendAll(containerId, btn){
   }
  }catch(e){
   if(btn){btn.disabled=false;btn.textContent=origTxt;}
+  window._busy=false;
   alert('오류: '+e.message);
  }
 }
@@ -3848,11 +3890,12 @@ async function boot(){
   const picking = selEv!=null;
   const drawerOpen = document.getElementById('drawer').style.display!=='none';
   const editing = document.activeElement && ['INPUT','TEXTAREA'].includes(document.activeElement.tagName);
-  if(sheetOpen||picking||drawerOpen||editing) return;
+  if(sheetOpen||picking||drawerOpen||editing||window._busy) return;   // 문구 생성/발송 중에는 다시 그리지 않음
   const t=await syncStamp();
   if(t && t===window._lastSyncCheck) return; // 데이터 안 바뀌었으면 다시 안 그림(깜박임 방지)
   window._lastSyncCheck=t;
-  loadData();
+  await loadData();
+  maRestoreCards();
  }, 60*1000);
 }
 const GH_OWNER='f45seongsu', GH_REPO='app', GH_WF='update.yml';
