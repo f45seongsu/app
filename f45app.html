@@ -293,6 +293,25 @@ async function clearHold(uid){
   open_(uid);
  }catch(e){alert('오류: '+e.message);}
 }
+// 최근 7일 안에 [문자] 기록이 있으면 '최근 발송'으로 봄 (자동 발송 기록 + 직접 입력한 [문자] 메모 둘 다)
+function recentSms(m){
+ const uid=m&&m.glofox_user_id; if(!uid)return null;
+ const logs=MEMO_BY_UID[uid]||[];
+ const lim=new Date(); lim.setDate(lim.getDate()-7);
+ for(const l of logs){
+  if(!l.content||l.content.indexOf('[문자]')<0)continue;
+  const t=new Date(l.created_at);
+  if(isNaN(t.getTime())||t<lim)continue;
+  const d=String(l.created_at).slice(5,10).replace('-','/');
+  return {date:d, content:String(l.content).replace(/\[\d{2}\/\d{2}\]\s*/,'').slice(0,40)};
+ }
+ return null;
+}
+function smsBadge(m){
+ const s=recentSms(m); if(!s)return '';
+ return `<span title="${esc(s.content)}" style="background:#1c3a24;border:1px solid #4ee88a;color:#4ee88a;border-radius:6px;padding:1px 5px;font-size:10px;margin-left:4px">📱 ${s.date}</span>`;
+}
+
 // 홀딩(일시정지) 중인지 - 오늘이 hold_from~hold_until 사이면 홀딩
 function holdInfo(m){
  if(!m||!m.hold_until)return null;
@@ -605,10 +624,11 @@ function careCard(uid,metaHtml,type,showGrid){const m=MEMBERS[uid]||{name:'?'};c
    ${stageBtn('리드','#5aa0e0')}${stageBtn('트라이얼','#4ee88a')}${stageBtn('콜드','#8892a6')}${stageBtn('투어','#e0954f')}
   </div>` : '';
  const _hold=holdInfo(m);
- return `<div class="carecard"${_hold?' style="background:#3a2a14;border-color:#e0954f"':''}>
+ const _sms=_hold?null:recentSms(m);
+ return `<div class="carecard"${_hold?' style="background:#3a2a14;border-color:#e0954f"':(_sms?' style="background:#16301f;border-color:#2d7a52"':'')}>
    <div class="srow" style="border:0;padding:0;margin:0;background:none">
      <span onclick="open_('${uid}')">${avatar(m,'bk')}</span>
-     <div class="sinfo" onclick="open_('${uid}')"><div class="nm">${esc(m.name)||'(이름없음)'}${bd?` <span class="badge b-${bd}">${bd}</span>`:''}${holdBadge(m)}</div><div class="smeta">${metaHtml}</div></div>
+     <div class="sinfo" onclick="open_('${uid}')"><div class="nm">${esc(m.name)||'(이름없음)'}${bd?` <span class="badge b-${bd}">${bd}</span>`:''}${holdBadge(m)}${smsBadge(m)}</div><div class="smeta">${metaHtml}</div></div>
      <div class="cacts"><button class="mini" onclick="aiMsg('${uid}','${type}',this)">🤖AI문구</button><button class="mini" onclick="sendSms('${uid}')">📱문자보내기</button></div>
    </div>
    ${recentMemosHtml(uid,2)}
@@ -2760,11 +2780,13 @@ function maTableHTML(list, containerId, situationHint){
   </div>`;
  h+= list.length ? list.map(m=>{
   const uid=m.glofox_user_id; const hasPh=!!(m.phone||'').trim();
-  const hold=holdInfo(m);   // 홀딩 중이면 줄 전체를 주황 배경으로
-  return `<div class="ma-row" style="display:flex;gap:8px;align-items:center;padding:5px 12px;border-bottom:1px solid var(--line);font-size:12px;min-width:900px;cursor:pointer${hold?';background:#3a2a14':''}" onclick="open_('${uid}')">
+  const hold=holdInfo(m);          // 홀딩 중이면 주황 배경 (우선)
+  const sms=hold?null:recentSms(m); // 최근 7일 내 문자 보냈으면 초록 배경
+  const rowBg=hold?';background:#3a2a14':(sms?';background:#16301f':'');
+  return `<div class="ma-row" style="display:flex;gap:8px;align-items:center;padding:5px 12px;border-bottom:1px solid var(--line);font-size:12px;min-width:900px;cursor:pointer${rowBg}" onclick="open_('${uid}')">
    <div class="ma-c-sms" onclick="event.stopPropagation()"><button class="mini" style="font-size:10px;padding:4px 6px" onclick="maSingleSms('${uid}')">📱문자</button></div>
    <div class="ma-c-chk"><input type="checkbox" class="ma-chk" data-uid="${uid}" ${hasPh?'':'disabled'} onclick="event.stopPropagation()" onchange="maUpdateCnt('${containerId}')"></div>
-   <div class="ma-c-name" style="font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(m.name)}${holdBadge(m)}</div>
+   <div class="ma-c-name" style="font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(m.name)}${holdBadge(m)}${smsBadge(m)}</div>
    <div style="flex:0 0 36px;overflow:hidden">${avatar(m,'bk')}</div>
    <div style="flex:0 0 106px;color:var(--dim);white-space:nowrap">${esc(m.phone||'번호없음')}</div>
    <div class="ma-c-plan" style="flex:0 0 140px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:11px">${esc(m.membership||'-')}</div>
