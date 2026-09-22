@@ -867,7 +867,15 @@ function renderTrial(){
    const inferred=m.stage!=='트라이얼';
    const ed=m.end_date?m.end_date.slice(0,10):'';const dd=ddayOf(m);
    const expTxt=ed?(dd!=null?(dd<0?`체험 만료 (${-dd}일 전)`:(dd===0?'오늘 만료':`체험 D-${dd}`)):ed):'';
-   const meta=`${esc(m.source||m.join_date||'')}${ed?` · ${expTxt}`:''}${m.join_date?` · 등록 ${m.join_date.slice(2,10).replace(/-/g,'.')}`:''}`;
+   // 첫 방문일 = 실제로 처음 출석한 날 (트라이얼 시작 시점으로 보기 좋음)
+   const days=(m._days||[]).slice().sort();
+   const firstV=days.length?days[0]:'';
+   const md=s=>s?s.slice(5,10).replace('-','/'):'';
+   const meta=[
+     ed?expTxt:'',
+     firstV?`첫 방문 ${md(firstV)} (${days.length}회 출석)`:'아직 방문 없음',
+     m.join_date?`앱 가입 ${md(m.join_date)}`:''
+   ].filter(Boolean).join(' · ');
    return `<div class="carecard">
      <div class="srow" style="border:0;padding:0;margin:0;background:none">
        <span onclick="open_('${uid}')">${avatar({...m,stage:'트라이얼',pass_remaining:null},'bk')}</span>
