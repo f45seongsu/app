@@ -114,9 +114,11 @@ body{padding-bottom:76px}
 .subtabs button.on{background:var(--red);border-color:var(--red);color:#fff}
 .carecard{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 11px;margin-bottom:9px}
 .mini4w-wrap{margin:9px 0 4px;display:flex;flex-direction:column;gap:2px;align-items:flex-start}
-.mini4w{display:grid;grid-template-columns:repeat(6,15px);gap:3px}
-.m4{width:15px;height:15px;background:#1a2942;border-radius:3px}
-.m4.on{background:var(--grn)}.m4.fut{opacity:.2}
+.mini4w{display:grid;grid-template-columns:repeat(6,24px);gap:3px}
+.m4{width:24px;height:22px;background:#1a2942;border-radius:4px;font-size:10px;color:#6b7c99;display:flex;align-items:center;justify-content:center;font-variant-numeric:tabular-nums}
+.m4h{width:24px;text-align:center;font-size:9px;color:var(--dim)}
+.m4.today{outline:1.5px solid var(--acc);outline-offset:-1px;color:var(--txt)}
+.m4.on{background:var(--grn);color:#0d2a18;font-weight:800}.m4.fut{opacity:.2}
 .m4lab{color:var(--dim);font-size:10px;margin-top:3px;display:block}
 .memoLogItem{font-size:12px;color:var(--txt);padding:5px 0;border-bottom:1px solid var(--line)}
 .memoin{width:100%;background:#0e1a30;border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:7px 10px;font-size:12px;margin-top:8px}
@@ -214,7 +216,6 @@ body{padding-bottom:76px}
   <button onclick="if(checkAdminPw())syncHolds()">⏸ 홀딩 신청서 불러오기</button>
   <button onclick="if(checkAdminPw())showView('xlsxsched')">📊 근무표 엑셀 업로드</button>
   <button onclick="if(checkAdminPw())showView('schedule')">📅 스케줄표 직접 입력</button>
-  <button onclick="if(checkAdminPw())showView('coachcash')">💰 코치캐시 정산</button>
 
   <h3 style="margin-top:10px">분석 · 기타</h3>
   <button onclick="if(checkAdminPw())showView('report')">📊 리포트</button>
@@ -489,9 +490,12 @@ async function saveMemo(uid,val){
  }catch(e){alert('오류: '+e.message);}
 }
 function miniGrid(m){const set=new Set(m._days||[]);const t=new Date(today+'T00:00:00');
- const dow=(t.getDay()+6)%7;const mon=new Date(t);mon.setDate(t.getDate()-dow);let c='';
+ const dow=(t.getDay()+6)%7;const mon=new Date(t);mon.setDate(t.getDate()-dow);
+ // 요일 머리글
+ let c=['월','화','수','목','금','토'].map(d=>`<span class="m4h">${d}</span>`).join('');
  for(let w=3;w>=0;w--)for(let d=0;d<6;d++){const cur=new Date(mon);cur.setDate(mon.getDate()-w*7+d);
-  const ds=fmt(cur);c+=`<span class="m4 ${set.has(ds)?'on':''} ${cur>t?'fut':''}"></span>`;}
+  const ds=fmt(cur);const isT=(ds===today);
+  c+=`<span class="m4 ${set.has(ds)?'on':''} ${cur>t?'fut':''} ${isT?'today':''}" title="${ds}${set.has(ds)?' 출석':''}">${cur.getDate()}</span>`;}
  return c;}
 
 // ===== AI 문구 생성 (Gemini Edge Function 호출) =====
@@ -603,6 +607,33 @@ function sendSms(uid){
  location.href='sms:'+ph;
 }
 
+function fmtPhone(p){
+ const d=String(p||'').replace(/[^0-9]/g,'');
+ if(d.length===11)return d.slice(0,3)+'-'+d.slice(3,7)+'-'+d.slice(7);
+ if(d.length===10)return d.slice(0,3)+'-'+d.slice(3,6)+'-'+d.slice(6);
+ return d?d:'';
+}
+// 메모 입력 후 Enter → 즉시 저장하고 목록 맨 위에 보여줌 (저장 여부가 눈에 보이게)
+async function quickMemo(uid,kind,el){
+ const val=(el.value||'').trim(); if(!val)return;
+ const author=COACH||ACTIVE_STAFF||'미지정';
+ el.disabled=true;
+ try{
+  const{data,error}=await sb.from('memo_log').insert({glofox_user_id:uid,coach_name:author,content:val}).select().single();
+  if(error)throw error;
+  const col=(kind==='trial')?'trial_memo':'care_memo';
+  sb.from('people').update({[col]:val}).eq('glofox_user_id',uid).then(()=>{},()=>{});
+  if(MEMBERS[uid])MEMBERS[uid][col]=val;
+  (MEMO_BY_UID[uid]=MEMO_BY_UID[uid]||[]).unshift(data||{content:val,coach_name:author,created_at:new Date().toISOString()});
+  const box=document.getElementById('memos_'+uid);
+  if(box)box.innerHTML=recentMemosHtml(uid,3);
+  el.value='';
+  const ok=document.getElementById('saved_'+uid);
+  if(ok){ok.style.opacity='1';setTimeout(()=>{ok.style.opacity='0';},1500);}
+  syncLeadToGlofox(uid,{note:`[${author}] ${val}`});
+ }catch(e){ alert('메모 저장 실패: '+(e.message||e)); }
+ finally{ el.disabled=false; el.focus(); }
+}
 function recentMemosHtml(uid,n){
  const list=(MEMO_BY_UID[uid]||[]).slice(0,n||2);
  if(!list.length)return '';
@@ -632,7 +663,7 @@ function careCard(uid,metaHtml,type,showGrid){const m=MEMBERS[uid]||{name:'?'};c
      <div class="cacts"><button class="mini" onclick="aiMsg('${uid}','${type}',this)">🤖AI문구</button><button class="mini" onclick="sendSms('${uid}')">📱문자보내기</button></div>
    </div>
    ${recentMemosHtml(uid,2)}
-   ${showGrid?`<div class="mini4w-wrap"><span class="m4lab">↑ 4주 전</span><div class="mini4w">${miniGrid(m)}</div><span class="m4lab">↓ 이번 주</span></div>`:''}
+   ${showGrid?`<div class="mini4w-wrap"><span class="m4lab">최근 4주 출석 (초록 = 출석)</span><div class="mini4w">${miniGrid(m)}</div></div>`:''}
    ${leadBtns}
    <input id="extra_${type}_${uid}" class="memoin" placeholder="AI에게 특별 요청사항 (예: 이번주 세일 언급해줘)">
    <input id="care_${uid}" class="memoin" value="${esc(m.care_memo||'')}" placeholder="메모 (예: 6/20 통화함·안받음)" onchange="saveMemo('${uid}',this.value)">
@@ -840,13 +871,16 @@ function renderTrial(){
    return `<div class="carecard">
      <div class="srow" style="border:0;padding:0;margin:0;background:none">
        <span onclick="open_('${uid}')">${avatar({...m,stage:'트라이얼',pass_remaining:null},'bk')}</span>
-       <div class="sinfo" onclick="open_('${uid}')"><div class="nm">${esc(m.name)||'(이름없음)'} <span class="badge b-트라이얼">${inferred?'⚡추정':'트라이얼'}</span></div><div class="smeta">${meta}</div></div>
+       <div class="sinfo" onclick="open_('${uid}')"><div class="nm">${esc(m.name)||'(이름없음)'} <span class="badge b-트라이얼">${inferred?'⚡추정':'트라이얼'}</span>${fmtPhone(m.phone)?` <span style="font-size:11px;color:var(--dim);font-weight:400">${fmtPhone(m.phone)}</span>`:''}</div><div class="smeta">${meta}</div></div>
        <div class="cacts"><button class="mini" onclick="aiMsg('${uid}','trial',this)">🤖AI문구</button><button class="mini" onclick="sendSms('${uid}')">📱문자보내기</button><button class="mini" style="color:var(--dim)" onclick="hideTrial('${uid}')">숨기기</button></div>
      </div>
-     <div class="mini4w-wrap"><span class="m4lab">↑ 4주 전</span><div class="mini4w">${miniGrid(m)}</div><span class="m4lab">↓ 이번 주</span></div>
-     ${recentMemosHtml(uid,2)}
+     <div class="mini4w-wrap"><span class="m4lab">최근 4주 출석 (초록 = 출석)</span><div class="mini4w">${miniGrid(m)}</div></div>
+     <div id="memos_${uid}">${recentMemosHtml(uid,3)}</div>
      <input id="extra_trial_${uid}" class="memoin" placeholder="AI에게 특별 요청사항 (예: 이번주 세일 언급해줘)">
-     <input id="trial_${uid}" class="memoin" value="${esc(m.trial_memo||'')}" placeholder="트라이얼 메모 (예: 7/2 통화·고민중)" onchange="saveTrialMemo('${uid}',this.value)">
+     <div style="position:relative">
+      <input id="trial_${uid}" class="memoin" placeholder="메모 입력 후 Enter (예: 통화함·고민중)" onkeydown="if(event.key==='Enter'&&!event.isComposing){event.preventDefault();quickMemo('${uid}','trial',this);}">
+      <span id="saved_${uid}" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);font-size:12px;color:var(--grn);font-weight:700;opacity:0;transition:opacity .25s">✓ 저장됨</span>
+     </div>
      ${channelRow('trial_'+uid)}
      ${managerRow()}
    </div>`;}).join('');
@@ -1708,7 +1742,16 @@ async function xsSave(){
 }
 
 // ===== 코치 관리 (연락처 · 근무 집계 · 전용 링크 문자 발송) =====
-const QUIZ_URL='https://f45seongsu.github.io/coachquiz.html';
+const QUIZ_URL='https://f45seongsu.github.io/coachquiz.html';   // 퀴즈는 누구나 여는 공용 링크 하나만 사용
+// 코치별 링크 = 원래 출결 앱 링크 (접속 기록이 남는 그 링크)
+function coachAppLink(token){
+ const u=new URL(location.href.split('#')[0]);
+ const p=new URLSearchParams();
+ if(TOKEN)p.set('key',TOKEN);
+ p.set('t',token);
+ u.search=p.toString();
+ return u.toString();
+}
 let CM_YM='';
 
 async function renderCoachMgr(){
@@ -1763,7 +1806,7 @@ async function renderCoachMgr(){
    <input type="month" value="${CM_YM}" onchange="CM_YM=this.value;renderCoachMgr()" style="font-size:13px">
    <span style="font-size:12px;color:var(--dim)">총 ${totalTimes}타임 · 재직 ${actv.length}명</span>
    <button class="mini" onclick="cmAddCoach()">+ 코치 추가</button>
-   <button class="mini" onclick="cmSmsAll()">📱 전체에게 퀴즈 링크 발송</button>
+   <button class="mini" onclick="cmCopy(QUIZ_URL)">🧠 퀴즈 링크 복사 (공용)</button>
   </div></div>`;
 
  const ROLES=['대표','매니저','코치'];
@@ -1785,7 +1828,7 @@ function cmCard(s,st,cash,token,actBy){
  const times=st?st.times:0, days=st?st.days.size:0, sat=st?st.sat:0;
  const ms=(window._MSTAT||{})[s.name];
  const isMgr=((s.role||'코치')!=='코치');
- const link=token?`${QUIZ_URL}?t=${token}`:'';
+ const link=token?coachAppLink(token):'';
  const a=(token&&actBy&&actBy[token])?actBy[token]:null;
  const actTxt=a?`접속 ${a.n}회 · 최근 ${String(a.last).slice(5,10)}`:'접속 기록 없음';
  return `<div class="carecard" style="margin:0;${s.active?'':'opacity:.55'}">
@@ -1807,10 +1850,9 @@ function cmCard(s,st,cash,token,actBy){
    <input id="cmph_${s.id}" value="${esc(s.phone||'')}" placeholder="연락처 (010-0000-0000)" style="flex:1;font-size:13px" onchange="cmSavePhone(${s.id},this.value)">
    ${s.phone?`<a class="mini" href="tel:${esc((s.phone||'').replace(/[^0-9]/g,''))}" style="text-decoration:none">📞</a>`:''}
   </div>
-  <div style="font-size:11px;color:var(--dim);margin-top:6px">🔑 ${esc(actTxt)} &nbsp;·&nbsp; <span style="color:#ffd166">코치캐시 ${cash.toLocaleString()}원</span></div>
+  <div style="font-size:11px;color:var(--dim);margin-top:6px">🔑 ${esc(actTxt)}</div>
   <div style="display:flex;gap:6px;margin-top:7px;flex-wrap:wrap;align-items:center">
-   ${link?`<button class="mini" onclick="cmCopy('${link}')">🔗 링크복사</button>
-      <button class="mini" onclick="cmSmsOne('${esc(s.name)}','${esc(s.phone||'')}','${link}')">📱 문자</button>`
+   ${link?`<button class="mini" onclick="cmCopy('${link}')">🔗 코치 링크 복사</button>`
      :`<button class="mini" style="color:#e0954f" onclick="cmMakeLink('${esc(s.name)}')">🔑 링크 생성</button>`}
    <button class="mini" style="margin-left:auto;${s.active?'color:#e0954f':'color:var(--grn)'}" onclick="cmToggleActive(${s.id||'null'},${s.active?'false':'true'},'${esc(s.name)}')">${s.active?'퇴사 처리':'복귀 처리'}</button>
   </div>
@@ -3872,6 +3914,17 @@ async function boot(){
    }
    COACH=data.coach_name||'';
    try{await sb.from('coach_activity').insert({token:COACH_TOKEN,coach_name:COACH,event_type:'login'});}catch(_e){}
+   // 코치 링크 접속 시: 상단에 '코치 퀴즈' 버튼 (본인 근무 기준으로 출제)
+   try{
+    const tb=document.querySelector('.topbar');
+    if(tb&&!document.getElementById('quizBtn')){
+     const b=document.createElement('button');
+     b.id='quizBtn'; b.textContent='🧠 퀴즈';
+     b.style.cssText='background:#2b2247;border:1px solid #6c5ce7;color:#cdc2ff;border-radius:9px;padding:6px 10px;font-size:13px;cursor:pointer;margin-left:6px';
+     b.onclick=()=>{ const u='https://f45seongsu.github.io/coachquiz.html?who='+encodeURIComponent(COACH)+(TOKEN?'&key='+encodeURIComponent(TOKEN):''); window.open(u,'_blank'); };
+     const ref=document.getElementById('staffBtn'); if(ref&&ref.nextSibling)tb.insertBefore(b,ref.nextSibling); else tb.appendChild(b);
+    }
+   }catch(_e){}
   }catch(e){
    document.body.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100vh;text-align:center;padding:20px"><div><div style="font-size:40px;margin-bottom:10px">🔒</div><div style="font-size:16px;color:var(--dim)">접근 확인 중 오류가 발생했어요.</div></div></div>';
    return;
@@ -3940,7 +3993,19 @@ async function loadData(manual){
   if(p.name_override)p.name=p.name_override;
   else p.name=fixKoreanOrder(p.name);   // 글로폭스는 '상연 문'처럼 이름+성 순서로 줌 → '문상연'으로 복원
   MEMBERS[p.glofox_user_id]=p});
+ // 근무표(coach_schedule)에서 운영 시간대를 가져와, 예약 0명인 수업도 출결에 띄움
  const since=new Date(today+'T00:00:00');since.setDate(since.getDate()-35);
+ try{
+  const to=new Date(today+'T00:00:00'); to.setDate(to.getDate()+21);
+  const{data:sch}=await sb.from('coach_schedule').select('work_date,work_time,coach_name')
+   .gte('work_date',since.toLocaleDateString('sv-SE')).lte('work_date',to.toLocaleDateString('sv-SE'));
+  SCHED_BY_DATE={};
+  (sch||[]).forEach(s=>{
+   const d=String(s.work_date).slice(0,10), t=String(s.work_time).slice(0,5);
+   if(!SCHED_BY_DATE[d])SCHED_BY_DATE[d]={};
+   (SCHED_BY_DATE[d][t]=SCHED_BY_DATE[d][t]||[]).push(s.coach_name);
+  });
+ }catch(e){ SCHED_BY_DATE={}; }
  let all=[],from=0;
  while(true){
   const {data,error:e2}=await sb.from('attendance').select('glofox_user_id,event_id,class_name,class_time,attended,status,booking_id')
@@ -4207,7 +4272,16 @@ function jumpTo(i){
  if(el){const y=el.getBoundingClientRect().top+window.scrollY-100;window.scrollTo({top:y,behavior:'smooth'});}
 }
 let selEv=null; const PICK=new Set();
-function renderDay(doScroll){const evs=(SESSIONS[sel]||[]).slice().sort((a,b)=>(a.time||'').localeCompare(b.time||''));
+let SCHED_BY_DATE={};
+function renderDay(doScroll){
+ // 예약이 하나도 없는 시간대도 근무표 기준으로 빈 수업을 만들어 표시
+ const base=(SESSIONS[sel]||[]).slice();
+ const have=new Set(base.map(e=>String(e.time||'').slice(0,5)));
+ const plan=SCHED_BY_DATE[sel]||{};
+ Object.keys(plan).forEach(t=>{
+  if(!have.has(t)) base.push({time:t,name:'수업',event_id:null,att:[],_empty:true,_coaches:plan[t]});
+ });
+ const evs=base.sort((a,b)=>(a.time||'').localeCompare(b.time||''));
  SESSIONS[sel]=evs; let h='';const nowTs=new Date();
  // 그날 전체(모든 시간대) 선택 바
  if(evs.length){
@@ -4233,9 +4307,11 @@ function renderDay(doScroll){const evs=(SESSIONS[sel]||[]).slice().sort((a,b)=>(
   const present=ev.att.filter(a=>a._st==='att').length;
   const noshow=ev.att.filter(a=>a._st==='noshow').length;
   const cancel=ev.att.filter(a=>a._st==='cancel').length;
-  const cntTxt=`${ev.att.length}명 · ${present} 출석`+(noshow?` · <span style="color:#e0563a">${noshow} 노쇼</span>`:'')+(cancel?` · <span style="color:#e0954f">${cancel} 취소</span>`:'');
+  const cntTxt=ev._empty
+    ? `<span style="color:var(--dim)">예약 없음</span>${ev._coaches&&ev._coaches.length?` · <span style="color:var(--dim)">${esc(ev._coaches.join(', '))}</span>`:''}`
+    : `${ev.att.length}명 · ${present} 출석`+(noshow?` · <span style="color:#e0563a">${noshow} 노쇼</span>`:'')+(cancel?` · <span style="color:#e0954f">${cancel} 취소</span>`:'');
   const on=(selEv===i)||DAYSEL;
-  h+=`<div class="ev" id="ev_${i}"><div class="evh"><span class="time">${ev.time}</span><span class="enm">${esc(ev.name)}</span><span class="cnt">${cntTxt}</span><button class="selbtn" style="background:#2a5a3a" onclick="openBookingForEvent('${ev.event_id}','${sel}','${ev.time}',this)">+예약</button><button class="selbtn ${on?'on':''}" onclick="toggleSel(${i})">${on?'완료':'선택'}</button></div><div class="grid">`;
+  h+=`<div class="ev" id="ev_${i}"${ev._empty?' style="opacity:.6"':''}><div class="evh"><span class="time">${ev.time}</span><span class="enm">${esc(ev.name)}</span><span class="cnt">${cntTxt}</span>${ev.event_id?`<button class="selbtn" style="background:#2a5a3a" onclick="openBookingForEvent('${ev.event_id}','${sel}','${ev.time}',this)">+예약</button>`:''}${ev._empty?'':`<button class="selbtn ${on?'on':''}" onclick="toggleSel(${i})">${on?'완료':'선택'}</button>`}</div><div class="grid">`;
   const buddyColors=buddyColorsForSession(ev.att.map(a=>a.uid));
   ev.att.forEach(a=>{if(a._dropin){h+=`<div class="chip s-${a._st}" style="cursor:default"><span class="ini" style="background:#4a5980">D</span><span class="nmwrap"><span class="nm">Drop in${a._dropin>1?` (${a._dropin}명)`:''}</span></span></div>`;return;}const m=MEMBERS[a.uid]||{name:'(미등록)'};const bd=badgeOf(m);
    const pk=on&&PICK.has(a.uid);
@@ -4245,7 +4321,7 @@ function renderDay(doScroll){const evs=(SESSIONS[sel]||[]).slice().sort((a,b)=>(
    const bc=buddyColors[a.uid];
    const bcStyle=bc?` style="background:${bc}"`:'';
    const bcTitle=bc?' title="🤝 함께 옴"':'';
-   h+=`<div class="chip s-${a._st} ${pk?'picked':''}"${bcStyle}${bcTitle} onclick="${click}" ${drop}>${avatar(m,a._st)}<span class="nmwrap"><span class="nm">${esc(m.name)}</span>${(()=>{const igShort=ig.length>8?ig.slice(0,8)+'..':ig;const igt=ig?`@${esc(igShort)}`:'';return igt?`<span class="submini">${igt}</span>`:'';})()}</span>${(!a._dropin&&!hasRealPhoto(m))?'<span title="사진 없음" style="margin-left:2px;font-size:10px;opacity:.85">📷</span>':''}${(!a._dropin&&holdInfo(m))?'<span title="홀딩 중" style="margin-left:2px;font-size:10px">⏸</span>':''}${m.injury_note?'<span class="inj">⚠</span>':''}${isBdayToday(m)?'<span title="오늘 생일">🎂</span>':''}${a.booking_id?`<span title="예약 취소" style="margin-left:3px;color:#e0563a;font-size:10px" onclick="event.stopPropagation();cancelBooking('${a.uid}','${ev.event_id}','${a.booking_id}',this)">✕</span>`:''}<span class="ck">✓</span></div>`;});
+   h+=`<div class="chip s-${a._st} ${pk?'picked':''}"${bcStyle}${bcTitle} onclick="${click}" ${drop}>${avatar(m,a._st)}<span class="nmwrap"><span class="nm">${esc(m.name)}</span>${(()=>{const igShort=ig.length>8?ig.slice(0,8)+'..':ig;const igt=ig?`@${esc(igShort)}`:'';return igt?`<span class="submini">${igt}</span>`:'';})()}</span>${(!a._dropin&&holdInfo(m))?'<span title="홀딩 중" style="margin-left:2px;font-size:10px">⏸</span>':''}${m.injury_note?'<span class="inj">⚠</span>':''}${isBdayToday(m)?'<span title="오늘 생일">🎂</span>':''}${a.booking_id?`<span title="예약 취소" style="margin-left:3px;color:#e0563a;font-size:10px" onclick="event.stopPropagation();cancelBooking('${a.uid}','${ev.event_id}','${a.booking_id}',this)">✕</span>`:''}<span class="ck">✓</span></div>`;});
   h+='</div>';
   if(on&&!DAYSEL){h+=`<div class="selbar"><span class="selcnt">${PICK.size}명 선택</span><button onclick="pickAll(${i})">전체</button><button onclick="pickNone()">해제</button><button class="pri" onclick="copyInsta()">@ 인스타복사</button><button class="pri" onclick="copyPhones()">번호복사</button><button onclick="smsOpen()">문자앱</button></div>`;}
   h+='</div>';});
