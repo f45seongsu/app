@@ -4013,7 +4013,15 @@ async function loadData(manual){
    if(!SCHED_BY_DATE[d])SCHED_BY_DATE[d]={};
    (SCHED_BY_DATE[d][t]=SCHED_BY_DATE[d][t]||[]).push(s.coach_name);
   });
- }catch(e){ SCHED_BY_DATE={}; }
+  // 그날 근무 매니저
+  const{data:mg}=await sb.from('manager_hours').select('staff_name,work_date,hours')
+   .gte('work_date',since.toLocaleDateString('sv-SE')).lte('work_date',to.toLocaleDateString('sv-SE'));
+  MGR_BY_DATE={};
+  (mg||[]).forEach(m=>{
+   const d=String(m.work_date).slice(0,10);
+   (MGR_BY_DATE[d]=MGR_BY_DATE[d]||[]).push(m.staff_name);
+  });
+ }catch(e){ SCHED_BY_DATE={}; MGR_BY_DATE={}; }
  let all=[],from=0;
  while(true){
   const {data,error:e2}=await sb.from('attendance').select('glofox_user_id,event_id,class_name,class_time,attended,status,booking_id')
@@ -4280,7 +4288,7 @@ function jumpTo(i){
  if(el){const y=el.getBoundingClientRect().top+window.scrollY-100;window.scrollTo({top:y,behavior:'smooth'});}
 }
 let selEv=null; const PICK=new Set();
-let SCHED_BY_DATE={};
+let SCHED_BY_DATE={}, MGR_BY_DATE={};
 function renderDay(doScroll){
  // 예약이 하나도 없는 시간대도 근무표 기준으로 빈 수업을 만들어 표시
  const base=(SESSIONS[sel]||[]).slice();
@@ -4291,6 +4299,12 @@ function renderDay(doScroll){
  });
  const evs=base.sort((a,b)=>(a.time||'').localeCompare(b.time||''));
  SESSIONS[sel]=evs; let h='';const nowTs=new Date();
+ // 그날 근무 매니저
+ const mgrs=[...new Set(MGR_BY_DATE[sel]||[])];
+ if(mgrs.length){
+  h+=`<div style="padding:8px 12px 0;font-size:12px;color:var(--dim)">🧑‍💼 매니저 · ${mgrs.map(n=>`<span style="background:#2b2247;border:1px solid #6c5ce7;color:#cdc2ff;border-radius:99px;padding:2px 9px;margin-right:4px">${esc(n)}</span>`).join('')}</div>`;
+ }
+
  // 그날 전체(모든 시간대) 선택 바
  if(evs.length){
   const noPhotoN=evs.reduce((s,ev)=>s+ev.att.filter(a=>!a._dropin&&a.uid&&MEMBERS[a.uid]&&!hasRealPhoto(MEMBERS[a.uid])).length,0);
@@ -4316,10 +4330,13 @@ function renderDay(doScroll){
   const noshow=ev.att.filter(a=>a._st==='noshow').length;
   const cancel=ev.att.filter(a=>a._st==='cancel').length;
   const cntTxt=ev._empty
-    ? `<span style="color:var(--dim)">예약 없음</span>${ev._coaches&&ev._coaches.length?` · <span style="color:var(--dim)">${esc(ev._coaches.join(', '))}</span>`:''}`
+    ? `<span style="color:var(--dim)">예약 없음</span>`
     : `${ev.att.length}명 · ${present} 출석`+(noshow?` · <span style="color:#e0563a">${noshow} 노쇼</span>`:'')+(cancel?` · <span style="color:#e0954f">${cancel} 취소</span>`:'');
   const on=(selEv===i)||DAYSEL;
-  h+=`<div class="ev" id="ev_${i}"${ev._empty?' style="opacity:.6"':''}><div class="evh"><span class="time">${ev.time}</span><span class="enm">${esc(ev.name)}</span><span class="cnt">${cntTxt}</span>${ev.event_id?`<button class="selbtn" style="background:#2a5a3a" onclick="openBookingForEvent('${ev.event_id}','${sel}','${ev.time}',this)">+예약</button>`:''}${ev._empty?'':`<button class="selbtn ${on?'on':''}" onclick="toggleSel(${i})">${on?'완료':'선택'}</button>`}</div><div class="grid">`;
+  // 근무표에 있는 그 시간 담당 코치
+  const evCoaches=(SCHED_BY_DATE[sel]||{})[String(ev.time||'').slice(0,5)]||[];
+  const coachTag=evCoaches.length?`<span style="font-size:11px;color:var(--grn);margin-left:6px">👟 ${esc([...new Set(evCoaches)].join(', '))}</span>`:'';
+  h+=`<div class="ev" id="ev_${i}"${ev._empty?' style="opacity:.6"':''}><div class="evh"><span class="time">${ev.time}</span><span class="enm">${esc(ev.name)}${coachTag}</span><span class="cnt">${cntTxt}</span>${ev.event_id?`<button class="selbtn" style="background:#2a5a3a" onclick="openBookingForEvent('${ev.event_id}','${sel}','${ev.time}',this)">+예약</button>`:''}${ev._empty?'':`<button class="selbtn ${on?'on':''}" onclick="toggleSel(${i})">${on?'완료':'선택'}</button>`}</div><div class="grid">`;
   const buddyColors=buddyColorsForSession(ev.att.map(a=>a.uid));
   ev.att.forEach(a=>{if(a._dropin){h+=`<div class="chip s-${a._st}" style="cursor:default"><span class="ini" style="background:#4a5980">D</span><span class="nmwrap"><span class="nm">Drop in${a._dropin>1?` (${a._dropin}명)`:''}</span></span></div>`;return;}const m=MEMBERS[a.uid]||{name:'(미등록)'};const bd=badgeOf(m);
    const pk=on&&PICK.has(a.uid);
