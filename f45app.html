@@ -4384,7 +4384,42 @@ function copyInsta(){const ids=pickedMembers().map(m=>(m.instagram||'').replace(
  navigator.clipboard.writeText(ids.join('\n'));alert(`${ids.length}명 인스타 복사됨:\n`+ids.join('\n'));}
 function copyPhones(){const ph=pickedMembers().map(m=>(m.phone||'').replace(/[^0-9]/g,'')).filter(x=>x);
  if(!ph.length){alert('선택된 회원 중 번호가 없어요.');return;}
- navigator.clipboard.writeText(ph.join(', '));alert(`${ph.length}명 번호 복사됨 (문자앱 수신자칸에 붙여넣기):\n`+ph.join(', '));}
+ showPhonePopup(ph);}
+
+// 번호 복사 팝업 - 콤마 구분(문자앱) / 줄바꿈 구분(알리고) 둘 다 제공
+function showPhonePopup(ph){
+ const comma=ph.join(','), lines=ph.join('\n');
+ const old=document.getElementById('phonePop'); if(old)old.remove();
+ const wrap=document.createElement('div');
+ wrap.id='phonePop';
+ wrap.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px';
+ wrap.onclick=e=>{ if(e.target===wrap)wrap.remove(); };
+ wrap.innerHTML=`
+  <div style="background:var(--card,#16223a);border:1px solid var(--line,#22304a);border-radius:16px;max-width:520px;width:100%;max-height:86vh;overflow:auto;padding:16px">
+   <div style="font-weight:800;font-size:16px;margin-bottom:4px">📋 ${ph.length}명 번호 복사</div>
+   <div style="font-size:12px;color:var(--dim);margin-bottom:12px">보낼 곳에 맞는 형식을 고르세요</div>
+
+   <div style="font-size:13px;font-weight:700;margin-bottom:4px">문자앱용 · 콤마 구분</div>
+   <textarea id="phComma" readonly rows="3" style="width:100%;background:#0f1828;border:1px solid var(--line,#22304a);color:var(--txt,#e8eef7);border-radius:10px;padding:9px;font-size:12px;resize:vertical">${comma}</textarea>
+   <button class="mini pri" style="margin:6px 0 14px" onclick="phCopy('phComma',this)">콤마 형식 복사</button>
+
+   <div style="font-size:13px;font-weight:700;margin-bottom:4px">알리고용 · 줄바꿈 구분</div>
+   <textarea id="phLines" readonly rows="6" style="width:100%;background:#0f1828;border:1px solid var(--line,#22304a);color:var(--txt,#e8eef7);border-radius:10px;padding:9px;font-size:12px;resize:vertical">${lines}</textarea>
+   <button class="mini pri" style="margin:6px 0 14px" onclick="phCopy('phLines',this)">줄바꿈 형식 복사</button>
+
+   <div style="text-align:right"><button class="mini" onclick="document.getElementById('phonePop').remove()">닫기</button></div>
+  </div>`;
+ document.body.appendChild(wrap);
+}
+function phCopy(id,btn){
+ const el=document.getElementById(id); if(!el)return;
+ const txt=el.value;
+ const done=()=>{ const t=btn.textContent; btn.textContent='✓ 복사됨'; setTimeout(()=>btn.textContent=t,1500); };
+ // 클립보드가 막힌 환경에서도 되도록 선택 방식 병행
+ if(navigator.clipboard&&navigator.clipboard.writeText){
+  navigator.clipboard.writeText(txt).then(done,()=>{ el.select(); document.execCommand&&document.execCommand('copy'); done(); });
+ }else{ el.select(); document.execCommand&&document.execCommand('copy'); done(); }
+}
 function smsOpen(){const ph=pickedMembers().map(m=>(m.phone||'').replace(/[^0-9]/g,'')).filter(x=>x);
  if(!ph.length){alert('선택된 회원 중 번호가 없어요.');return;}location.href='sms:'+ph.join(',');}
 function fmt(d){return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`}
