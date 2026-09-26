@@ -2868,7 +2868,7 @@ function maByUid(uid){ return MEMBERS[uid]; }
 function maToggleAll(id,on){ document.querySelectorAll('#'+id+' .ma-chk').forEach(el=>{if(!el.disabled)el.checked=on;}); maUpdateCnt(id); }
 function maUpdateCnt(id){ const c=document.querySelectorAll('#'+id+' .ma-chk:checked').length; const p=document.getElementById(id+'-cnt'); if(p)p.innerHTML=`<b>${c}</b>명 선택됨`; }
 function maSelectedPhones(id){ return [...document.querySelectorAll('#'+id+' .ma-chk:checked')].map(el=>{const m=maByUid(el.dataset.uid); return m?(m.phone||'').replace(/[^0-9]/g,''):'';}).filter(Boolean); }
-function maCopy(id){ const p=maSelectedPhones(id); if(!p.length){alert('선택된 번호가 없어요.');return;} navigator.clipboard.writeText(p.join(', ')); alert(`${p.length}명 번호 복사됨`); }
+function maCopy(id){ const p=maSelectedPhones(id); if(!p.length){alert('선택된 번호가 없어요.');return;} showPhonePopup(p); }
 function maSmsOpen(id){
  const p=maSelectedPhones(id);
  if(!p.length){alert('선택된 번호가 없어요.');return;}
